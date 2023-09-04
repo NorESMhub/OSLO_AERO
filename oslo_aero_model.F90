@@ -1,4 +1,4 @@
-module aero_model
+module oslo_aero_model
 
   !===============================================================================
   ! Oslo Aerosol Model
@@ -944,4 +944,4 @@ contains
 
   end subroutine calcaersize_sub
 
-end module aero_model
+end module oslo_aero_model
