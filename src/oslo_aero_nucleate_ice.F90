@@ -416,7 +416,7 @@ contains
 
     do k = top_lev, pver
        ! Get humidity and saturation vapor pressures
-       call qsat_water(t(:ncol,k), pmid(:ncol,k), es(:ncol), qs(:ncol), gam=gammas(:ncol))
+       call qsat_water(t(:ncol,k), pmid(:ncol,k), es(:ncol), qs(:ncol), ncol, gam=gammas(:ncol))
 
        do i = 1, ncol
           relhum(i,k) = qn(i,k)/qs(i)

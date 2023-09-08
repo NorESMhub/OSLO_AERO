@@ -119,7 +119,7 @@ contains
     !-------------------------------------------------------------------------
 
     ! calculate relative humidity for table lookup into rh grid
-    call qsat_water(state%t(1:ncol,1:pver), state%pmid(1:ncol,1:pver), es(1:ncol,1:pver), qs(1:ncol,1:pver))
+    call qsat_water(state%t(1:ncol,1:pver), state%pmid(1:ncol,1:pver), es(1:ncol,1:pver), qs(1:ncol,1:pver), ncol, pver)
 
     rht(1:ncol,1:pver) = state%q(1:ncol,1:pver,1) / qs(1:ncol,1:pver)
     rh_temp(1:ncol,1:pver) = min(rht(1:ncol,1:pver),1._r8)
@@ -337,8 +337,7 @@ contains
        ssatot(1:ncol,1:pver,ib) = ssatot(1:ncol,1:pver,ib) &
             + volc_ext_sun(1:ncol,1:pver,ib)*volc_omega_sun(1:ncol,1:pver,ib)
        asymtot(1:ncol,1:pver,ib) = asymtot(1:ncol,1:pver,ib) &
-            + volc_ext_sun(1:ncol,1:pver,ib)*volc_omega_sun(1:ncol,1:pver,ib) &
-            *volc_g_sun(1:ncol,1:pver,ib)
+            + volc_ext_sun(1:ncol,1:pver,ib)*volc_omega_sun(1:ncol,1:pver,ib) * volc_g_sun(1:ncol,1:pver,ib)
     enddo
     bevisvolc(1:ncol,1:pver) = volc_ext_sun(1:ncol,1:pver,4)
 
@@ -506,9 +505,8 @@ contains
              absvis(icol)=absvis(icol)+batotvis(icol,k)*deltah
 
              ! Optical depths at ca. 550 nm (0.442-0.625um) CMIP6 volcanic aerosol
-             aodvisvolc(icol)=aodvisvolc(icol)+volc_ext_sun(icol,k,4)*deltah
-             absvisvolc(icol)=absvisvolc(icol)+volc_ext_sun(icol,k,4) &
-                  *(1.0_r8-volc_omega_sun(icol,k,4))*deltah
+             aodvisvolc(icol) = aodvisvolc(icol)+volc_ext_sun(icol,k,4) * deltah
+             absvisvolc(icol) = absvisvolc(icol)+volc_ext_sun(icol,k,4) * (1.0_r8-volc_omega_sun(icol,k,4))*deltah
 
           end do  ! k
        endif   ! daylight

@@ -715,7 +715,7 @@ contains
           orgforgrowth(i,k)=(1.e-6_r8*oxidorg(i,k)*avogad*1.e-3_r8*rhoair(i,k))/(molmass_soa*1.E-3_r8)
           orgforgrowth(i,k)=MAX(MIN(orgforgrowth(i,k),1.E10_r8),0._r8)
 
-          call qsat_water(t(i,k),pmid(i,k),dummy,qs(i,k))
+          call qsat_water(t(i,k), pmid(i,k), dummy, qs(i,k))
 
           relhum(i,k) = h2ommr(i,k)/qs(i,k)
           relhum(i,k) = max(relhum(i,k),0.0_r8)

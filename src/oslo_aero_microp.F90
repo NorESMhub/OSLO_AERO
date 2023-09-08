@@ -20,10 +20,10 @@ module oslo_aero_microp
   use physics_types,          only: physics_state_copy, physics_update
   use physics_buffer,         only: physics_buffer_desc, pbuf_get_index, pbuf_old_tim_idx, pbuf_get_field
   use phys_control,           only: phys_getopts, use_hetfrz_classnuc
-  use rad_constituents,       only: rad_cnst_get_info, rad_cnst_get_aer_mmr, rad_cnst_get_aer_props, rad_cnst_get_mode_num
   use ndrop_bam,              only: ndrop_bam_init, ndrop_bam_run, ndrop_bam_ccn
   use cam_history,            only: addfld, add_default, outfld
   use cam_logfile,            only: iulog
+  use cam_abortutils,         only: endrun
   !
   use oslo_aero_ndrop,        only: ndrop_init_oslo, dropmixnuc_oslo
   use oslo_aero_conc,         only: oslo_aero_conc_calc
@@ -42,8 +42,8 @@ module oslo_aero_microp
   public :: oslo_aero_microp_init, oslo_aero_microp_run, oslo_aero_microp_readnl, oslo_aero_microp_register
 
   ! Private module data
-
   character(len=16)   :: eddy_scheme
+  real(r8), parameter :: unset_r8 = huge(1.0_r8)
 
   ! contact freezing due to dust, dust number mean radius (m), 
   ! Zender et al JGR 2003 assuming number mode radius of 0.6 micron, sigma=2
@@ -82,19 +82,26 @@ contains
   subroutine oslo_aero_microp_readnl(nlfile)
 
     use namelist_utils, only: find_group_name
-    use cam_abortutils, only: endrun
-    use mpishorthand
+    use spmd_utils,     only: mpicom, mstrid=>masterprocid, mpi_real8
 
     character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
     ! Namelist variables
-    real(r8) :: microp_aero_bulk_scale = 2._r8  ! prescribed aerosol bulk sulfur scale factor
+    real(r8) :: microp_aero_bulk_scale  = 2._r8    ! prescribed aerosol bulk sulfur scale factor
+
+    ! NOTE: the following are not currently used - but are needed to have the namelist work in cam
+    real(r8) :: microp_aero_npccn_scale = unset_r8 ! prescribed aerosol bulk sulfur scale factor 
+    real(r8) :: microp_aero_wsub_scale  = unset_r8 ! subgrid vertical velocity (liquid) scale factor
+    real(r8) :: microp_aero_wsubi_scale = unset_r8 ! subgrid vertical velocity (ice) scale factor
+    real(r8) :: microp_aero_wsub_min    = unset_r8 ! subgrid vertical velocity (liquid) minimum
+    real(r8) :: microp_aero_wsubi_min   = unset_r8 ! subgrid vertical velocity (ice) minimum
 
     ! Local variables
     integer :: unitn, ierr
     character(len=*), parameter :: subname = 'microp_aero_readnl'
 
-    namelist /microp_aero_nl/ microp_aero_bulk_scale
+    namelist /microp_aero_nl/ microp_aero_bulk_scale, microp_aero_npccn_scale, microp_aero_wsub_min, &
+                              microp_aero_wsubi_min, microp_aero_wsub_scale, microp_aero_wsubi_scale
     !-----------------------------------------------------------------------------
 
     if (masterproc) then
@@ -109,7 +116,18 @@ contains
        close(unitn)
     end if
 #ifdef SPMD
-    call mpibcast(microp_aero_bulk_scale, 1, mpir8, 0, mpicom)
+    call mpi_bcast(microp_aero_bulk_scale, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= 0) call endrun(subname//": FATAL: mpi_bcast: microp_aero_bulk_scale")
+    call mpi_bcast(microp_aero_npccn_scale, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= 0) call endrun(subname//": FATAL: mpi_bcast: microp_aero_npccn_scale")
+    call mpi_bcast(microp_aero_wsub_scale, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= 0) call endrun(subname//": FATAL: mpi_bcast: microp_aero_wsub_scale")
+    call mpi_bcast(microp_aero_wsubi_scale, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= 0) call endrun(subname//": FATAL: mpi_bcast: microp_aero_wsubi_scale")
+    call mpi_bcast(microp_aero_wsub_min, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= 0) call endrun(subname//": FATAL: mpi_bcast: microp_aero_wsub_min")
+    call mpi_bcast(microp_aero_wsubi_min, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= 0) call endrun(subname//": FATAL: mpi_bcast: microp_aero_wsubi_min")
 #endif
 
     ! set local variables
@@ -160,7 +178,6 @@ contains
     call phys_getopts(eddy_scheme_out=eddy_scheme, history_amwg_out=history_amwg )
 
     ! Access the physical properties of the aerosols that are affecting the climate
-    ! by using routines from the rad_constituents module.
 
     ! get indices into state and pbuf structures
     call cnst_get_ind('CLDLIQ', cldliq_idx)

@@ -41,15 +41,15 @@ module oslo_aero_model
   use oslo_aero_dust,        only: oslo_aero_dust_init, oslo_aero_dust_emis, dust_active
   use oslo_aero_ocean,       only: oslo_aero_ocean_init, oslo_aero_dms_emis
   use oslo_aero_sw_tables,   only: initopt, initopt_lw
-  use oslo_aero_share,            only: chemistryIndex, physicsIndex, getCloudTracerIndexDirect, getCloudTracerName
-  use oslo_aero_share,            only: qqcw_get_field, numberOfProcessModeTracers
-  use oslo_aero_share,            only: lifeCycleNumberMedianRadius
-  use oslo_aero_share,            only: getCloudTracerName
-  use oslo_aero_share,            only: aero_register
+  use oslo_aero_share,       only: chemistryIndex, physicsIndex, getCloudTracerIndexDirect, getCloudTracerName
+  use oslo_aero_share,       only: qqcw_get_field, numberOfProcessModeTracers
+  use oslo_aero_share,       only: lifeCycleNumberMedianRadius
+  use oslo_aero_share,       only: getCloudTracerName
+  use oslo_aero_share,       only: aero_register
   use oslo_aero_sox_cldaero, only: sox_cldaero_init
-  use oslo_aero_params,     only: originalSigma, originalNumberMedianRadius
-  use oslo_aero_params,     only: nmodes_oslo=>nmodes, nbmodes
-  use oslo_aero_const,                 only: numberToSurface
+  use oslo_aero_params,      only: originalSigma, originalNumberMedianRadius
+  use oslo_aero_params,      only: nmodes_oslo=>nmodes, nbmodes
+  use oslo_aero_const,       only: numberToSurface
 #ifdef AEROCOM
   use oslo_aero_aerocom_opt, only: initaeropt
   use oslo_aero_aerocom_dry, only: initdryp
@@ -97,13 +97,15 @@ contains
     character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
     ! Local variables
-    integer :: unitn, ierr
-    character(len=16) :: aer_wetdep_list(pcnst) = ' ' ! Namelist variable
-    character(len=16) :: aer_drydep_list(pcnst) = ' ' ! Namelist variable
+    integer           :: unitn, ierr
+    character(len=16) :: aer_wetdep_list(pcnst) = ' '      ! Namelist variable
+    character(len=16) :: aer_drydep_list(pcnst) = ' '      ! Namelist variable
+    logical           :: modal_strat_sulfate = .false.     ! TODO: Namelist variables only needed by CAM
+    logical           :: modal_accum_coarse_exch = .false. ! TODO: Namelist variables only needed by CAM
     character(len=*), parameter :: subname = 'aero_model_readnl'
 
     namelist /aerosol_nl/ aer_wetdep_list, aer_drydep_list, sol_facti_cloud_borne, &
-         sol_factb_interstitial, sol_factic_interstitial
+       sol_factb_interstitial, sol_factic_interstitial, modal_strat_sulfate, modal_accum_coarse_exch, seasalt_emis_scale
     !-----------------------------------------------------------------------------
 
     ! Read namelist
@@ -816,7 +818,7 @@ contains
     integer  :: t_irh1,t_irh2
     real(r8) :: t_rh1,t_rh2,t_xrh,rr1,rr2
     real(r8) :: volumeFractionAerosol   !with respect to total (aerosol + water)
-    real(r8) :: tmp1, tmp2
+    real(r8) :: tmp1
     real(r8) :: wetrad_tmp(max_tracers_per_mode)
     real(r8) :: dry_rhopart_tmp(max_tracers_per_mode)
     real(r8) :: mixed_dry_rho
@@ -825,7 +827,7 @@ contains
     !Get the tabulated rh in all grid cells
     do k=1,pver
        do i=1,ncol
-          call qsat_water(t(i,k),pmid(i,k), tmp1, qs(i,k), tmp2)
+          call qsat_water(t(i,k), pmid(i,k), tmp1, qs(i,k))
           xrh(i,k) = h2ommr(i,k)/qs(i,k)
           xrh(i,k) = max(xrh(i,k),0.0_r8)
           xrh(i,k) = min(xrh(i,k),1.0_r8)

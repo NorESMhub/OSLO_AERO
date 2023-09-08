@@ -15,7 +15,7 @@ module oslo_aero_hetfrz
 
   use shr_kind_mod,      only: r8=>shr_kind_r8
   use shr_spfn_mod,      only: erf => shr_spfn_erf
-  use spmd_utils,        only: masterproc
+  use spmd_utils,        only: mpicom, mstrid=>masterprocid, mpi_logical, mpi_real8, mpi_success, masterproc
   use ppgrid,            only: pcols, pver, begchunk, endchunk
   use physconst,         only: rair, cpair, rh2o, rhoh2o, mwh2o, tmelt, pi
   use constituents,      only: cnst_get_ind, pcnst
@@ -54,7 +54,9 @@ module oslo_aero_hetfrz
   private :: hetfrz_classnuc_init_pdftheta
 
   ! Namelist variables
-  logical :: hist_hetfrz_classnuc = .false.
+  logical  :: hist_hetfrz_classnuc = .false.
+  real(r8) :: hetfrz_bc_scalfac = -huge(1._r8) ! scaling factor for BC  (NOT USED)
+  real(r8) :: hetfrz_dust_scalfac = -huge(1._r8) ! scaling factor for dust (NOT USED)
 
   ! Vars set via init method.
   real(r8) :: mincld      ! minimum allowed cloud fraction
@@ -106,7 +108,6 @@ contains
   subroutine hetfrz_classnuc_oslo_readnl(nlfile)
 
     use namelist_utils, only: find_group_name
-    use mpishorthand
 
     character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
@@ -114,7 +115,7 @@ contains
     integer :: unitn, ierr
     character(len=*), parameter :: subname = 'hetfrz_classnuc_cam_readnl'
 
-    namelist /hetfrz_classnuc_nl/ hist_hetfrz_classnuc
+    namelist /hetfrz_classnuc_nl/ hist_hetfrz_classnuc, hetfrz_bc_scalfac, hetfrz_dust_scalfac
     !-----------------------------------------------------------------------------
 
     if (masterproc) then
@@ -128,10 +129,19 @@ contains
        end if
        close(unitn)
     end if
-#ifdef SPMD
-    ! Broadcast namelist variables
-    call mpibcast(hist_hetfrz_classnuc, 1, mpilog, 0, mpicom)
-#endif
+
+    call mpi_bcast(hist_hetfrz_classnuc, 1, mpi_logical, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: hist_hetfrz_classnuc")
+    call mpi_bcast(hetfrz_bc_scalfac, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: hetfrz_bc_scalfac")
+    call mpi_bcast(hetfrz_dust_scalfac, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: hetfrz_dust_scalfac")
+
+    if (masterproc) then
+       write(iulog,*) subname,': hist_hetfrz_classnuc = ',hist_hetfrz_classnuc
+       write(iulog,*) subname,': hetfrz_bc_scalfac = ',hetfrz_bc_scalfac
+       write(iulog,*) subname,': hetfrz_dust_scalfac = ',hetfrz_dust_scalfac
+    end if
 
   end subroutine hetfrz_classnuc_oslo_readnl
 
