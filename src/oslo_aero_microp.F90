@@ -115,7 +115,6 @@ contains
        end if
        close(unitn)
     end if
-#ifdef SPMD
     call mpi_bcast(microp_aero_bulk_scale, 1, mpi_real8, mstrid, mpicom, ierr)
     if (ierr /= 0) call endrun(subname//": FATAL: mpi_bcast: microp_aero_bulk_scale")
     call mpi_bcast(microp_aero_npccn_scale, 1, mpi_real8, mstrid, mpicom, ierr)
@@ -128,7 +127,6 @@ contains
     if (ierr /= 0) call endrun(subname//": FATAL: mpi_bcast: microp_aero_wsub_min")
     call mpi_bcast(microp_aero_wsubi_min, 1, mpi_real8, mstrid, mpicom, ierr)
     if (ierr /= 0) call endrun(subname//": FATAL: mpi_bcast: microp_aero_wsubi_min")
-#endif
 
     ! set local variables
     bulk_scale = microp_aero_bulk_scale

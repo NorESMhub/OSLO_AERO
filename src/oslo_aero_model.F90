@@ -6,6 +6,9 @@ module oslo_aero_model
   !===============================================================================
 
   use shr_kind_mod,          only: r8 => shr_kind_r8
+  use spmd_utils,            only: mpicom, mstrid=>masterprocid, masterproc
+  use spmd_utils,            only: mpi_logical, mpi_real8, mpi_character, mpi_integer,  mpi_success
+  use namelist_utils,        only: find_group_name
   use constituents,          only: pcnst, cnst_name, cnst_get_ind
   use ppgrid,                only: pcols, pver, pverp
   use phys_control,          only: phys_getopts, cam_physpkg_is
@@ -54,6 +57,8 @@ module oslo_aero_model
   use oslo_aero_aerocom_opt, only: initaeropt
   use oslo_aero_aerocom_dry, only: initdryp
 #endif
+  use oslo_aero_control,     only: oslo_aero_ctl_readnl
+  use oslo_aero_microp,      only: oslo_aero_microp_readnl
 
   implicit none
   private
@@ -88,13 +93,11 @@ module oslo_aero_model
 contains
 !=============================================================================
 
-  subroutine aero_model_readnl(nlfile)
+  subroutine aero_model_readnl(nlfilename)
+
     ! read aerosol namelist options
 
-    use namelist_utils,  only: find_group_name
-    use mpishorthand
-
-    character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
+    character(len=*), intent(in) :: nlfilename  ! filepath for file containing namelist input
 
     ! Local variables
     integer           :: unitn, ierr
@@ -105,12 +108,13 @@ contains
     character(len=*), parameter :: subname = 'aero_model_readnl'
 
     namelist /aerosol_nl/ aer_wetdep_list, aer_drydep_list, sol_facti_cloud_borne, &
-       sol_factb_interstitial, sol_factic_interstitial, modal_strat_sulfate, modal_accum_coarse_exch, seasalt_emis_scale
+         sol_factb_interstitial, sol_factic_interstitial, &
+         modal_strat_sulfate, modal_accum_coarse_exch, seasalt_emis_scale
     !-----------------------------------------------------------------------------
 
     ! Read namelist
     if (masterproc) then
-       open(newunit=unitn, file=trim(nlfile), status='old' )
+       open(newunit=unitn, file=trim(nlfilename), status='old' )
        call find_group_name(unitn, 'aerosol_nl', status=ierr)
        if (ierr == 0) then
           read(unitn, aerosol_nl, iostat=ierr)
@@ -120,18 +124,26 @@ contains
        end if
        close(unitn)
     end if
-#ifdef SPMD
+
     ! Broadcast namelist variables
-    call mpibcast(aer_wetdep_list, len(aer_wetdep_list(1))*pcnst, mpichar, 0, mpicom)
-    call mpibcast(aer_drydep_list, len(aer_drydep_list(1))*pcnst, mpichar, 0, mpicom)
-    call mpibcast(sol_facti_cloud_borne, 1, mpir8, 0, mpicom)
-    call mpibcast(sol_factb_interstitial, 1, mpir8, 0, mpicom)
-    call mpibcast(sol_factic_interstitial, 1, mpir8, 0, mpicom)
-    call mpibcast(seasalt_emis_scale, 1, mpir8, 0, mpicom)
-#endif
+    call mpi_bcast(aer_wetdep_list, len(aer_wetdep_list(1))*pcnst, mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: aer_wetdep_list")
+    call mpi_bcast(aer_drydep_list, len(aer_drydep_list(1))*pcnst, mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: aer_drydep_list")
+    call mpi_bcast(sol_facti_cloud_borne, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: sol_facti_cloud_borne")
+    call mpi_bcast(sol_factb_interstitial, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: sol_factb_interstitial")
+    call mpi_bcast(sol_factic_interstitial, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: sol_factic_interstitial")
+    call mpi_bcast(seasalt_emis_scale, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: seasalt_emis_scale")
 
     wetdep_list = aer_wetdep_list
     drydep_list = aer_drydep_list
+
+    call oslo_aero_ctl_readnl(nlfilename)
+    call oslo_aero_microp_readnl(nlfilename)
 
   end subroutine aero_model_readnl
 

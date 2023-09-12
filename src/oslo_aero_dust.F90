@@ -5,11 +5,13 @@ module oslo_aero_dust
   ! the soil erodibility factor is applied here.
 
   use shr_kind_mod,     only: r8 => shr_kind_r8, cl => shr_kind_cl
+  use spmd_utils,       only: mpicom, mstrid=>masterprocid, masterproc
+  use spmd_utils,       only: mpi_logical, mpi_real8, mpi_character, mpi_integer,  mpi_success
+  use namelist_utils,   only: find_group_name
   use ppgrid,           only: pcols, begchunk, endchunk
   use phys_grid,        only: get_ncols_p, get_rlat_all_p, get_rlon_all_p
   use physics_types,    only: physics_state
   use camsrfexch,       only: cam_in_t
-  use spmd_utils,       only: masterproc
   use constituents,     only: cnst_name
   use interpolate_data, only: lininterp_init, lininterp, lininterp_finish, interp_type
   use mo_constants,     only: pi, d2r
@@ -55,9 +57,6 @@ contains
 
   subroutine oslo_aero_dust_readnl(nlfile)
 
-    use namelist_utils,  only: find_group_name
-    use mpishorthand
-
     character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
     ! Local variables
@@ -79,11 +78,12 @@ contains
        end if
        close(unitn)
     end if
-#ifdef SPMD
     ! Broadcast namelist variables
-    call mpibcast(dust_emis_fact, 1,                   mpir8,   0, mpicom)
-    call mpibcast(soil_erod_file, len(soil_erod_file), mpichar, 0, mpicom)
-#endif
+    call mpi_bcast(dust_emis_fact, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: dust_emis_fact")
+    call mpi_bcast(soil_erod_file, len(soil_erod_file), mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: soil_erod_file")
+
   end subroutine oslo_aero_dust_readnl
 
   !===============================================================================

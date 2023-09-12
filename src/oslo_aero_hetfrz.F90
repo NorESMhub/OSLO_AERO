@@ -3,11 +3,11 @@ module oslo_aero_hetfrz
   !-----------------------------------------------------------------------
   ! Calculate heterogeneous freezing rates from classical nucleation theory
   !
-  ! Author: 
+  ! Author:
   !   Corinna Hoose, UiO, May 2009
-  !   Yong Wang and Xiaohong Liu, UWyo, 12/2012, 
+  !   Yong Wang and Xiaohong Liu, UWyo, 12/2012,
   !   implement in CAM5 and constrain uncertain parameters using natural dust and
-  !   BC(soot) datasets. 
+  !   BC(soot) datasets.
   !   Yong Wang and Xiaohong Liu, UWyo, 05/2013, implement the PDF-contact angle
   !   approach: Y. Wang et al., Atmos. Chem. Phys., 2014.
   !   Jack Chen, NCAR, 09/2015, modify calculation of dust activation fraction.
@@ -15,7 +15,8 @@ module oslo_aero_hetfrz
 
   use shr_kind_mod,      only: r8=>shr_kind_r8
   use shr_spfn_mod,      only: erf => shr_spfn_erf
-  use spmd_utils,        only: mpicom, mstrid=>masterprocid, mpi_logical, mpi_real8, mpi_success, masterproc
+  use spmd_utils,        only: mpicom, mstrid=>masterprocid, masterproc
+  use spmd_utils,        only: mpi_logical, mpi_real8, mpi_character, mpi_success
   use ppgrid,            only: pcols, pver, begchunk, endchunk
   use physconst,         only: rair, cpair, rh2o, rhoh2o, mwh2o, tmelt, pi
   use constituents,      only: cnst_get_ind, pcnst
@@ -42,7 +43,7 @@ module oslo_aero_hetfrz
   private
 
   ! The following are called by microp_aero
-  public :: hetfrz_classnuc_oslo_readnl   
+  public :: hetfrz_classnuc_oslo_readnl
   public :: hetfrz_classnuc_oslo_register
   public :: hetfrz_classnuc_oslo_init
   public :: hetfrz_classnuc_oslo_calc
@@ -79,7 +80,7 @@ module oslo_aero_hetfrz
   ! The basis is converted from mass to volume.
   real(r8), allocatable :: aer_cb(:,:,:,:)
 
-  ! PDF theta model 
+  ! PDF theta model
   ! some variables for PDF theta model
   ! immersion freezing
   !

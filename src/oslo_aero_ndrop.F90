@@ -132,9 +132,7 @@ contains
     alog2    = log(2._r8)
     alog3    = log(3._r8)
 
-    ! get info about the modal aerosols
-    ! get ntot_amode
-    ! TODO: make these local variables and don't allocate
+    ! get info about the modal aerosols, get ntot_amode
     ntot_amode = nmodes
     allocate( &
          nspec_amode(ntot_amode),  &

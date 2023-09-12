@@ -56,7 +56,9 @@ module oslo_aero_ocean
   character(len=16)  :: dmsk_fld_name  = 'dms_Kettle'   !not set from namelist, hard coded, name of nc var
   character(len=32)  :: dms_data_type = 'CYCLICAL'      !will be collected from NAMELIST
   integer            :: dms_cycle_yr  = 0               !will be collected from NAMELIST
-  character(len=20)  :: dms_source    = 'emission_file' !will be collected from NAMELIST
+
+  !will be collected from NAMELIST - but can be overwritten by atm_import_export if the ocean is sending DMS to the atm
+  character(len=20), public  :: dms_source = 'emission_file' 
   !
   character(len=16)  :: opomo_fld_name = 'chlor_a'      !not set from namelist, hard coded, name of nc var
   character(len=16)  :: opomn_fld_name = 'poc'          !not set from namelist, hard coded, name of nc var
