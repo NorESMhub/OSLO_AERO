@@ -40,9 +40,7 @@ contains
 !===============================================================================
 
   subroutine oslo_aero_optical_params_calc(lchnk, ncol, pint, pmid, t, qm1, cld, coszrs, &
-       per_tau, per_tau_w, per_tau_w_g, per_tau_w_f, per_lw_abs, &
-       volc_ext_sun, volc_omega_sun, volc_g_sun, volc_ext_earth, volc_omega_earth, &
-       aodvis, absvis)
+       per_tau, per_tau_w, per_tau_w_g, per_tau_w_f, per_lw_abs, aodvis, absvis)
 
     ! Arguments
     integer , intent(in) :: lchnk                                 ! chunk identifier
@@ -53,11 +51,6 @@ contains
     real(r8), intent(in) :: qm1(pcols,pver,pcnst)                 ! Specific humidity and tracers (kg/kg)
     real(r8), intent(in) :: cld(pcols,pver)                       ! cloud fraction
     real(r8), intent(in) :: coszrs(pcols)                         ! Cosine solar zenith angle
-    real(r8), intent(in) :: volc_ext_sun(pcols,pver,nbands)       ! volcanic aerosol extinction for solar bands, CMIP6
-    real(r8), intent(in) :: volc_omega_sun(pcols,pver,nbands)     ! volcanic aerosol SSA for solar bands, CMIP6
-    real(r8), intent(in) :: volc_g_sun(pcols,pver,nbands)         ! volcanic aerosol g for solar bands, CMIP6
-    real(r8), intent(in) :: volc_ext_earth(pcols,pver,nlwbands)   ! volcanic aerosol extinction for terrestrial bands, CMIP6
-    real(r8), intent(in) :: volc_omega_earth(pcols,pver,nlwbands) ! volcanic aerosol SSA for terrestrial bands, CMIP6
 
     ! Output arguments
     ! AOD and absorptive AOD for visible wavelength closest to 0.55 um (0.442-0.625)
@@ -73,13 +66,21 @@ contains
     ! Local variables
     integer  :: i, k, ib, icol, mplus10
     integer  :: iloop
-    logical  :: daylight(pcols)            ! SW calculations also at (polar) night in interpol* if daylight=.true.
-    real(r8) :: Nnatk(pcols,pver,0:nmodes) ! aerosol mode number concentration
-    real(r8) :: aodvisvolc(pcols)          ! AOD vis for CMIP6 volcanic aerosol
-    real(r8) :: absvisvolc(pcols)          ! AAOD vis for CMIP6 volcanic aerosol
-    real(r8) :: bevisvolc(pcols,pver)      ! Extinction in vis wavelength band for CMIP6 volcanic aerosol
-    real(r8) :: rhum(pcols,pver)           ! (trimmed) relative humidity for the aerosol calculations
-    real(r8) :: deltah_km(pcols,pver)      ! Layer thickness, unit km
+    logical  :: daylight(pcols)                       ! SW calculations also at (polar) night in interpol* if daylight=.true.
+
+    real(r8) :: Nnatk(pcols,pver,0:nmodes)            ! aerosol mode number concentration
+
+    real(r8) :: volc_ext_sun(pcols,pver,nbands)       ! volcanic aerosol extinction for solar bands, CMIP6
+    real(r8) :: volc_omega_sun(pcols,pver,nbands)     ! volcanic aerosol SSA for solar bands, CMIP6
+    real(r8) :: volc_g_sun(pcols,pver,nbands)         ! volcanic aerosol g for solar bands, CMIP6
+    real(r8) :: volc_ext_earth(pcols,pver,nlwbands)   ! volcanic aerosol extinction for terrestrial bands, CMIP6
+    real(r8) :: volc_omega_earth(pcols,pver,nlwbands) ! volcanic aerosol SSA for terrestrial bands, CMIP6
+
+    real(r8) :: aodvisvolc(pcols)                     ! AOD vis for CMIP6 volcanic aerosol
+    real(r8) :: absvisvolc(pcols)                     ! AAOD vis for CMIP6 volcanic aerosol
+    real(r8) :: bevisvolc(pcols,pver)                 ! Extinction in vis wavelength band for CMIP6 volcanic aerosol
+    real(r8) :: rhum(pcols,pver)                      ! (trimmed) relative humidity for the aerosol calculations
+    real(r8) :: deltah_km(pcols,pver)                 ! Layer thickness, unit km
     real(r8) :: deltah, airmassl(pcols,pver), airmass(pcols)
     real(r8) :: Ca(pcols,pver), f_c(pcols,pver), f_bc(pcols,pver), f_aq(pcols,pver)
     real(r8) :: fnbc(pcols,pver), faitbc(pcols,pver), f_so4_cond(pcols,pver)
@@ -101,7 +102,10 @@ contains
     real(r8) :: balw(pcols,pver,0:nmodes,nlwbands)
     real(r8) :: volc_balw(pcols,0:pver,nlwbands) ! volcanic aerosol absorption coefficient for terrestrial bands, CMIP6
     real(r8) :: rh0(pcols,pver), rhoda(pcols,pver)
-    real(r8) :: ssavis(pcols,pver), asymmvis(pcols,pver), extvis(pcols,pver), dayfoc(pcols,pver)
+    real(r8) :: ssavis(pcols,pver)
+    real(r8) :: asymmvis(pcols,pver)
+    real(r8) :: extvis(pcols,pver)
+    real(r8) :: dayfoc(pcols,pver)
     real(r8) :: n_aer(pcols,pver)
     real(r8) :: es(pcols,pver)      ! saturation vapor pressure
     real(r8) :: qs(pcols,pver)      ! saturation specific humidity
@@ -125,6 +129,15 @@ contains
     integer  :: ifbcbgn1(pcols,pver)
     logical  :: lw_on   ! LW calculations are performed in interpol* if true
     !-------------------------------------------------------------------------
+
+    ! Volcanic optics for solar (SW) bands
+    volc_ext_sun(1:ncol,1:pver, 1:nbands)   = 0.0_r8
+    volc_omega_sun(1:ncol,1:pver, 1:nbands) = 0.999_r8
+    volc_g_sun(1:ncol,1:pver, 1:nbands)     = 0.5_r8
+
+    ! Volcanic optics for terrestrial (LW) bands (g is not used here)
+    volc_ext_earth(1:ncol,1:pver,1:nlwbands)   = 0.0_r8
+    volc_omega_earth(1:ncol,1:pver,1:nlwbands) = 0.999_r8
 
     ! calculate relative humidity for table lookup into rh grid
     call qsat_water(t(1:ncol,1:pver), pmid(1:ncol,1:pver), es(1:ncol,1:pver), qs(1:ncol,1:pver), ncol, pver)
@@ -189,7 +202,7 @@ contains
     do k=1,pver
        do icol=1,ncol
           v_soana(icol,k) = f_soana(icol,k)/(f_soana(icol,k) &
-               +(1.0_r8-f_soana(icol,k))*rhopart(l_soa_na)/rhopart(l_so4_na))
+                   +(1.0_r8-f_soana(icol,k))*rhopart(l_soa_na)/rhopart(l_so4_na))
        end do
     end do
 
