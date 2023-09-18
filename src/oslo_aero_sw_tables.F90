@@ -57,8 +57,9 @@ module oslo_aero_sw_tables
   public :: interpol4
   public :: interpol5to10
 
-  integer, public, parameter :: nbands=14    ! number of aerosol spectral bands in SW
-  integer, public, parameter :: nbmp1=11     ! number of first non-background mode
+  integer, public, parameter :: nbands=14   ! number of aerosol spectral bands in SW
+  integer, public, parameter :: nlwbands=16 ! number of aerosol spectral bands in LW
+  integer, public, parameter :: nbmp1=11    ! number of first non-background mode
 
   real(r8), public, dimension(10)     :: rh
   real(r8), public, dimension(6)      :: fombg, fbcbg, fac, fbc, faq
@@ -99,9 +100,6 @@ module oslo_aero_sw_tables
 
   real(r8), public :: e, eps
   parameter (e=2.718281828_r8, eps=1.0e-30_r8)
-
-  ! Array bounds in the tabulated optical parameters
-  integer, public, parameter :: nlwbands=16    ! number of aerosol spectral bands in LW
 
   real(r8), public :: ka0(nlwbands)
   real(r8), public :: ka1(nlwbands,10,6,16,6)
@@ -907,14 +905,13 @@ contains
   end subroutine initopt_lw
 
   !********************************************************************************************
-  subroutine inputForInterpol (lchnk, ncol, rhum, xrh, irh1, &
+  subroutine inputForInterpol (ncol, rhum, xrh, irh1, &
        f_soana, xfombg, ifombg1, faitbc, xfbcbg, ifbcbg1,    &
        fnbc, xfbcbgn, ifbcbgn1, Nnatk, Cam, xct, ict1,       &
        focm, fcm, xfac, ifac1, fbcm, xfbc, ifbc1, faqm, xfaq, ifaq1)
 
     !
     ! Input arguments
-    integer, intent(in)  :: lchnk                      ! chunk identifier
     integer, intent(in)  :: ncol                       ! number of atmospheric columns
     real(r8), intent(in) :: rhum(pcols,pver)           ! level relative humidity (fraction)
     real(r8), intent(in) :: f_soana(pcols,pver)        ! SOA/(SOA+H2SO4) mass fraction for the background in mode 1
@@ -1077,10 +1074,9 @@ contains
   end subroutine inputForInterpol
 
   !********************************************************************************************
-  subroutine interpol0 (lchnk, ncol, daylight, Nnatk, omega, gass, bex, ske, lw_on, kabs)
+  subroutine interpol0 (ncol, daylight, Nnatk, omega, gass, bex, ske, lw_on, kabs)
     !
     ! Arguments
-    integer  , intent(in)  :: lchnk                              ! chunk identifier
     integer  , intent(in)  :: ncol                               ! number of atmospheric columns
     logical  , intent(in)  :: daylight(pcols)                    ! calculations also at (polar) night if daylight=.true.
     logical  , intent(in)  :: lw_on                              ! LW calculations are performed if true
@@ -1150,12 +1146,11 @@ contains
   end subroutine interpol0
 
   !********************************************************************************************
-  subroutine interpol1 (lchnk, ncol, daylight, xrh, irh1, mplus10, Nnatk, xfombg, ifombg1, &
+  subroutine interpol1 (ncol, daylight, xrh, irh1, mplus10, Nnatk, xfombg, ifombg1, &
        xct, ict1, xfac, ifac1, omega, gass, bex, ske, lw_on, kabs)
 
     !
     ! Arguments
-    integer, intent(in) :: lchnk                       ! chunk identifier
     integer, intent(in) :: ncol                        ! number of atmospheric columns
     integer, intent(in) :: mplus10                     ! mode number (0) or number + 10 (1)
     logical, intent(in) :: daylight(pcols)             ! only daylight calculations if .true.
@@ -1521,11 +1516,10 @@ contains
 
 
   !********************************************************************************************
-  subroutine interpol2to3 (lchnk, ncol, daylight, xrh, irh1, mplus10, Nnatk, &
+  subroutine interpol2to3 (ncol, daylight, xrh, irh1, mplus10, Nnatk, &
        xct, ict1, xfac, ifac1, omega, gass, bex, ske, lw_on, kabs)
 
     ! Input arguments
-    integer, intent(in) :: lchnk                       ! chunk identifier
     integer, intent(in) :: ncol                        ! number of atmospheric columns
     integer, intent(in) :: mplus10                     ! mode number (0) or number + 10 (1)
     logical, intent(in) :: daylight(pcols)             ! only daylight calculations if .true.
@@ -1837,12 +1831,11 @@ contains
 
   !********************************************************************************************
 
-  subroutine interpol4 (lchnk, ncol, daylight, xrh, irh1, mplus10, Nnatk, xfbcbg, ifbcbg1, &
+  subroutine interpol4 (ncol, daylight, xrh, irh1, mplus10, Nnatk, xfbcbg, ifbcbg1, &
        xct, ict1, xfac, ifac1, xfaq, ifaq1, &
        omega, gass, bex, ske, lw_on, kabs)
 
     ! Input arguments
-    integer, intent(in) :: lchnk                       ! chunk identifier
     integer, intent(in) :: ncol                        ! number of atmospheric columns
     integer, intent(in) :: mplus10                     ! mode number (0) or number + 10 (1)
     logical, intent(in) :: daylight(pcols)             ! only daylight calculations if .true.
@@ -2296,12 +2289,11 @@ contains
   end subroutine interpol4
 
   !********************************************************************************************
-  subroutine interpol5to10 (lchnk, ncol, daylight, xrh, irh1, Nnatk, xct, ict1, &
+  subroutine interpol5to10 (ncol, daylight, xrh, irh1, Nnatk, xct, ict1, &
        xfac, ifac1, xfbc, ifbc1, xfaq, ifaq1, &
        omega, gass, bex, ske, lw_on, kabs)
 
     ! Input arguments
-    integer, intent(in) :: lchnk                       ! chunk identifier
     integer, intent(in) :: ncol                        ! number of atmospheric columns
     logical, intent(in) :: daylight(pcols)             ! only daylight calculations if .true.
     logical, intent(in) :: lw_on                       ! LW calculations are performed if true

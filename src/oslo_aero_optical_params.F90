@@ -2,13 +2,22 @@ module oslo_aero_optical_params
 
   ! Optical parameters for a composite aerosol is calculated by interpolation
   ! from the tables kcomp1.out-kcomp14.out.
+  ! Optimized June 2002 byrild Burud/NoSerC
+  ! Optimized July 2002 by Egil Storen/NoSerC (ces)
+  ! Revised for inclusion of OC and modified aerosol backgeound aerosol
+  ! by Alf Kirkevaag in 2003, and finally rewritten for CAM3 February 2005.
+  ! Modified for new aerosol schemes by Alf Kirkevaag in January 2006.
+  ! Updated by Alf Kirkev, May 2013: The SO4(Ait) mode now takes into
+  ! account condensed SOA in addition to H2SO4.
+  ! Updated for CAM5-Oslo with RRTMG by Alf Kirkevaag, 2014-2015, for new
+  ! SOA treatment August/September 2015, and for cleanig up and optimizing
+  ! the code around interpolations in November 2016.
 
   use shr_kind_mod,    only: r8 => shr_kind_r8
   use ppgrid,          only: pcols, pver, pverp
   use constituents,    only: pcnst
   use cam_history,     only: outfld
   use physconst,       only: rair,pi
-  use physics_types,   only: physics_state
   use wv_saturation,   only: qsat_water
   !
   use oslo_aero_utils, only: calculateNumberConcentration
@@ -17,6 +26,9 @@ module oslo_aero_optical_params
   use oslo_aero_params
   use oslo_aero_const
   use oslo_aero_share
+#ifdef AEROCOM
+  use oslo_aero_aerocom, only: aerocom
+#endif
 
   implicit none
   private
@@ -27,30 +39,25 @@ module oslo_aero_optical_params
 contains
 !===============================================================================
 
-  subroutine oslo_aero_optical_params_calc(lchnk, ncol, pint, pmid,                &
-       coszrs, state, t, cld, qm1, Nnatk,                                          &
-       per_tau, per_tau_w, per_tau_w_g, per_tau_w_f, per_lw_abs,                   &
+  subroutine oslo_aero_optical_params_calc(lchnk, ncol, pint, pmid, t, qm1, cld, coszrs, &
+       per_tau, per_tau_w, per_tau_w_g, per_tau_w_f, per_lw_abs, &
        volc_ext_sun, volc_omega_sun, volc_g_sun, volc_ext_earth, volc_omega_earth, &
        aodvis, absvis)
 
-    ! Input arguments
+    ! Arguments
     integer , intent(in) :: lchnk                                 ! chunk identifier
     integer , intent(in) :: ncol                                  ! number of atmospheric columns
-    real(r8), intent(in) :: coszrs(pcols)                         ! Cosine solar zenith angle
     real(r8), intent(in) :: pint(pcols,pverp)                     ! Model interface pressures (10*Pa)
     real(r8), intent(in) :: pmid(pcols,pver)                      ! Model level pressures (Pa)
     real(r8), intent(in) :: t(pcols,pver)                         ! Model level temperatures (K)
-    real(r8), intent(in) :: cld(pcols,pver)                       ! cloud fraction
     real(r8), intent(in) :: qm1(pcols,pver,pcnst)                 ! Specific humidity and tracers (kg/kg)
+    real(r8), intent(in) :: cld(pcols,pver)                       ! cloud fraction
+    real(r8), intent(in) :: coszrs(pcols)                         ! Cosine solar zenith angle
     real(r8), intent(in) :: volc_ext_sun(pcols,pver,nbands)       ! volcanic aerosol extinction for solar bands, CMIP6
     real(r8), intent(in) :: volc_omega_sun(pcols,pver,nbands)     ! volcanic aerosol SSA for solar bands, CMIP6
     real(r8), intent(in) :: volc_g_sun(pcols,pver,nbands)         ! volcanic aerosol g for solar bands, CMIP6
     real(r8), intent(in) :: volc_ext_earth(pcols,pver,nlwbands)   ! volcanic aerosol extinction for terrestrial bands, CMIP6
     real(r8), intent(in) :: volc_omega_earth(pcols,pver,nlwbands) ! volcanic aerosol SSA for terrestrial bands, CMIP6
-    type(physics_state), intent(in), target :: state
-
-    ! Input-output arguments
-    real(r8), intent(inout) :: Nnatk(pcols,pver,0:nmodes)         ! aerosol mode number concentration
 
     ! Output arguments
     ! AOD and absorptive AOD for visible wavelength closest to 0.55 um (0.442-0.625)
@@ -66,13 +73,14 @@ contains
     ! Local variables
     integer  :: i, k, ib, icol, mplus10
     integer  :: iloop
-    logical  :: daylight(pcols)        ! SW calculations also at (polar) night in interpol* if daylight=.true.
-    real(r8) :: aodvisvolc(pcols)      ! AOD vis for CMIP6 volcanic aerosol
-    real(r8) :: absvisvolc(pcols)      ! AAOD vis for CMIP6 volcanic aerosol
-    real(r8) :: bevisvolc(pcols,pver)  ! Extinction in vis wavelength band for CMIP6 volcanic aerosol
-    real(r8) :: rhum(pcols,pver)       ! (trimmed) relative humidity for the aerosol calculations
-    real(r8) :: deltah_km(pcols,pver)  ! Layer thickness, unit km
-    real(r8) :: deltah, airmassl(pcols,pver), airmass(pcols) !akc6
+    logical  :: daylight(pcols)            ! SW calculations also at (polar) night in interpol* if daylight=.true.
+    real(r8) :: Nnatk(pcols,pver,0:nmodes) ! aerosol mode number concentration
+    real(r8) :: aodvisvolc(pcols)          ! AOD vis for CMIP6 volcanic aerosol
+    real(r8) :: absvisvolc(pcols)          ! AAOD vis for CMIP6 volcanic aerosol
+    real(r8) :: bevisvolc(pcols,pver)      ! Extinction in vis wavelength band for CMIP6 volcanic aerosol
+    real(r8) :: rhum(pcols,pver)           ! (trimmed) relative humidity for the aerosol calculations
+    real(r8) :: deltah_km(pcols,pver)      ! Layer thickness, unit km
+    real(r8) :: deltah, airmassl(pcols,pver), airmass(pcols)
     real(r8) :: Ca(pcols,pver), f_c(pcols,pver), f_bc(pcols,pver), f_aq(pcols,pver)
     real(r8) :: fnbc(pcols,pver), faitbc(pcols,pver), f_so4_cond(pcols,pver)
     real(r8) :: f_soa(pcols,pver),f_soana(pcols,pver)
@@ -119,9 +127,9 @@ contains
     !-------------------------------------------------------------------------
 
     ! calculate relative humidity for table lookup into rh grid
-    call qsat_water(state%t(1:ncol,1:pver), state%pmid(1:ncol,1:pver), es(1:ncol,1:pver), qs(1:ncol,1:pver), ncol, pver)
+    call qsat_water(t(1:ncol,1:pver), pmid(1:ncol,1:pver), es(1:ncol,1:pver), qs(1:ncol,1:pver), ncol, pver)
 
-    rht(1:ncol,1:pver) = state%q(1:ncol,1:pver,1) / qs(1:ncol,1:pver)
+    rht(1:ncol,1:pver) = qm1(1:ncol,1:pver,1)/ qs(1:ncol,1:pver)
     rh_temp(1:ncol,1:pver) = min(rht(1:ncol,1:pver),1._r8)
 
     do k=1,pver
@@ -144,13 +152,13 @@ contains
     end do
 
     ! interpol-calculations only when daylight or not:
-       do icol=1,ncol
-          if (coszrs(icol) > 0.0_r8) then
-             daylight(icol) = .true.
-          else
-             daylight(icol) = .false.
-          endif
-       end do
+    do icol=1,ncol
+       if (coszrs(icol) > 0.0_r8) then
+          daylight(icol) = .true.
+       else
+          daylight(icol) = .false.
+       endif
+    end do
 
     ! Set SO4, BC and OC concentrations:
 
@@ -202,11 +210,11 @@ contains
 
     !==> calls modalapp to partition the mass
     call partitionMass(ncol, nnatk, Ca, f_c, f_bc, f_aq, f_so4_cond, f_soa , &
-         cam, fcm, fbcm, faqm, f_condm, f_soam )
+         Cam, fcm, fbcm, faqm, f_condm, f_soam )
 
     !The following uses non-standard units, #/cm3 and ug/m3
     Nnatk(:ncol,:,:) = Nnatk(:ncol,:,:)*1.e-6_r8
-    cam(:ncol,:,:)=cam(:ncol,:,:)*1.e9_r8
+    Cam(:ncol,:,:) = Cam(:ncol,:,:)*1.e9_r8
 
     ! Calculate fraction of added mass which is either SOA condensate or OC coagulate,
     ! which in AeroTab are both treated as condensate for kcomp=1-4.
@@ -224,35 +232,40 @@ contains
     enddo
 
     ! find common input parameters for use in the interpolation routines
-    call inputForInterpol (lchnk, ncol, rhum, xrh, irh1,   &
+    call inputForInterpol (ncol, rhum, xrh, irh1,   &
          f_soana, xfombg, ifombg1, faitbc, xfbcbg, ifbcbg1,  &
          fnbc, xfbcbgn, ifbcbgn1, Nnatk, Cam, xct, ict1,     &
          focm, fcm, xfac, ifac1, fbcm, xfbc, ifbc1, faqm, xfaq, ifaq1)
+
+#ifdef AEROCOM
+    ! The following computes the optical parameters with lw_on set to .false.
+    call aerocom(Cam, Nnatk, pint, coszrs)
+#endif
 
     ! (Wet) Optical properties for each of the aerosol modes:
     lw_on = .true.  ! No LW optics needed for RH=0 (interpol returns 0-values)
 
     ! BC(ax) mode (dry only):
-    call interpol0 (lchnk, ncol, daylight, Nnatk, ssa, asym, be, ke, lw_on, kalw)
+    call interpol0 (ncol, daylight, Nnatk, ssa, asym, be, ke, lw_on, kalw)
 
     mplus10=0
     ! SO4/SOA(Ait) mode:
-    call interpol1 (lchnk, ncol, daylight, xrh, irh1, mplus10, &
+    call interpol1 (ncol, daylight, xrh, irh1, mplus10, &
          Nnatk, xfombg, ifombg1, xct, ict1,    &
          xfac, ifac1, ssa, asym, be, ke, lw_on, kalw)
 
     ! BC(Ait) and OC(Ait) modes:
-    call interpol2to3 (lchnk, ncol, daylight, xrh, irh1, mplus10, &
+    call interpol2to3 (ncol, daylight, xrh, irh1, mplus10, &
          Nnatk, xct, ict1, xfac, ifac1, &
          ssa, asym, be, ke, lw_on, kalw)
 
     ! BC&OC(Ait) mode:   ------ fcm invalid here (=0). Using faitbc instead
-    call interpol4 (lchnk, ncol, daylight, xrh, irh1, mplus10, &
+    call interpol4 (ncol, daylight, xrh, irh1, mplus10, &
          Nnatk, xfbcbg, ifbcbg1, xct, ict1,    &
          xfac, ifac1, xfaq, ifaq1, ssa, asym, be, ke, lw_on, kalw)
 
     ! SO4(Ait75) (5), Mineral (6-7) and Sea-salt (8-10) modes:
-    call interpol5to10 (lchnk, ncol, daylight, xrh, irh1, &
+    call interpol5to10 (ncol, daylight, xrh, irh1, &
          Nnatk, xct, ict1, xfac, ifac1, &
          xfbc, ifbc1, xfaq, ifaq1, ssa, asym, be, ke, lw_on, kalw)
 
@@ -264,19 +277,19 @@ contains
           end do
        enddo
     enddo
-    call outfld('N_AER   ',n_aer ,pcols,lchnk)
+    call outfld('N_AER   ',n_aer ,pcols, lchnk)
 
     mplus10=1
     ! SO4/SOA(Ait) mode:
     !does no longer exist as an externally mixed mode
 
     ! BC(Ait) and OC(Ait) modes:
-    call interpol2to3 (lchnk, ncol, daylight, xrh, irh1, mplus10, &
+    call interpol2to3 (ncol, daylight, xrh, irh1, mplus10, &
          Nnatk, xct, ict1, xfac, ifac1, &
          ssa, asym, be, ke, lw_on, kalw)
 
     ! BC&OC(n) mode:    ------ fcm not valid here (=0). Use fnbc instead
-    call interpol4 (lchnk, ncol, daylight, xrh, irh1, mplus10, &
+    call interpol4 (ncol, daylight, xrh, irh1, mplus10, &
          Nnatk, xfbcbgn, ifbcbgn1, xct, ict1,  &
          xfac, ifac1, xfaq, ifaq1, ssa, asym, be, ke, lw_on, kalw)
 
@@ -299,9 +312,9 @@ contains
     do ib=1,nbands
        do k=1,pver
           do icol=1,ncol
-             betot(icol,k,ib)=0.0_r8
-             ssatot(icol,k,ib)=0.0_r8
-             asymtot(icol,k,ib)=0.0_r8
+             betot(icol,k,ib)   = 0.0_r8
+             ssatot(icol,k,ib)  = 0.0_r8
+             asymtot(icol,k,ib) = 0.0_r8
           end do
        enddo
     enddo
@@ -309,11 +322,9 @@ contains
        do i=0,nmodes
           do k=1,pver
              do icol=1,ncol
-                betot(icol,k,ib)=betot(icol,k,ib)+Nnatk(icol,k,i)*be(icol,k,i,ib)
-                ssatot(icol,k,ib)=ssatot(icol,k,ib)+Nnatk(icol,k,i) &
-                     *be(icol,k,i,ib)*ssa(icol,k,i,ib)
-                asymtot(icol,k,ib)=asymtot(icol,k,ib)+Nnatk(icol,k,i) &
-                     *be(icol,k,i,ib)*ssa(icol,k,i,ib)*asym(icol,k,i,ib)
+                betot(icol,k,ib)   = betot(icol,k,ib)  + Nnatk(icol,k,i)*be(icol,k,i,ib)
+                ssatot(icol,k,ib)  = ssatot(icol,k,ib) + Nnatk(icol,k,i)*be(icol,k,i,ib)*ssa(icol,k,i,ib)
+                asymtot(icol,k,ib) = asymtot(icol,k,ib)+ Nnatk(icol,k,i)*be(icol,k,i,ib)*ssa(icol,k,i,ib)*asym(icol,k,i,ib)
              end do
           enddo
        enddo
@@ -429,9 +440,8 @@ contains
     ! Adding also the volcanic contribution (CMIP6), which is also using
     ! AeroTab band numbering, so that a remapping is required here
     do ib=1,nlwbands
-       volc_balw(1:ncol,1:pver,ib) = volc_ext_earth(:ncol,1:pver,ib) &
-            *(1.0_r8-volc_omega_earth(:ncol,1:pver,ib))
-       batotlw(1:ncol,1:pver,ib)=batotlw(1:ncol,1:pver,ib)+volc_balw(1:ncol,1:pver,ib)
+       volc_balw(1:ncol,1:pver,ib) = volc_ext_earth(:ncol,1:pver,ib) *(1.0_r8-volc_omega_earth(:ncol,1:pver,ib))
+       batotlw(1:ncol,1:pver,ib) = batotlw(1:ncol,1:pver,ib)+volc_balw(1:ncol,1:pver,ib)
     enddo
 
     ! Remapping of LW wavelength bands from AeroTab to CAM5
@@ -478,10 +488,10 @@ contains
     end do
 
     ! optical parameters in visible light (0.442-0.625um)
-    call outfld('SSAVIS  ',ssavis,pcols,lchnk)
-    call outfld('ASYMMVIS',asymmvis,pcols,lchnk)
-    call outfld('EXTVIS  ',extvis,pcols,lchnk)
-    call outfld('DAYFOC  ',dayfoc,pcols,lchnk)
+    call outfld('SSAVIS  ',ssavis   ,pcols, lchnk)
+    call outfld('ASYMMVIS',asymmvis ,pcols, lchnk)
+    call outfld('EXTVIS  ',extvis   ,pcols, lchnk)
+    call outfld('DAYFOC  ',dayfoc   ,pcols, lchnk)
 
     ! Initialize fields
     do icol=1,ncol
@@ -489,7 +499,7 @@ contains
        absvis(icol)=0.0_r8
        aodvisvolc(icol)=0.0_r8
        absvisvolc(icol)=0.0_r8
-       airmass(icol)=0.0_r8  !akc6
+       airmass(icol)=0.0_r8
     enddo
 
     do icol=1,ncol
@@ -498,7 +508,7 @@ contains
              ! Layer thickness, unit km, and layer airmass, unit kg/m2
              deltah=deltah_km(icol,k)
              airmassl(icol,k)=1.e3_r8*deltah*rhoda(icol,k)
-             airmass(icol)=airmass(icol)+airmassl(icol,k)  !akc6
+             airmass(icol)=airmass(icol)+airmassl(icol,k)
 
              ! Optical depths at ca. 550 nm (0.442-0.625um) all aerosols
              aodvis(icol)=aodvis(icol)+betotvis(icol,k)*deltah
@@ -513,12 +523,15 @@ contains
     end do   ! icol
 
     ! Extinction and absorption for 0.55 um for the total aerosol, and AODs
-    call outfld('AOD_VIS ',aodvis ,pcols,lchnk)
-    call outfld('ABSVIS  ',absvis ,pcols,lchnk)
+    call outfld('AOD_VIS ',aodvis     ,pcols,lchnk)
+    call outfld('ABSVIS  ',absvis     ,pcols,lchnk)
     call outfld('AODVVOLC',aodvisvolc ,pcols,lchnk)
     call outfld('ABSVVOLC',absvisvolc ,pcols,lchnk)
-    call outfld('BVISVOLC',bevisvolc ,pcols,lchnk)
-
+    call outfld('BVISVOLC',bevisvolc  ,pcols,lchnk)
+#ifdef AEROCOM
+    call outfld('AIRMASSL',airmassl   ,pcols,lchnk)
+    call outfld('AIRMASS ',airmass    ,pcols,lchnk)
+#endif
   end subroutine oslo_aero_optical_params_calc
 
 end module oslo_aero_optical_params

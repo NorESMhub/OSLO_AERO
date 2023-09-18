@@ -5,8 +5,10 @@ module oslo_aero_aerocom_dry
   use shr_kind_mod            , only: r8 => shr_kind_r8
   use ppgrid                  , only: pcols, pver
   use cam_logfile             , only: iulog
+  use spmd_utils              , only: masterproc
+  use cam_abortutils          , only: endrun
   !
-  use oslo_aero_params       , only: nmodes, nbmodes
+  use oslo_aero_params        , only: nmodes, nbmodes
   use oslo_aero_sw_tables     , only: cate, cat, fac, faq, fbc, fombg, fbcbg, nbmp1
   use oslo_aero_linear_interp , only: lininterpol3dim, lininterpol4dim, lininterpol5dim  
   use oslo_aero_control       , only: oslo_aero_getopts, dir_string_length
@@ -14,20 +16,20 @@ module oslo_aero_aerocom_dry
   implicit none
   private
 
-  ! Set by init_dryp Mode0
+  ! Set by aerocom_init_dryp Mode0
   real(r8) :: a0cintbg, a0cintbg05, a0cintbg125
   real(r8) :: a0aaeros, a0aaerol, a0vaeros, a0vaerol
 
-  ! Used by init_dryp Mode1
+  ! Used by aerocom_init_dryp Mode1
   real(r8) :: a1var(19,6,16,6)
 
-  ! Used by init_dryp Mode2to3
+  ! Used by aerocom_init_dryp Mode2to3
   real(r8) :: a2to3var(19,16,6,2:3)
 
-  ! Used by init_dryp Mode4
+  ! Used by aeromcom_init_dryp Mode4
   real(r8) :: a4var(19,6,16,6,6)
 
-  ! Used by init_dryp Mode5
+  ! Used by aerocom_init_dryp Mode5
   real(r8) :: a5to10var(19,6,6,6,6,5:10)
 
   type, public :: aerodry_prop_type
@@ -77,13 +79,13 @@ module oslo_aero_aerocom_dry
 
   type(aerodry_prop_type), public :: aerodry_prop
 
-  public :: initdryp
+  public :: aerocom_init_dryp
 
 ! ==========================================================
 contains
 ! ==========================================================
 
-  subroutine initdryp()
+  subroutine aerocom_init_dryp()
 
     !Purpose: To read in the AeroCom look-up tables for calculation of dry
     !     aerosol size and mass distribution properties. The grid for discrete
@@ -149,7 +151,9 @@ contains
     a0aaerol=aaerol
     a0vaeros=vaeros
     a0vaerol=vaerol
-    write(iulog,*)'mode 0 ok'
+    if (masterproc) then
+       write(iulog,*)'mode 0 ok'
+    end if
 
     !-------------------------------------------
     ! Mode 1 (H2SO4 and SOA + condensate from H2SO4 and SOA)
@@ -214,14 +218,15 @@ contains
              do ifac=1,6
                 if(a1var(iv,ifombg,ictot,ifac)<=0.0_r8) then
                    write(*,*) 'a1var =', iv, ifombg, ictot, ifac, a1var(iv,ifombg,ictot,ifac)
-                   write(*,*) 'Error in initialization of a1var'
-                   stop
+                   call endrun ('Error in initialization of a1var')
                 endif
              enddo
           enddo
        enddo
     enddo
-    write(iulog,*)'new aerodry mode 1 ok'
+    if (masterproc) then
+       write(iulog,*)'new aerodry mode 1 ok'
+    end if
 
     !-------------------------------------------
     ! Modes 2 to 3 (BC/OC + condesate from H2SO4 and SOA)
@@ -289,16 +294,17 @@ contains
                 do ifaq=1,6
                    if(a2to3var(iv,ictot,ifac,kcomp)<=0.0_r8) then
                       write(*,*) 'a2to3var =', iv, kcomp, ictot, a2to3var(iv,ictot,ifac,kcomp)
-                      write(*,*) 'Error in initialization of a2to3var'
-                      stop
+                      call endrun ('Error in initialization of a2to3var')
                    endif
                 enddo
              enddo
           enddo
        enddo
     enddo
-    write(iulog,*)'aerodry mode 2-3 ok'
-    !
+    if (masterproc) then
+       write(iulog,*)'aerodry mode 2-3 ok'
+    end if
+
     !-------------------------------------------
     !       Mode 4 (BC&OC + condensate from H2SO4 and SOA + wetphase (NH4)2SO4)
     !-------------------------------------------
@@ -372,16 +378,17 @@ contains
                    if(a4var(iv,ifbcbg,ictot,ifac,ifaq)<=0.0_r8) then
                       write(*,*) 'a4var =', iv, ifbcbg, ictot, ifac, ifaq, &
                            a4var(iv,ifbcbg,ictot,ifac,ifaq)
-                      write(*,*) 'Error in initialization of a4var'
-                      stop
+                      call endrun ('Error in initialization of a4var')
                    endif
                 enddo
              enddo
           enddo
        enddo
     enddo
-    write(iulog,*)'aerodry mode 4 ok'
-    !
+    if (masterproc) then
+       write(iulog,*)'aerodry mode 4 ok'
+    end if
+
     !-------------------------------------------
     !       Modes 5 to 10 (mineral and seasalt-modes + cond./coag./aq.)
     !-------------------------------------------
@@ -449,15 +456,16 @@ contains
                    if(a5to10var(iv,ictot,ifac,ifbc,ifaq,kcomp)<=0.0_r8) then
                       write(*,*) 'a5to10var =', iv, kcomp, ictot, ifac, ifbc, ifaq, &
                            a5to10var(iv,ictot,ifac,ifbc,ifaq,kcomp)
-                      write(*,*) 'Error in initialization of a5to10var'
-                      stop
+                      call endrun ('Error in initialization of a5to10var')
                    endif
                 enddo
              enddo
           enddo
        enddo
     enddo
-    write(iulog,*)'aerodry mode 5-10 ok'
+    if (masterproc) then
+       write(iulog,*)'aerodry mode 5-10 ok'
+    end if
 
 993 format(I2,23e10.3)
 994 format(I2,21e10.3)
@@ -469,14 +477,13 @@ contains
        close (ifil)
     end do
 
-  end subroutine initdryp
+  end subroutine aerocom_init_dryp
 
   ! ==========================================================
-  subroutine intdrypar0 (this, lchnk, ncol, Nnatk)
+  subroutine intdrypar0 (this, ncol, Nnatk)
 
     ! arguments
     class (aerodry_prop_type):: this
-    integer  , intent(in)    :: lchnk                      ! chunk identifier
     integer  , intent(in)    :: ncol                       ! number of atmospheric columns
     real(r8) , intent(in)    :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration 
 
@@ -521,7 +528,7 @@ contains
   end subroutine intdrypar0
 
   ! ==========================================================
-  subroutine intdrypar1 (this, lchnk, ncol, Nnatk, xfombg, ifombg1, xct, ict1, xfac, ifac1)
+  subroutine intdrypar1 (this, ncol, Nnatk, xfombg, ifombg1, xct, ict1, xfac, ifac1)
 
     ! Output arguments: Modal mass concentrations (cint), area (aaero) and volume (vaero)
     ! (for AeroCom determination of particle effective radii) of each constituent. cint*05
@@ -530,7 +537,6 @@ contains
 
     ! Arguments
     class(aerodry_prop_type) :: this
-    integer, intent(in)   :: lchnk                       ! chunk identifier
     integer, intent(in)   :: ncol                        ! number of atmospheric columns
     real(r8), intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
     real(r8), intent(in)  :: xfombg(pcols,pver)         ! SOA/(SOA+H2SO4) for the background mode (1)
@@ -638,7 +644,7 @@ contains
   end subroutine intdrypar1
 
   ! ==========================================================
-  subroutine intdrypar2to3 (this, lchnk, ncol, Nnatk, xct, ict1, xfac, ifac1)
+  subroutine intdrypar2to3 (this, ncol, Nnatk, xct, ict1, xfac, ifac1)
 
     ! Modal mass concentrations (cint), area (aaero)
     ! and volume (vaero) (for AeroCom determination of particle
@@ -648,7 +654,6 @@ contains
 
     ! arguments
     class(aerodry_prop_type) :: this
-    integer  , intent(in) :: lchnk                       ! chunk identifier
     integer  , intent(in) :: ncol                        ! number of atmospheric columns
     real(r8) , intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
     real(r8) , intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
@@ -740,7 +745,7 @@ contains
   end subroutine intdrypar2to3
 
   ! ==========================================================
-  subroutine intdrypar4 (this, lchnk, ncol, Nnatk, xfbcbg, ifbcbg1, &
+  subroutine intdrypar4 (this, ncol, Nnatk, xfbcbg, ifbcbg1, &
        xfbcbgn, ifbcbgn1, xct, ict1, xfac, ifac1, xfaq, ifaq1)
 
     ! Output arguments: Modal mass concentrations (cint), area (aaero)
@@ -751,7 +756,6 @@ contains
 
     ! arguments
     class(aerodry_prop_type) :: this
-    integer  , intent(in) :: lchnk                      ! chunk identifier
     integer  , intent(in) :: ncol                       ! number of atmospheric columns
     real(r8) , intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
     real(r8) , intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
@@ -908,7 +912,7 @@ contains
   end subroutine intdrypar4
 
   ! ==========================================================
-  subroutine intdrypar5to10 (this, lchnk, ncol, Nnatk, xct, ict1, &
+  subroutine intdrypar5to10 (this, ncol, Nnatk, xct, ict1, &
        xfac, ifac1, xfbc, ifbc1, xfaq, ifaq1)
 
     ! Output arguments: Modal mass concentrations (cint), area (aaero)
@@ -919,7 +923,6 @@ contains
 
     ! arguments
     class(aerodry_prop_type) :: this
-    integer  , intent(in) :: lchnk                      ! chunk identifier
     integer  , intent(in) :: ncol                       ! number of atmospheric columns
     real(r8) , intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
     real(r8) , intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.

@@ -54,8 +54,8 @@ module oslo_aero_model
   use oslo_aero_params,      only: nmodes_oslo=>nmodes, nbmodes
   use oslo_aero_const,       only: numberToSurface
 #ifdef AEROCOM
-  use oslo_aero_aerocom_opt, only: initaeropt
-  use oslo_aero_aerocom_dry, only: initdryp
+  use oslo_aero_aerocom_opt, only: aerocom_init_aeropt
+  use oslo_aero_aerocom_dry, only: aerocom_init_dryp
 #endif
   use oslo_aero_control,     only: oslo_aero_ctl_readnl
   use oslo_aero_microp,      only: oslo_aero_microp_readnl
@@ -180,8 +180,8 @@ contains
     call oslo_aero_seasalt_init() !seasalt_emis_scale)
     call oslo_aero_wetdep_init()
 #ifdef AEROCOM
-    call initaeropt()
-    call initdryp()
+    call aerocom_init_aeropt()
+    call aerocom_init_dryp()
 #endif
 
     dummy = 'RAM1'
@@ -189,6 +189,7 @@ contains
     if ( history_aerosol ) then
        call add_default (dummy, 1, ' ')
     endif
+
     dummy = 'airFV'
     call addfld (dummy,horiz_only, 'A','frac','FV')
     if ( history_aerosol ) then
