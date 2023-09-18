@@ -877,10 +877,10 @@ contains
     ! if the user has specified prescribed aerosol dep fluxes then 
     ! do not set cam_out dep fluxes according to the prognostic aerosols
     if (.not. aerodep_flx_prescribed()) then
-       call oslo_set_srf_wetdep(aerdepwetis, aerdepwetcw, cam_out)
+       call oslo_set_srf_wetdep(ncol, aerdepwetis, aerdepwetcw, &
+            cam_out%bcphiwet, cam_out%ocphiwet, &
+            cam_out%dstwet1, cam_out%dstwet2, cam_out%dstwet3, cam_out%dstwet4)
     endif
-
-    return
 
   end subroutine oslo_aero_depos_wet
 
@@ -1055,54 +1055,55 @@ contains
   end subroutine oslo_aero_depvel_part
 
   !===============================================================================
-  subroutine oslo_set_srf_wetdep(aerdepwetis, aerdepwetcw, cam_out)
+  subroutine oslo_set_srf_wetdep(ncol, aerdepwetis, aerdepwetcw, &
+       bcphiwet, ocphiwet, dstwet1, dstwet2, dstwet3, dstwet4)
 
     ! Set surface wet deposition fluxes passed to coupler.
 
     ! Arguments:
-    real(r8), intent(in) :: aerdepwetis(:,:)  ! aerosol wet deposition (interstitial)
-    real(r8), intent(in) :: aerdepwetcw(:,:)  ! aerosol wet deposition (cloud water)
-    type(cam_out_t), intent(inout) :: cam_out ! cam export state
+    integer , intent(in)  :: ncol
+    real(r8), intent(in)  :: aerdepwetis(:,:)  ! aerosol wet deposition (interstitial)
+    real(r8), intent(in)  :: aerdepwetcw(:,:)  ! aerosol wet deposition (cloud water)
+    real(r8), intent(out) :: bcphiwet(:)
+    real(r8), intent(out) :: ocphiwet(:)
+    real(r8), intent(out) :: dstwet1(:)
+    real(r8), intent(out) :: dstwet2(:)
+    real(r8), intent(out) :: dstwet3(:)
+    real(r8), intent(out) :: dstwet4(:)
 
     ! Local variables:
     integer :: i
-    integer :: ncol ! number of columns
     !----------------------------------------------------------------------------
 
-    cam_out%bcphiwet(:) = 0._r8
-    cam_out%ocphiwet(:) = 0._r8
+    bcphiwet(:) = 0._r8
+    ocphiwet(:) = 0._r8
 
     ! derive cam_out variables from deposition fluxes
     !  note: wet deposition fluxes are negative into surface, 
     !        dry deposition fluxes are positive into surface.
     !        srf models want positive definite fluxes.
-    ncol = cam_out%ncol
     do i = 1,ncol
-
        ! black carbon fluxes
-       ! djlo : added bc_n and bc_ax contribution
-       ! djlo : bc_ax is assumed not to exist in cloud water
-       cam_out%bcphiwet(i) = -(aerdepwetis(i,l_bc_ni)+aerdepwetcw(i,l_bc_ni)+ &
-            aerdepwetis(i,l_bc_ai)+aerdepwetcw(i,l_bc_ai)+ &
-            aerdepwetis(i,l_bc_a )+aerdepwetcw(i,l_bc_a )+ &
-            aerdepwetis(i,l_bc_ac)+aerdepwetcw(i,l_bc_ac)+ &
-            aerdepwetis(i,l_bc_n )+aerdepwetcw(i,l_bc_n )+ &
-            aerdepwetis(i,l_bc_ax))
+       ! note: bc_ax is assumed not to exist in cloud water
+       bcphiwet(i) = -(aerdepwetis(i,l_bc_ni)+aerdepwetcw(i,l_bc_ni)+ &
+                       aerdepwetis(i,l_bc_ai)+aerdepwetcw(i,l_bc_ai)+ &
+                       aerdepwetis(i,l_bc_a )+aerdepwetcw(i,l_bc_a )+ &
+                       aerdepwetis(i,l_bc_ac)+aerdepwetcw(i,l_bc_ac)+ &
+                       aerdepwetis(i,l_bc_n )+aerdepwetcw(i,l_bc_n )+ &
+                       aerdepwetis(i,l_bc_ax))
 
        ! organic carbon fluxes
-       cam_out%ocphiwet(i) = -(aerdepwetis(i,l_om_ni)+aerdepwetcw(i,l_om_ni)+ &
-            aerdepwetis(i,l_om_ai)+aerdepwetcw(i,l_om_ai)+ &
-            aerdepwetis(i,l_om_ac)+aerdepwetcw(i,l_om_ac))
+       ocphiwet(i) = -(aerdepwetis(i,l_om_ni)+aerdepwetcw(i,l_om_ni)+ &
+                       aerdepwetis(i,l_om_ai)+aerdepwetcw(i,l_om_ai)+ &
+                       aerdepwetis(i,l_om_ac)+aerdepwetcw(i,l_om_ac))
 
        ! dust fluxes
-       !
        ! bulk bin1 (fine) dust deposition equals accumulation mode deposition:
-       cam_out%dstwet1(i) = -(aerdepwetis(i,l_dst_a2)+aerdepwetcw(i,l_dst_a2))
-
        !  A. Simple: Assign all coarse-mode dust to bulk size bin 3:
-       cam_out%dstwet2(i) = 0._r8
-       cam_out%dstwet3(i) = -(aerdepwetis(i,l_dst_a3)+aerdepwetcw(i,l_dst_a3))
-       cam_out%dstwet4(i) = 0._r8
+       dstwet1(i) = -(aerdepwetis(i,l_dst_a2)+aerdepwetcw(i,l_dst_a2))
+       dstwet2(i) = 0._r8
+       dstwet3(i) = -(aerdepwetis(i,l_dst_a3)+aerdepwetcw(i,l_dst_a3))
+       dstwet4(i) = 0._r8
 
     enddo
 
