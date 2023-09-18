@@ -279,20 +279,21 @@ contains
     type(physics_buffer_desc),    pointer :: pbuf(:)
 
     ! local vars
-    integer                                         :: ncol
-    real(r8), dimension(pcols, pver, 0:nmodes_oslo) :: oslo_dgnumwet
-    real(r8), dimension(pcols, pver, 0:nmodes_oslo) :: oslo_wetdens
-    real(r8), dimension(pcols, pver, numberOfProcessModeTracers) :: oslo_dgnumwet_processmodes
-    real(r8), dimension(pcols, pver, numberOfProcessModeTracers) :: oslo_wetdens_processmodes
+    real(r8) :: oslo_dgnumwet(pcols, pver, 0:nmodes_oslo)
+    real(r8) :: oslo_wetdens(pcols, pver, 0:nmodes_oslo)
+    real(r8) :: oslo_dgnumwet_processmodes(pcols, pver, numberOfProcessModeTracers)
+    real(r8) :: oslo_wetdens_processmodes(pcols, pver, numberOfProcessModeTracers)
 
-    ncol  = state%ncol
     oslo_wetdens(:,:,:) = 0._r8
-    call calcaersize_sub( ncol, state%t, state%q(1,1,1), state%pmid, state%pdel, &
+    call calcaersize_sub(state%ncol, state%t, state%q(1,1,1), state%pmid, state%pdel, &
          oslo_dgnumwet, oslo_wetdens, oslo_dgnumwet_processmodes, oslo_wetdens_processmodes)
 
-    call oslo_aero_depos_dry(state, pbuf, obklen, ustar, cam_in, dt, cam_out, ptend, &
+    call oslo_aero_depos_dry(state%lchnk, state%ncol, state%psetcols, &
+         state%t, state%pmid, state%pdel, state%pint, state%q, &
+         cam_in%landfrac, cam_in%icefrac, cam_in%ocnfrac, cam_in%fv, cam_in%ram1, cam_in%cflx, &
+         pbuf, obklen, ustar, dt, &
          oslo_dgnumwet, oslo_wetdens, oslo_dgnumwet_processmodes, oslo_wetdens_processmodes, &
-         cam_in%cflx )
+         cam_out, ptend)
 
   endsubroutine aero_model_drydep
 
@@ -306,7 +307,8 @@ contains
     type(physics_ptend), intent(out)   :: ptend       ! indivdual parameterization tendencies
     type(physics_buffer_desc), pointer :: pbuf(:)
 
-    call oslo_aero_depos_wet( state, dt, dlf, cam_out, ptend, pbuf)
+    call oslo_aero_depos_wet(state%lchnk, state%ncol, state%psetcols, state%pmid, state%pdel, state%q, state%t, &
+         dt, dlf, cam_out, ptend, pbuf)
 
   endsubroutine aero_model_wetdep
 

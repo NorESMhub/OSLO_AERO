@@ -12,11 +12,11 @@ module oslo_aero_depos
   use phys_control,            only: phys_getopts, cam_physpkg_is
   use cam_abortutils,          only: endrun
   use cam_logfile,             only: iulog
-  use camsrfexch,              only: cam_in_t, cam_out_t
+  use camsrfexch,              only: cam_out_t
   use time_manager,            only: is_first_step
   use aerodep_flx,             only: aerodep_flx_prescribed
   use mo_drydep,               only: n_land_type, fraction_landuse
-  use physics_types,           only: physics_state, physics_ptend, physics_ptend_init
+  use physics_types,           only: physics_ptend, physics_ptend_init
   use physics_buffer,          only: physics_buffer_desc, pbuf_get_chunk, pbuf_get_field, pbuf_get_index
   use physics_buffer,          only: pbuf_old_tim_idx
   use physconst,               only: gravit, rair, rhoh2o, boltz, pi, tmelt
@@ -146,7 +146,8 @@ contains
                'Wet deposition flux (belowcloud, convective) at surface')
           call addfld (trim(aName)//'SFSBS',horiz_only, 'A', unit_basename//'/m2/s ', &
                'Wet deposition flux (belowcloud, stratiform) at surface')
-          call addfld (trim(aName)//'WET',(/'lev'/), 'A', unit_basename//'/kg/s ','wet deposition tendency')
+          call addfld (trim(aName)//'WET',(/'lev'/), 'A', unit_basename//'/kg/s ',&
+               'wet deposition tendency')
           call addfld (trim(aName)//'SIC',(/'lev'/), 'A', unit_basename//'/kg/s ', &
                trim(aName)//' ic wet deposition')
           call addfld (trim(aName)//'SIS',(/'lev'/), 'A', unit_basename//'/kg/s ', &
@@ -232,50 +233,57 @@ contains
   end subroutine oslo_aero_depos_init
 
   !===============================================================================
-  subroutine oslo_aero_depos_dry  ( state, pbuf, obklen, ustar, cam_in, dt, cam_out, ptend, &
-       dgncur_awet, wetdens, dgncur_awet_processmode, wetdens_processmode, cflx)
+  subroutine oslo_aero_depos_dry  (lchnk, ncol, psetcols, &
+       t, pmid, pdel, pint, q, &
+       landfrac, icefrac, ocnfrac, fvin, ram1in, cflx, &
+       pbuf, obklen, ustar, dt, &
+       dgncur_awet, wetdens, dgncur_awet_processmode, wetdens_processmode, &
+       cam_out, ptend)
 
     ! Arguments:
-    type(physics_state),    intent(in)    :: state             ! Physics state variables
-    type(physics_buffer_desc),    pointer :: pbuf(:)
-    real(r8),               intent(in)    :: obklen(:)          
-    real(r8),               intent(in)    :: ustar(:)          ! sfc fric vel
-    type(cam_in_t), target, intent(in)    :: cam_in            ! import state
-    real(r8),               intent(in)    :: dt                ! time step
-    type(cam_out_t),        intent(inout) :: cam_out           ! export state
-    type(physics_ptend),    intent(out)   :: ptend             ! indivdual parameterization tendencies
-    real(r8),               intent(in)    :: dgncur_awet(pcols,pver,0:nmodes)
-    real(r8),               intent(in)    :: wetdens(pcols,pver,0:nmodes)
-    real(r8),               intent(in)    :: dgncur_awet_processmode(pcols, pver, numberOfProcessModeTracers)
-    real(r8),               intent(in)    :: wetdens_processmode(pcols, pver, numberOfProcessModeTracers)
-    real(r8),               intent(in)    :: cflx(pcols,pcnst) ! Surface fluxes
+    integer  ,           intent(in)    :: lchnk
+    integer  ,           intent(in)    :: ncol
+    integer  ,           intent(in)    :: psetcols
+    real(r8) ,           intent(in)    :: t(pcols,pver)     ! Model level temperatures (K)
+    real(r8) ,           intent(in)    :: q(pcols,pver,pcnst)  
+    real(r8) ,           intent(in)    :: pmid(pcols,pver)  ! Model level pressures (Pa)
+    real(r8) ,           intent(in)    :: pdel(pcols,pver)  ! model layer thickness (Pa)
+    real(r8) ,           intent(in)    :: pint(pcols,pverp) ! Model interface pressures (10*Pa)
+    real(r8) ,           intent(in)    :: landfrac(pcols)   ! land fraction
+    real(r8) ,           intent(in)    :: icefrac(pcols)    ! ice fraction
+    real(r8) ,           intent(in)    :: ocnfrac(pcols)    ! ocean fraction
+    real(r8) ,           intent(in)    :: fvin(pcols)       !
+    real(r8) ,           intent(in)    :: ram1in(pcols)     ! for dry dep velocities from land model for progseasalts
+    real(r8) ,           intent(in)    :: cflx(pcols,pcnst) ! Surface fluxes
+    type(physics_buffer_desc), pointer :: pbuf(:)
+    real(r8),            intent(in)    :: obklen(:)          
+    real(r8),            intent(in)    :: ustar(:)          ! sfc fric vel
+    real(r8),            intent(in)    :: dt                ! time step
+    real(r8),            intent(in)    :: dgncur_awet(pcols,pver,0:nmodes)
+    real(r8),            intent(in)    :: wetdens(pcols,pver,0:nmodes)
+    real(r8),            intent(in)    :: dgncur_awet_processmode(pcols, pver, numberOfProcessModeTracers)
+    real(r8),            intent(in)    :: wetdens_processmode(pcols, pver, numberOfProcessModeTracers)
+    type(cam_out_t),     intent(inout) :: cam_out           ! export state
+    type(physics_ptend), intent(out)   :: ptend             ! indivdual parameterization tendencies
 
     ! local vars
-    real(r8), pointer :: landfrac(:) ! land fraction
-    real(r8), pointer :: icefrac(:)  ! ice fraction
-    real(r8), pointer :: ocnfrac(:)  ! ocean fraction
-    real(r8), pointer :: fvin(:)     !
-    real(r8), pointer :: ram1in(:)   ! for dry dep velocities from land model for progseasalts
+    real(r8) :: fv(pcols)                ! for dry dep velocities, from land modified over ocean & ice
+    real(r8) :: ram1(pcols)              ! for dry dep velocities, from land modified over ocean & ice
 
-    real(r8) :: fv(pcols)            ! for dry dep velocities, from land modified over ocean & ice
-    real(r8) :: ram1(pcols)          ! for dry dep velocities, from land modified over ocean & ice
-
-    integer :: lchnk                   ! chunk identifier
-    integer :: ncol                    ! number of atmospheric columns
-    integer :: jvlc                    ! index for last dimension of vlc_xxx arrays
-    integer :: lphase                  ! index for interstitial / cloudborne aerosol
-    integer :: lspec                   ! index for aerosol number / chem-mass / water-mass
-    integer :: m                       ! aerosol mode index
-    integer :: mm                      ! tracer index
+    integer :: jvlc                      ! index for last dimension of vlc_xxx arrays
+    integer :: lphase                    ! index for interstitial / cloudborne aerosol
+    integer :: lspec                     ! index for aerosol number / chem-mass / water-mass
+    integer :: m                         ! aerosol mode index
+    integer :: mm                        ! tracer index
     integer :: i
 
     real(r8) :: tvs(pcols,pver)
-    real(r8) :: rho(pcols,pver)                    ! air density in kg/m3
-    real(r8) :: sflx(pcols)            ! deposition flux
-    real(r8)::  dep_trb(pcols)       !kg/m2/s
-    real(r8)::  dep_grv(pcols)       !kg/m2/s (total of grav and trb)
-    real(r8) :: pvmzaer(pcols,pverp)    ! sedimentation velocity in Pa
-    real(r8) :: dqdt_tmp(pcols,pver)   ! temporary array to hold tendency for 1 species
+    real(r8) :: rho(pcols,pver)          ! air density in kg/m3
+    real(r8) :: sflx(pcols)              ! deposition flux
+    real(r8)::  dep_trb(pcols)           ! kg/m2/s
+    real(r8)::  dep_grv(pcols)           ! kg/m2/s (total of grav and trb)
+    real(r8) :: pvmzaer(pcols,pverp)     ! sedimentation velocity in Pa
+    real(r8) :: dqdt_tmp(pcols,pver)     ! temporary array to hold tendency for 1 species
 
     real(r8) :: rad_drop(pcols,pver)
     real(r8) :: dens_drop(pcols,pver)
@@ -284,11 +292,11 @@ contains
     real(r8) :: dens_aer(pcols,pver)
     real(r8) :: sg_aer(pcols,pver)
 
-    real(r8) :: vlc_dry(pcols,pver,4)       ! dep velocity
-    real(r8) :: vlc_grv(pcols,pver,4)       ! dep velocity
-    real(r8)::  vlc_trb(pcols,4)            ! dep velocity
-    real(r8) :: aerdepdryis(pcols,pcnst)  ! aerosol dry deposition (interstitial)
-    real(r8) :: aerdepdrycw(pcols,pcnst)  ! aerosol dry deposition (cloud water)
+    real(r8) :: vlc_dry(pcols,pver,4)    ! dep velocity
+    real(r8) :: vlc_grv(pcols,pver,4)    ! dep velocity
+    real(r8)::  vlc_trb(pcols,4)         ! dep velocity
+    real(r8) :: aerdepdryis(pcols,pcnst) ! aerosol dry deposition (interstitial)
+    real(r8) :: aerdepdrycw(pcols,pcnst) ! aerosol dry deposition (cloud water)
     real(r8), pointer :: fldcw(:,:)
 
     ! oslo aerosols
@@ -303,21 +311,12 @@ contains
     logical  :: is_done(pcnst,2)
     !-----------------------------------------------------------------------
 
-    landfrac => cam_in%landfrac(:)
-    icefrac  => cam_in%icefrac(:)
-    ocnfrac  => cam_in%ocnfrac(:)
-    fvin     => cam_in%fv(:)
-    ram1in   => cam_in%ram1(:)
-
-    lchnk = state%lchnk
-    ncol  = state%ncol
     aerdepdryis(:,:)=0._r8
     aerdepdrycw(:,:)=0._r8
 
     ! calc ram and fv over ocean and sea ice ...
-    call calcram( ncol,landfrac,icefrac,ocnfrac,obklen, &
-         ustar,ram1in,ram1,state%t(:,pver),state%pmid(:,pver), &
-         state%pdel(:,pver),fvin,fv)
+    call calcram( ncol,landfrac, icefrac, ocnfrac, obklen, &
+         ustar, ram1in, ram1, t(:,pver), pmid(:,pver), pdel(:,pver), fvin, fv)
 
     call outfld( 'airFV', fv(:), pcols, lchnk )
     call outfld( 'RAM1', ram1(:), pcols, lchnk )
@@ -325,10 +324,10 @@ contains
     ! note that tendencies are not only in sfc layer (because of sedimentation)
     ! and that ptend is updated within each subroutine for different species
 
-    call physics_ptend_init(ptend, state%psetcols, 'aero_model_drydep', lq=drydep_lq)
+    call physics_ptend_init(ptend, psetcols, 'aero_model_drydep', lq=drydep_lq)
 
-    tvs(:ncol,:) = state%t(:ncol,:)!*(1+state%q(:ncol,k)
-    rho(:ncol,:)=  state%pmid(:ncol,:)/(rair*state%t(:ncol,:))
+    tvs(:ncol,:) = t(:ncol,:) !*(1+q(:ncol,k)
+    rho(:ncol,:)=  pmid(:ncol,:)/(rair*t(:ncol,:))
     is_done(:,:) = .false.
 
     ! calc settling/deposition velocities for cloud droplets (and cloud-borne aerosols)
@@ -338,12 +337,8 @@ contains
     sg_drop(:,:) = 1.46_r8
 
     !jvlc = 3
-    !call oslo_aero_depvel_part( ncol,state%t(:,:), state%pmid(:,:), ram1, fv,  &
-    !                 vlc_dry(:,:,jvlc), vlc_trb(:,jvlc), vlc_grv(:,:,jvlc),  &
-    !                 rad_drop(:,:), dens_drop(:,:), sg_drop(:,:), 0, lchnk)
-
     jvlc = 4
-    call oslo_aero_depvel_part( ncol,state%t(:,:), state%pmid(:,:), ram1, fv,  &
+    call oslo_aero_depvel_part( ncol, t(:,:), pmid(:,:), ram1, fv,  &
          vlc_dry(:,:,jvlc), vlc_trb(:,jvlc), vlc_grv(:,:,jvlc),  &
          rad_drop(:,:), dens_drop(:,:), sg_drop(:,:), 3, lchnk)
 
@@ -379,7 +374,7 @@ contains
              sg_aer(1:ncol,:) = lifecycleSigma(m)
 
              jvlc = 2
-             call oslo_aero_depvel_part( ncol, state%t(:,:), state%pmid(:,:), ram1, fv,  & 
+             call oslo_aero_depvel_part( ncol, t(:,:), pmid(:,:), ram1, fv,  & 
                   vlc_dry(:,:,jvlc), vlc_trb(:,jvlc), vlc_grv(:,:,jvlc),  &
                   rad_aer(:,:), dens_aer(:,:), sg_aer(:,:), 3, lchnk)
           end if
@@ -406,7 +401,7 @@ contains
                    rad_aer(1:ncol,top_lev:) = 0.5_r8*dgncur_awet_processmode(1:ncol,top_lev:,processModeMap(mm))   &
                         *exp(1.5_r8*(logSigma))
 
-                   call oslo_aero_depvel_part( ncol, state%t(:,:), state%pmid(:,:), ram1, fv,  & 
+                   call oslo_aero_depvel_part( ncol, t(:,:), pmid(:,:), ram1, fv,  & 
                         vlc_dry(:,:,jvlc), vlc_trb(:,jvlc), vlc_grv(:,:,jvlc),  &
                         rad_aer(:,:), dens_aer(:,:), sg_aer(:,:), 3, lchnk)
                 endif
@@ -431,8 +426,8 @@ contains
                 pvmzaer(:ncol,2:pverp) = pvmzaer(:ncol,2:pverp) * rho(:ncol,:)*gravit
 
                 ! calculate the tendencies and sfc fluxes from the above velocities
-                call oslo_aero_dust_sediment_tend(ncol, dt, state%pint(:,:), state%pmid, state%pdel, state%t , &
-                     state%q(:,:,mm),  pvmzaer,  ptend%q(:,:,mm), sflx, &
+                call oslo_aero_dust_sediment_tend(ncol, dt, pint(:,:), pmid, pdel, t , &
+                     q(:,:,mm),  pvmzaer,  ptend%q(:,:,mm), sflx, &
                      dusttend_to_ll_out=interfaceTendToLowestLayer)
 
                 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -440,7 +435,7 @@ contains
                 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 !Some tracers have short lifetime with respect to dry dep:
                 !Solve implicitly for eqn for emission and dry dep in lowest layer
-                deltaH(:ncol)=state%pdel(:ncol,pver)/rho(:ncol,pver)/gravit     ![m] height of layer
+                deltaH(:ncol) = pdel(:ncol,pver)/rho(:ncol,pver)/gravit     ![m] height of layer
                 !print*, "deltaH", deltaH(:ncol)
 
                 lossRate(:ncol) = vlc_dry(:ncol,pver,jvlc)/deltaH(:ncol)            ![1/s] loss rate out of layer
@@ -457,26 +452,24 @@ contains
                 if(mm .eq. l_bc_ax) then
                    totalProd(:ncol) = interfaceTendToLowestLayer(:ncol)
                 else
-                   totalProd(:ncol) = cflx(:ncol,mm)*gravit/state%pdel(:ncol,pver) + interfaceTendToLowestLayer(:ncol)
+                   totalProd(:ncol) = cflx(:ncol,mm)*gravit/pdel(:ncol,pver) + interfaceTendToLowestLayer(:ncol)
                 end if
 
                 !Do solution
                 where(lossRate(:ncol)*dt .gt. 1.e-2_r8)
-                   MMRNew(:ncol) = state%q(:ncol,pver,mm)*exp(-lossRate(:ncol)*dt)   &
+                   MMRNew(:ncol) = q(:ncol,pver,mm)*exp(-lossRate(:ncol)*dt)   &
                         + totalProd(:ncol)/lossRate(:ncol)*(1.0_r8 - exp(-lossRate(:ncol)*dt))
                 elsewhere
-                   MMRNew(:ncol) = state%q(:ncol,pver,mm)        &
-                        + totalProd(:ncol)*dt &
-                        - state%q(:ncol,pver,mm)*lossRate(:ncol)*dt
+                   MMRNew(:ncol) = q(:ncol,pver,mm)+ totalProd(:ncol)*dt - q(:ncol,pver,mm)*lossRate(:ncol)*dt
                 end where
 
                 !C0 + Pdt -massLostDD = CNew   ==>               
-                massLostDD(:ncol) = state%q(:ncol,pver,mm) - MMRNew(:ncol) + totalProd(:ncol)*dt
+                massLostDD(:ncol) = q(:ncol,pver,mm) - MMRNew(:ncol) + totalProd(:ncol)*dt
 
                 !Overwrite tendency in lowest layer to include emissions
                 !They are then not included in vertical diffusion!!
-                ptend%q(:ncol,pver,mm) = (MMRNew(:ncol)-state%q(:ncol,pver,mm))/dt
-                sflx(:ncol) = massLostDD(:ncol)*state%pdel(:ncol,pver) / gravit / dt
+                ptend%q(:ncol,pver,mm) = (MMRNew(:ncol)-q(:ncol,pver,mm))/dt
+                sflx(:ncol) = massLostDD(:ncol)*pdel(:ncol,pver) / gravit / dt
                 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
                 ! apportion dry deposition into turb and gravitational settling for tapes
@@ -513,7 +506,7 @@ contains
                 pvmzaer(:ncol,2:pverp) = pvmzaer(:ncol,2:pverp) * rho(:ncol,:)*gravit
 
                 ! calculate the tendencies and sfc fluxes from the above velocities
-                call oslo_aero_dust_sediment_tend(ncol, dt, state%pint(:,:), state%pmid, state%pdel, state%t, &
+                call oslo_aero_dust_sediment_tend(ncol, dt, pint(:,:), pmid, pdel, t, &
                      fldcw(:,:), pvmzaer, dqdt_tmp(:,:), sflx)
 
                 ! apportion dry deposition into turb and gravitational settling for tapes
@@ -542,25 +535,32 @@ contains
     ! if the user has specified prescribed aerosol dep fluxes then 
     ! do not set cam_out dep fluxes according to the prognostic aerosols
     if (.not.aerodep_flx_prescribed()) then
-       call oslo_set_srf_drydep(aerdepdryis, aerdepdrycw, cam_out)
+       call  oslo_set_srf_drydep(ncol, aerdepdryis, aerdepdrycw, &
+            cam_out%bcphidry, cam_out%bcphodry, cam_out%ocphidry, cam_out%ocphodry, &
+            cam_out%dstdry1, cam_out%dstdry2, cam_out%dstdry3, cam_out%dstdry4)
     endif
 
   end subroutine oslo_aero_depos_dry
 
   !===============================================================================
-  subroutine oslo_aero_depos_wet ( state, dt, dlf, cam_out, ptend, pbuf) 
+  subroutine oslo_aero_depos_wet ( lchnk, ncol, psetcols, pmid, pdel, q, t, &
+       dt, dlf, cam_out, ptend, pbuf) 
 
-    type(physics_state), intent(in)    :: state    ! Physics state variables
-    real(r8),            intent(in)    :: dt       ! time step
-    real(r8),            intent(in)    :: dlf(:,:) ! shallow+deep convective detrainment [kg/kg/s]
-    type(cam_out_t),     intent(inout) :: cam_out  ! export state
-    type(physics_ptend), intent(out)   :: ptend    ! indivdual parameterization tendencies
+    integer ,            intent(in)    :: lchnk            ! chunk identifier
+    integer ,            intent(in)    :: ncol             ! number of atmospheri columns
+    integer ,            intent(in)    :: psetcols 
+    real(r8) ,           intent(in)    :: pmid(pcols,pver) ! Model level pressures (Pa)
+    real(r8) ,           intent(in)    :: pdel(pcols,pver) ! model layer thickness (Pa)
+    real(r8) ,           intent(in)    :: q(pcols,pver,pcnst)  
+    real(r8) ,           intent(in)    :: t(pcols,pver)    ! Model level temperatures (K)
+    real(r8),            intent(in)    :: dt               ! time step
+    real(r8),            intent(in)    :: dlf(:,:)         ! shallow+deep convective detrainment [kg/kg/s]
     type(physics_buffer_desc), pointer :: pbuf(:)
+    type(cam_out_t),     intent(inout) :: cam_out          ! export state
+    type(physics_ptend), intent(out)   :: ptend            ! indivdual parameterization tendencies
 
     ! Local variables
     integer  :: m                             ! tracer index
-    integer  :: lchnk                         ! chunk identifier
-    integer  :: ncol                          ! number of atmospheric columns
     integer  :: i,k,mm
     real(r8) :: iscavt(pcols, pver)
     real(r8) :: icscavt(pcols, pver)
@@ -593,15 +593,13 @@ contains
     real(r8) :: rsscavt(pcols, pver)
     real(r8) :: qqcw_in(pcols,pver), qqcw_sav(pcols,pver,pcnst) ! temporary array to hold qqcw for the current mode
     logical  :: is_done(pcnst,2)
-    real(r8), target :: zeroAerosolConcentration(pcols,pver)
+    real(r8) :: zeroAerosolConcentration(pcols,pver)
     real(r8), pointer :: fldcw(:,:)
     real(r8), pointer :: fracis(:,:,:)   ! fraction of transported species that are insoluble
     type(wetdep_inputs_t) :: dep_inputs
+    !-----------------------------------------------------------------------
 
-    lchnk = state%lchnk
-    ncol  = state%ncol
-
-    call physics_ptend_init(ptend, state%psetcols, 'aero_model_wetdep', lq=wetdep_lq)
+    call physics_ptend_init(ptend, psetcols, 'aero_model_wetdep', lq=wetdep_lq)
 
     is_done(:,:) = .false.
 
@@ -610,7 +608,7 @@ contains
     ! Wet deposition of mozart aerosol species.
     ptend%name  = ptend%name//'+mz_aero_wetdep'
 
-    call wetdep_inputs_set( state, pbuf, dep_inputs )
+    call wetdep_inputs_set(ncol, pmid, pdel, t, q, pbuf, dep_inputs)
     call pbuf_get_field(pbuf, fracis_idx, fracis, start=(/1,1,1/), kount=(/pcols, pver, pcnst/) )
 
     prec(:ncol)=0._r8
@@ -621,7 +619,7 @@ contains
           isprx(:ncol,k) = .false.
        endwhere
        prec(:ncol) = prec(:ncol) + &
-            (dep_inputs%prain(:ncol,k) + dep_inputs%cmfdqr(:ncol,k) - dep_inputs%evapr(:ncol,k)) *state%pdel(:ncol,k)/gravit
+            (dep_inputs%prain(:ncol,k) + dep_inputs%cmfdqr(:ncol,k) - dep_inputs%evapr(:ncol,k)) * pdel(:ncol,k)/gravit
     end do
 
 
@@ -720,7 +718,7 @@ contains
                 ptend%lq(mm) = .TRUE.
                 dqdt_tmp(:,:) = 0.0_r8
                 ! q_tmp reflects changes from modal_aero_calcsize and is the "most current" q
-                q_tmp(1:ncol,:) = state%q(1:ncol,:,mm) + ptend%q(1:ncol,:,mm)*dt
+                q_tmp(1:ncol,:) = q(1:ncol,:,mm) + ptend%q(1:ncol,:,mm)*dt
                 if(convproc_do_aer) then
                    !Feed in the saved cloudborne mixing ratios from phase 2
                    qqcw_in(:,:) = qqcw_sav(:,:,mm)
@@ -734,7 +732,7 @@ contains
                    end if
                 endif
 
-                call wetdepa_v2( state%pmid, state%q(:,:,1), state%pdel, &
+                call wetdepa_v2( pmid, q(:,:,1), pdel, &
                      dep_inputs%cldt, dep_inputs%cldcu, dep_inputs%cmfdqr, &
                      dep_inputs%evapc, dep_inputs%conicw, dep_inputs%prain, dep_inputs%qme, &
                      dep_inputs%evapr, dep_inputs%totcond, q_tmp, dt, &
@@ -759,7 +757,7 @@ contains
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
-                      sflx(i)=sflx(i)+dqdt_tmp(i,k)*state%pdel(i,k)/gravit
+                      sflx(i)=sflx(i)+dqdt_tmp(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
                 if (.not.convproc_do_aer) call outfld( trim(cnst_name(mm))//'SFWET', sflx, pcols, lchnk)
@@ -768,7 +766,7 @@ contains
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
-                      sflx(i)=sflx(i)+icscavt(i,k)*state%pdel(i,k)/gravit
+                      sflx(i)=sflx(i)+icscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
                 if (.not.convproc_do_aer) call outfld( trim(cnst_name(mm))//'SFSIC', sflx, pcols, lchnk)
@@ -777,7 +775,7 @@ contains
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
-                      sflx(i)=sflx(i)+isscavt(i,k)*state%pdel(i,k)/gravit
+                      sflx(i)=sflx(i)+isscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
                 call outfld( trim(cnst_name(mm))//'SFSIS', sflx, pcols, lchnk)
@@ -785,7 +783,7 @@ contains
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
-                      sflx(i)=sflx(i)+bcscavt(i,k)*state%pdel(i,k)/gravit
+                      sflx(i)=sflx(i)+bcscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
                 call outfld( trim(cnst_name(mm))//'SFSBC', sflx, pcols, lchnk)
@@ -794,7 +792,7 @@ contains
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
-                      sflx(i)=sflx(i)+bsscavt(i,k)*state%pdel(i,k)/gravit
+                      sflx(i)=sflx(i)+bsscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
                 call outfld( trim(cnst_name(mm))//'SFSBS', sflx, pcols, lchnk)
@@ -818,7 +816,7 @@ contains
                    end if
                 endif
 
-                call wetdepa_v2(state%pmid, state%q(:,:,1), state%pdel, &
+                call wetdepa_v2(pmid, q(:,:,1), pdel, &
                      dep_inputs%cldt, dep_inputs%cldcu, dep_inputs%cmfdqr, &
                      dep_inputs%evapc, dep_inputs%conicw, dep_inputs%prain, dep_inputs%qme, &
                      dep_inputs%evapr, dep_inputs%totcond, fldcw, dt, &
@@ -835,7 +833,7 @@ contains
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
-                      sflx(i)=sflx(i)+dqdt_tmp(i,k)*state%pdel(i,k)/gravit
+                      sflx(i)=sflx(i)+dqdt_tmp(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
                 call outfld( trim(getCloudTracerName(mm))//'SFWET', sflx, pcols, lchnk)
@@ -844,28 +842,28 @@ contains
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
-                      sflx(i)=sflx(i)+icscavt(i,k)*state%pdel(i,k)/gravit
+                      sflx(i)=sflx(i)+icscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
                 call outfld( trim(getCloudTracerName(mm))//'SFSIC', sflx, pcols, lchnk)
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
-                      sflx(i)=sflx(i)+isscavt(i,k)*state%pdel(i,k)/gravit
+                      sflx(i)=sflx(i)+isscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
                 call outfld( trim(getCloudTracerName(mm))//'SFSIS', sflx, pcols, lchnk)
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
-                      sflx(i)=sflx(i)+bcscavt(i,k)*state%pdel(i,k)/gravit
+                      sflx(i)=sflx(i)+bcscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
                 call outfld( trim(getCloudTracerName(mm))//'SFSBC', sflx, pcols, lchnk)
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
-                      sflx(i)=sflx(i)+bsscavt(i,k)*state%pdel(i,k)/gravit
+                      sflx(i)=sflx(i)+bsscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
                 call outfld( trim(getCloudTracerName(mm))//'SFSBS', sflx, pcols, lchnk)
@@ -1064,7 +1062,7 @@ contains
     ! Arguments:
     real(r8), intent(in) :: aerdepwetis(:,:)  ! aerosol wet deposition (interstitial)
     real(r8), intent(in) :: aerdepwetcw(:,:)  ! aerosol wet deposition (cloud water)
-    type(cam_out_t), intent(inout) :: cam_out     ! cam export state
+    type(cam_out_t), intent(inout) :: cam_out ! cam export state
 
     ! Local variables:
     integer :: i
@@ -1111,56 +1109,61 @@ contains
   end subroutine oslo_set_srf_wetdep
 
   !===============================================================================
-  subroutine oslo_set_srf_drydep(aerdepdryis, aerdepdrycw, cam_out)
+  subroutine oslo_set_srf_drydep(ncol, aerdepdryis, aerdepdrycw, &
+       bcphidry, bcphodry, ocphidry, ocphodry, dstdry1, dstdry2, dstdry3, dstdry4)
 
     ! Set surface dry deposition fluxes passed to coupler.
 
     ! Arguments:
-    real(r8), intent(in) :: aerdepdryis(:,:)  ! aerosol dry deposition (interstitial)
-    real(r8), intent(in) :: aerdepdrycw(:,:)  ! aerosol dry deposition (cloud water)
-    type(cam_out_t), intent(inout) :: cam_out     ! cam export state
+    integer , intent(in)  :: ncol
+    real(r8), intent(in)  :: aerdepdryis(:,:)  ! aerosol dry deposition (interstitial)
+    real(r8), intent(in)  :: aerdepdrycw(:,:)  ! aerosol dry deposition (cloud water)
+    real(r8), intent(out) :: bcphidry(:)
+    real(r8), intent(out) :: bcphodry(:)
+    real(r8), intent(out) :: ocphidry(:)
+    real(r8), intent(out) :: ocphodry(:)
+    real(r8), intent(out) :: dstdry1(:)
+    real(r8), intent(out) :: dstdry2(:)
+    real(r8), intent(out) :: dstdry3(:)
+    real(r8), intent(out) :: dstdry4(:)
 
     ! Local variables:
-    integer :: i, idx
-    integer :: ncol                      ! number of columns
+    integer :: i
     !----------------------------------------------------------------------------
 
-    cam_out%bcphidry(:) = 0._r8
-    cam_out%bcphodry(:) = 0._r8
-    cam_out%ocphidry(:) = 0._r8
-    cam_out%ocphodry(:) = 0._r8
+    bcphidry(:) = 0._r8
+    bcphodry(:) = 0._r8
+    ocphidry(:) = 0._r8
+    ocphodry(:) = 0._r8
 
-    ! derive cam_out variables from deposition fluxes
-    !  note: wet deposition fluxes are negative into surface, 
-    !        dry deposition fluxes are positive into surface.
-    !        srf models want positive definite fluxes.
-    ncol = cam_out%ncol
+    ! wet deposition fluxes are negative into surface, 
+    ! dry deposition fluxes are positive into surface.
+    ! srf models want positive definite fluxes.
     do i = 1, ncol
        ! black carbon fluxes
-       cam_out%bcphidry(i) = aerdepdryis(i,l_bc_ni)+aerdepdrycw(i,l_bc_ni)+ &
-            aerdepdryis(i,l_bc_ai)+aerdepdrycw(i,l_bc_ai)+ &
-            aerdepdryis(i,l_bc_a )+aerdepdrycw(i,l_bc_a )+ &
-            aerdepdryis(i,l_bc_ac)+aerdepdrycw(i,l_bc_ac)
-       cam_out%bcphodry(i) = aerdepdryis(i,l_bc_n )+aerdepdrycw(i,l_bc_n )+ &
-            aerdepdryis(i,l_bc_ax)+aerdepdrycw(i,l_bc_ax)
+       bcphidry(i) = aerdepdryis(i,l_bc_ni)+aerdepdrycw(i,l_bc_ni)+ &
+                     aerdepdryis(i,l_bc_ai)+aerdepdrycw(i,l_bc_ai)+ &
+                     aerdepdryis(i,l_bc_a )+aerdepdrycw(i,l_bc_a )+ &
+                     aerdepdryis(i,l_bc_ac)+aerdepdrycw(i,l_bc_ac)
+       bcphodry(i) = aerdepdryis(i,l_bc_n )+aerdepdrycw(i,l_bc_n )+ &
+                     aerdepdryis(i,l_bc_ax)+aerdepdrycw(i,l_bc_ax)
 
        ! organic carbon fluxes
        ! djlo : skipped the bc_a contribution (was about om !)
-       cam_out%ocphidry(i) = aerdepdryis(i,l_om_ni)+aerdepdrycw(i,l_om_ni)+ &
-            aerdepdryis(i,l_om_ai)+aerdepdrycw(i,l_om_ai)+ &
-            aerdepdryis(i,l_om_ac)+aerdepdrycw(i,l_om_ac)
-       cam_out%ocphidry(i) = 0._r8
-       cam_out%ocphodry(i) = 0._r8
+       ! ocphidry(i) = aerdepdryis(i,l_om_ni)+aerdepdrycw(i,l_om_ni)+ &
+       !               aerdepdryis(i,l_om_ai)+aerdepdrycw(i,l_om_ai)+ &
+       !               aerdepdryis(i,l_om_ac)+aerdepdrycw(i,l_om_ac)
+       ocphidry(i) = 0._r8
+       ocphodry(i) = 0._r8
 
        ! dust fluxes
-       ! bulk bin1 (fine) dust deposition equals accumulation mode deposition:
-       cam_out%dstdry1(i) = aerdepdryis(i,l_dst_a2)+aerdepdrycw(i,l_dst_a2)
-
-       ! Two options for partitioning deposition into bins 2-4:
-       !  A. Simple: Assign all coarse-mode dust to bulk size bin 3:
-       cam_out%dstdry2(i) = 0._r8
-       cam_out%dstdry3(i) = aerdepdryis(i,l_dst_a3)+aerdepdrycw(i,l_dst_a3)
-       cam_out%dstdry4(i) = 0._r8
+       ! bulk bin1 (fine) : dust deposition equals accumulation mode deposition:
+       ! bulk bin 3       : A. Simple: Assign all coarse-mode dust to bulk size bin 3:
+       ! bulk bins 2-4    : two options for partitioning deposition into bins 2-4:
+       dstdry1(i) = aerdepdryis(i,l_dst_a2)+aerdepdrycw(i,l_dst_a2)
+       dstdry2(i) = 0._r8
+       dstdry3(i) = aerdepdryis(i,l_dst_a3)+aerdepdrycw(i,l_dst_a3)
+       dstdry4(i) = 0._r8
     enddo
 
   end subroutine oslo_set_srf_drydep
@@ -1264,14 +1267,18 @@ contains
   endsubroutine oslo_aero_wetdep_init
 
   !==============================================================================
-  subroutine wetdep_inputs_set( state, pbuf, inputs )
+  subroutine wetdep_inputs_set(ncol, pmid, pdel, t, q, pbuf, inputs )
 
     ! gather up the inputs needed for the wetdepa routines
 
     ! arguments
-    type(physics_state),  intent(in )  :: state   ! physics state
-    type(physics_buffer_desc), pointer :: pbuf(:) ! physics buffer
-    type(wetdep_inputs_t), intent(out) :: inputs  ! collection of wetdepa inputs
+    integer,               intent(in)  :: ncol
+    real(r8) ,             intent(in)  :: pmid(pcols,pver) ! Model level pressures (Pa)
+    real(r8) ,             intent(in)  :: pdel(pcols,pver) ! model layer thickness (Pa)
+    real(r8) ,             intent(in)  :: t(pcols,pver)    ! Model level temperatures (K)
+    real(r8) ,             intent(in)  :: q(pcols,pver,pcnst)  
+    type(physics_buffer_desc), pointer :: pbuf(:)          ! physics buffer
+    type(wetdep_inputs_t), intent(out) :: inputs           ! collection of wetdepa inputs
 
     ! local variables
     real(r8), pointer :: icwmrdp(:,:)       ! in cloud water mixing ratio, deep convection
@@ -1284,9 +1291,8 @@ contains
     real(r8), pointer :: evapcdp(:,:)       ! Evaporation rate of deep    convective precipitation >=0.
     real(r8)          :: rainmr(pcols,pver) ! mixing ratio of rain within cloud volume
     real(r8)          :: cldst(pcols,pver)  ! Stratiform cloud fraction
-    integer           :: itim, ncol
+    integer           :: itim
 
-    ncol = state%ncol
     itim = pbuf_old_tim_idx()
 
     call pbuf_get_field(pbuf, cld_idx,         inputs%cldt, start=(/1,1,itim/), kount=(/pcols,pver,1/) )
@@ -1315,11 +1321,11 @@ contains
        inputs%conicw(:ncol,:) = icwmrdp(:ncol,:) + icwmrsh(:ncol,:)
     end if
 
-    inputs%totcond(:ncol,:) = state%q(:ncol,:,ixcldliq) + state%q(:ncol,:,ixcldice)
+    inputs%totcond(:ncol,:) = q(:ncol,:,ixcldliq) + q(:ncol,:,ixcldice)
 
-    call clddiag( state%t, state%pmid, state%pdel, inputs%cmfdqr, inputs%evapc, &
+    call clddiag( t, pmid, pdel, inputs%cmfdqr, inputs%evapc, &
          inputs%cldt, inputs%cldcu, cldst, inputs%qme, inputs%evapr, &
-         inputs%prain, inputs%cldv, inputs%cldvcu, inputs%cldvst, rainmr, state%ncol )
+         inputs%prain, inputs%cldv, inputs%cldvcu, inputs%cldvst, rainmr, ncol )
 
   end subroutine wetdep_inputs_set
 
