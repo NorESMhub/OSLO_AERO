@@ -6,9 +6,10 @@ module oslo_aero_aerocom
   use shr_kind_mod,    only: r8 => shr_kind_r8
   use cam_history,     only: outfld
   !
-  use oslo_aero_aerocom_opt, only: extinction_coeffs, extinction_coeffsn
-  use oslo_aero_aerocom_dry, only: aerodry_prop
-  use oslo_aero_sw_tables,   only: interpol0, interpol1, interpol2to3, interpol4, interpol5to10
+  use oslo_aero_aerocom_opt,    only: extinction_coeffs, extinction_coeffsn
+  use oslo_aero_aerocom_dry,    only: aerodry_prop
+  use oslo_aero_sw_tables,      only: interpol0, interpol1, interpol2to3, interpol4, interpol5to10
+  use oslo_aero_sw_tables,      only: cate, cat, fac, faq, fbc, rh, fombg, fbcbg, eps, rh, xrhrf, irhrf1
   use oslo_aero_share
   use oslo_aero_params
   use oslo_aero_const
@@ -28,15 +29,20 @@ module oslo_aero_aerocom
 contains
 !===============================================================================
 
-  subroutine aerocom(Cam, Nnatk, pint, coszrs)
+  subroutine aerocom(Cam, Nnatk, pint, coszrs, deltah_km, batotlw, faitbc, f_soana, fnbc)
 
-    ! This is currently called by radiation.F90 if the AEROCOM cpp-ifdef is defined
+    ! This is currently called by oslo_aero_optical_params
 
     ! Arguments
     real(r8), intent(in)  :: Cam(pcols,pver,nbmodes)
     real(r8), intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! aerosol mode
     real(r8), intent(in)  :: pint(pcols,pverp)          ! Model interface pressures (10*Pa)
     real(r8), intent(in)  :: coszrs(pcols)
+    real(r8), intent(in)  :: deltah_km(pcols,pver)
+    real(r8), intent(in)  :: batotlw(pcols,pver,nlwbands)
+    real(r8), intent(in)  :: faitbc(pcols,pver)
+    real(r8), intent(in)  :: f_soana(pcols,pver)
+    real(r8), intent(in)  :: fnbc(pcols,pver)
 
     ! Local variables
     integer  :: indx, k, ib, icol, mplus10
@@ -1222,40 +1228,40 @@ contains
           ! (sa=so4(aq) and sc=so4(cond+coag), separated because of different density:
           ! necessary for calculation of volume fractions!), and total aerosol surface
           ! areas and volumes.
-          c_bc(icol,k)=0.0_r8
-          c_bc05(icol,k)=0.0_r8
-          c_bc125(icol,k)=0.0_r8
-          c_oc(icol,k)=0.0_r8
-          c_oc05(icol,k)=0.0_r8
-          c_oc125(icol,k)=0.0_r8
-          c_s4(icol,k)=0.0_r8
-          c_s4_a(icol,k)=0.0_r8
-          c_s4_1(icol,k)=0.0_r8
-          c_s4_5(icol,k)=0.0_r8
-          c_sa(icol,k)=0.0_r8
-          c_sa05(icol,k)=0.0_r8
-          c_sa125(icol,k)=0.0_r8
-          c_sc(icol,k)=0.0_r8
-          c_sc05(icol,k)=0.0_r8
-          c_sc125(icol,k)=0.0_r8
-          aaeros_tot(icol,k)=0.0_r8
-          aaerol_tot(icol,k)=0.0_r8
-          vaeros_tot(icol,k)=0.0_r8
-          vaerol_tot(icol,k)=0.0_r8
-          c_bc_0(icol,k)=0.0_r8
-          c_bc_2(icol,k)=0.0_r8
-          c_bc_4(icol,k)=0.0_r8
-          c_bc_12(icol,k)=0.0_r8
-          c_bc_14(icol,k)=0.0_r8
-          c_oc_4(icol,k)=0.0_r8
-          c_oc_14(icol,k)=0.0_r8
-          c_tot(icol,k)=0.0_r8
-          c_tot125(icol,k)=0.0_r8
-          c_tot05(icol,k)=0.0_r8
-          c_pm25(icol,k)=0.0_r8
-          c_pm1(icol,k)=0.0_r8
-          mmr_pm25(icol,k)=0.0_r8
-          mmr_pm1(icol,k)=0.0_r8
+          c_bc(icol,k)       = 0.0_r8
+          c_bc05(icol,k)     = 0.0_r8
+          c_bc125(icol,k)    = 0.0_r8
+          c_oc(icol,k)       = 0.0_r8
+          c_oc05(icol,k)     = 0.0_r8
+          c_oc125(icol,k)    = 0.0_r8
+          c_s4(icol,k)       = 0.0_r8
+          c_s4_a(icol,k)     = 0.0_r8
+          c_s4_1(icol,k)     = 0.0_r8
+          c_s4_5(icol,k)     = 0.0_r8
+          c_sa(icol,k)       = 0.0_r8
+          c_sa05(icol,k)     = 0.0_r8
+          c_sa125(icol,k)    = 0.0_r8
+          c_sc(icol,k)       = 0.0_r8
+          c_sc05(icol,k)     = 0.0_r8
+          c_sc125(icol,k)    = 0.0_r8
+          aaeros_tot(icol,k) = 0.0_r8
+          aaerol_tot(icol,k) = 0.0_r8
+          vaeros_tot(icol,k) = 0.0_r8
+          vaerol_tot(icol,k) = 0.0_r8
+          c_bc_0(icol,k)     = 0.0_r8
+          c_bc_2(icol,k)     = 0.0_r8
+          c_bc_4(icol,k)     = 0.0_r8
+          c_bc_12(icol,k)    = 0.0_r8
+          c_bc_14(icol,k)    = 0.0_r8
+          c_oc_4(icol,k)     = 0.0_r8
+          c_oc_14(icol,k)    = 0.0_r8
+          c_tot(icol,k)      = 0.0_r8
+          c_tot125(icol,k)   = 0.0_r8
+          c_tot05(icol,k)    = 0.0_r8
+          c_pm25(icol,k)     = 0.0_r8
+          c_pm1(icol,k)      = 0.0_r8
+          mmr_pm25(icol,k)   = 0.0_r8
+          mmr_pm1(icol,k)    = 0.0_r8
 
           do i=0,nbmodes
              if(i.ne.3) then
@@ -1414,7 +1420,7 @@ contains
           ! i.e. not including coag./cond./Aq. BC,OC,SO4 or condensed water.
           ! Units: ug/m3 for concentrations and mg/m2 (--> kg/m2 later) for mass loading.
           do i=0,nmodes
-             ck(icol,k,i) = cknorm(icol,k,i)*Nnatk(icol,k,i)
+             ck(icol,k,i) = aerodry_prop%cknorm(icol,k,i)*Nnatk(icol,k,i)
              dload3d(icol,k,i) = ck(icol,k,i)*deltah
              dload(icol,i) = dload(icol,i)+dload3d(icol,k,i)
           enddo

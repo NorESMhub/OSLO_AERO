@@ -14,8 +14,6 @@ module oslo_aero_aerocom_opt
   implicit none
   private
 
-  AEROCOM_INIT_AEROPT
-
   public :: aerocom_init_aeropt
 
   ! Set by aerocom_init_aeropt Mode0

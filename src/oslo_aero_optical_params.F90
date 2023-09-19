@@ -35,6 +35,11 @@ module oslo_aero_optical_params
 
   public :: oslo_aero_optical_params_calc
 
+  real(r8), public, protected :: deltah_km(pcols,pver)        ! Layer thickness, unit km
+  real(r8), public, protected :: batotlw(pcols,pver,nlwbands) ! spectral aerosol absportion extinction in LW
+  real(r8), public, protected :: faitbc(pcols,pver)
+  real(r8), public, protected :: f_soana(pcols,pver)
+
 !===============================================================================
 contains
 !===============================================================================
@@ -80,11 +85,14 @@ contains
     real(r8) :: absvisvolc(pcols)                     ! AAOD vis for CMIP6 volcanic aerosol
     real(r8) :: bevisvolc(pcols,pver)                 ! Extinction in vis wavelength band for CMIP6 volcanic aerosol
     real(r8) :: rhum(pcols,pver)                      ! (trimmed) relative humidity for the aerosol calculations
-    real(r8) :: deltah_km(pcols,pver)                 ! Layer thickness, unit km
     real(r8) :: deltah, airmassl(pcols,pver), airmass(pcols)
-    real(r8) :: Ca(pcols,pver), f_c(pcols,pver), f_bc(pcols,pver), f_aq(pcols,pver)
-    real(r8) :: fnbc(pcols,pver), faitbc(pcols,pver), f_so4_cond(pcols,pver)
-    real(r8) :: f_soa(pcols,pver),f_soana(pcols,pver)
+    real(r8) :: Ca(pcols,pver)
+    real(r8) :: fnbc(pcols,pver)
+    real(r8) :: f_c(pcols,pver)
+    real(r8) :: f_bc(pcols,pver)
+    real(r8) :: f_aq(pcols,pver)
+    real(r8) :: f_so4_cond(pcols,pver)
+    real(r8) :: f_soa(pcols,pver)
     real(r8) :: v_soana(pcols,pver)
     real(r8) :: dCtot(pcols,pver), Ctot(pcols,pver)
     real(r8) :: Cam(pcols,pver,nbmodes), fbcm(pcols,pver,nbmodes), fcm(pcols,pver,nbmodes)
@@ -97,7 +105,6 @@ contains
     real(r8) :: ssatot(pcols,pver,nbands)     ! spectral aerosol single scattering albedo
     real(r8) :: asymtot(pcols,pver,nbands)    ! spectral aerosol asymmetry factor
     real(r8) :: betot(pcols,pver,nbands)      ! spectral aerosol extinction coefficient
-    real(r8) :: batotlw(pcols,pver,nlwbands)  ! spectral aerosol absportion extinction in LW
     real(r8) :: kalw(pcols,pver,0:nmodes,nlwbands)
     real(r8) :: balw(pcols,pver,0:nmodes,nlwbands)
     real(r8) :: volc_balw(pcols,0:pver,nlwbands) ! volcanic aerosol absorption coefficient for terrestrial bands, CMIP6
@@ -252,7 +259,7 @@ contains
 
 #ifdef AEROCOM
     ! The following computes the optical parameters with lw_on set to .false.
-    call aerocom(Cam, Nnatk, pint, coszrs)
+    call aerocom(Cam, Nnatk, pint, coszrs, deltah_km, batotlw, faitbc, f_soana, fnbc)
 #endif
 
     ! (Wet) Optical properties for each of the aerosol modes:
