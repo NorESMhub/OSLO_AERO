@@ -42,7 +42,7 @@ module oslo_aero_sw_tables
   !
   use oslo_aero_control       , only: oslo_aero_getopts, dir_string_length
   use oslo_aero_linear_interp , only: lininterpol3dim, lininterpol4dim, lininterpol5dim
-  use oslo_aero_params        , only: nmodes, nbmodes
+  use oslo_aero_params        , only: nmodes, nbmodes, nbands, nlwbands
 
   implicit none
   private
@@ -56,10 +56,6 @@ module oslo_aero_sw_tables
   public :: interpol2to3
   public :: interpol4
   public :: interpol5to10
-
-  integer, public, parameter :: nbands=14   ! number of aerosol spectral bands in SW
-  integer, public, parameter :: nlwbands=16 ! number of aerosol spectral bands in LW
-  integer, public, parameter :: nbmp1=11    ! number of first non-background mode
 
   real(r8), public, dimension(10)     :: rh
   real(r8), public, dimension(6)      :: fombg, fbcbg, fac, fbc, faq

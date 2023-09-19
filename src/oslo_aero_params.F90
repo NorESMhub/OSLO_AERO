@@ -59,8 +59,11 @@ module oslo_aero_params
        (/3.0_r8,    1.0_r8,     1.0_r8,    2.0_r8,     2.0_r8    /)   ![-]
 
   ! Define lognormal size parameters for each size mode (dry, at point of emission/production)
-  integer, parameter :: nmodes  = 14
-  integer, parameter :: nbmodes = 10
+ integer, parameter :: nmodes   = 14
+ integer, parameter :: nbmodes  = 10
+ integer, parameter :: nbands   = 14 ! number of aerosol spectral bands in SW
+ integer, parameter :: nlwbands = 16 ! number of aerosol spectral bands in LW
+ integer, parameter :: nbmp1    = 11 ! number of first non-background mode
 
   ! Number median radius of background emissions THESE DO NOT ASSUME IMPLICIT GROWTH!!
   real(r8), parameter :: originalNumberMedianRadius(0:nmodes) =        &

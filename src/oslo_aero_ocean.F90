@@ -15,7 +15,7 @@ module oslo_aero_ocean
 
   use shr_kind_mod,   only : r8 => shr_kind_r8
   use ppgrid,         only : pcols, pver, pverp, begchunk, endchunk
-  use constituents,   only : cnst_get_ind, cnst_mw   !molecular weight for physics constituents
+  use constituents,   only : cnst_get_ind,pcnst, cnst_mw   !molecular weight for physics constituents
   use spmd_utils,     only : masterproc
   use cam_abortutils, only : endrun
   use cam_logfile,    only : iulog
@@ -191,6 +191,8 @@ contains
   !===============================================================================
   subroutine oslo_aero_ocean_time(state, pbuf2d)
 
+    ! Interpolate ocean_species in space and time to model grid and time
+
     ! arguments
     type(physics_state), intent(in)    :: state(begchunk:endchunk)
     type(physics_buffer_desc), pointer :: pbuf2d(:,:)
@@ -205,35 +207,33 @@ contains
   endsubroutine oslo_aero_ocean_time
 
   !===============================================================================
-  subroutine oslo_aero_dms_emis(state, cam_in)
+  subroutine oslo_aero_dms_emis(ncol, lchnk, u, v, zm, ocnfrc, icefrc, sst, fdms, cflx)
 
     ! arguments
-    type(physics_state),    intent(in)    :: state   ! Physics state variables
-    type(cam_in_t), target, intent(inout) :: cam_in  ! import state
+    integer  , intent(in)    :: ncol  ![nbr] number of columns in use
+    integer  , intent(in)    :: lchnk !chunk index
+    real(r8) , intent(in)    :: u(pcols)
+    real(r8) , intent(in)    :: v(pcols)
+    real(r8) , intent(in)    :: zm(pcols)
+    real(r8) , intent(in)    :: ocnfrc(pcols)
+    real(r8) , intent(in)    :: icefrc(pcols)
+    real(r8) , intent(in)    :: sst(pcols)
+    real(r8) , intent(in)    :: fdms(pcols)
+    real(r8) , intent(inout) :: cflx(pcols,pcnst) 
 
     ! local variables
-    real(r8)            :: u10m(pcols)       ![m/s]
-    real(r8), pointer   :: ocnfrc(:)         ! [frc] ocean fraction
-    real(r8), pointer   :: icefrc(:)         ! [frc] ice fraction
-    integer             :: ncol              ! [nbr] number of columns in use
-    integer             :: lchnk             ! chunk index
-    real(r8)            :: rk600(pcols)      ! ocean/atmos. DMS exchange factor [cm/hr]
-    real(r8)            :: flux(pcols)       ! Local flux array: DMS emission rate [kg m-2 s-1]
-    real(r8)            :: odms(pcols)       ! Ocean dms concentration [nmol/L] from file
-    real(r8)            :: open_ocn(pcols)   ! Open Ocean
-    real(r8)            :: t(pcols)
-    real(r8)            :: scdms(pcols)
-    real(r8)            :: kwdms(pcols)
+    real(r8) :: u10m(pcols)     ! [m/s]
+    real(r8) :: rk600(pcols)    ! ocean/atmos. DMS exchange factor [cm/hr]
+    real(r8) :: flux(pcols)     ! Local flux array: DMS emission rate [kg m-2 s-1]
+    real(r8) :: odms(pcols)     ! Ocean dms concentration [nmol/L] from file
+    real(r8) :: open_ocn(pcols) ! Open Ocean
+    real(r8) :: t(pcols)
+    real(r8) :: scdms(pcols)
+    real(r8) :: kwdms(pcols)
     real(r8), parameter :: z0= 0.0001_r8     ! [m] roughness length over ocean
     real(r8), parameter :: Xconvxa= 6.97e-07 ! Wanninkhof's a=0.251 converted to ms-1/(ms-1)^2
     logical , parameter :: method_oslo   = .false.
     logical , parameter :: method_hamocc = .true.
-
-    !pointers to land model variables
-    ocnfrc => cam_in%ocnfrac
-    icefrc => cam_in%icefrac
-    ncol  = state%ncol
-    lchnk = state%lchnk
 
     if (dms_source=='lana' .or. dms_source=='kettle') then
 
@@ -246,28 +246,30 @@ contains
        open_ocn(:ncol) = ocnfrc(:ncol) * (1._r8-icefrc(:ncol))
 
        !start with midpoint wind speed
-       u10m(:ncol)=sqrt(state%u(:ncol,pver)**2+state%v(:ncol,pver)**2)
+       u10m(:ncol)=sqrt(u(:ncol)**2 + v(:ncol)**2)
 
        if (method_oslo) then
           ! move the winds to 10m high from the midpoint of the gridbox:
-          u10m (:ncol) = u10m(:ncol)*log(10._r8/z0)/log(state%zm(:ncol,pver)/z0)
+          u10m (:ncol) = u10m(:ncol)*log(10._r8/z0)/log(zm(:ncol)/z0)
           rk600(:ncol) = (0.222_r8*(u10m(:ncol)*u10m(:ncol))) + (0.333_r8*u10m(:ncol))        ! [cm/hr]
           flux (:ncol) = 2.778e-15*cnst_mw(pndx_fdms)*rk600(:ncol)*open_ocn(:ncol)*odms(:ncol) ! [kg m-2 s-1]
        else if (method_hamocc) then
-          t(:ncol)=cam_in%sst(:ncol)-273.15_r8
-          u10m (:ncol) = u10m(:ncol)*log(10._r8/z0)/log(state%zm(:ncol,pver)/z0)
+          t(:ncol)     = sst(:ncol)-273.15_r8
+          u10m (:ncol) = u10m(:ncol)*log(10._r8/z0)/log(zm(:ncol)/z0)
           scdms(:ncol) = 2855.7+  (-177.63 + (6.0438 + (-0.11645 + 0.00094743*t(:ncol))*t(:ncol))*t(:ncol))*t(:ncol)
           kwdms(:ncol) = open_ocn(:ncol) * Xconvxa *u10m(:ncol)**2*(660./scdms(:ncol))**0.5
           flux (:ncol) = 62.13*kwdms(:ncol)*1e-9*odms(:ncol)
        endif
-       cam_in%cflx(:ncol, pndx_fdms  )  = flux(:ncol)
+
+       cflx(:ncol,pndx_fdms) = flux(:ncol)
 
        call outfld('odms', odms(:ncol), ncol, lchnk)
 
     elseif (dms_source=='ocean_flux') then
 
        ! if ocean flux
-       cam_in%cflx(:ncol, pndx_fdms)  =  cam_in%fdms(:ncol)
+       cflx(:ncol,pndx_fdms) = fdms(:ncol)
+
     endif
 
     ! IF EMISSION FILE

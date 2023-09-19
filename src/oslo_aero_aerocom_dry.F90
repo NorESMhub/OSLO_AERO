@@ -8,8 +8,8 @@ module oslo_aero_aerocom_dry
   use spmd_utils              , only: masterproc
   use cam_abortutils          , only: endrun
   !
-  use oslo_aero_params        , only: nmodes, nbmodes
-  use oslo_aero_sw_tables     , only: cate, cat, fac, faq, fbc, fombg, fbcbg, nbmp1
+  use oslo_aero_params        , only: nmodes, nbmodes, nbmp1
+  use oslo_aero_sw_tables     , only: cate, cat, fac, faq, fbc, fombg, fbcbg
   use oslo_aero_linear_interp , only: lininterpol3dim, lininterpol4dim, lininterpol5dim  
   use oslo_aero_control       , only: oslo_aero_getopts, dir_string_length
 
@@ -677,7 +677,7 @@ contains
 
     do kcomp=2,3
        call this%zero(kcomp, ncol)
-    end do ! kcomp
+    end do
 
     kcomp = 1
     do k=1,pver

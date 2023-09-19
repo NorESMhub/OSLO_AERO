@@ -6,7 +6,7 @@ module oslo_aero_aerocom_opt
   use ppgrid                  , only : pcols, pver
   use cam_logfile             , only : iulog
   !
-  use oslo_aero_params       , only : nmodes, nbmodes
+  use oslo_aero_params        , only : nmodes, nbmodes
   use oslo_aero_sw_tables     , only : cate, cat, fac, faq, fbc, rh, fombg, fbcbg
   use oslo_aero_control       , only : oslo_aero_getopts, dir_string_length
   use oslo_aero_linear_interp , only : lininterpol3dim, lininterpol4dim, lininterpol5dim
@@ -14,7 +14,11 @@ module oslo_aero_aerocom_opt
   implicit none
   private
 
-  ! Set by init_aeropt Mode0
+  AEROCOM_INIT_AEROPT
+
+  public :: aerocom_init_aeropt
+
+  ! Set by aerocom_init_aeropt Mode0
   real(r8) :: bex440, bax440
   real(r8) :: bex500, bax500, bax550
   real(r8) :: bex670, bax670
@@ -25,7 +29,7 @@ module oslo_aero_aerocom_opt
   real(r8), public :: bep1(38,10,6,16,6)
 
   ! Set by init_aeropt Mode2to3
-  real(r8), public :: bep2to3 (38,10,16,6,2:3)
+  real(r8), public :: bep2to3(38,10,16,6,2:3)
 
   ! Set by init_aeropt Mode4
   real(r8), public :: bep4(38,10,6,16,6,6)
@@ -94,25 +98,19 @@ module oslo_aero_aerocom_opt
   type(extinction_coeffs_type), public :: extinction_coeffs
   type(extinction_coeffs_type), public :: extinction_coeffsn
 
-  public :: initaeropt
-
 ! ==========================================================
 contains
 ! ==========================================================
 
-  subroutine initaeropt()
+  subroutine aerocom_init_aeropt()
 
-    !Purpose: To read in the AeroCom look-up tables for aerosol optical properties.
-    !     The grid for discrete input-values in the look-up tables is defined in opptab.
-
-    !     Tabulating the 'aerocomk'-files to save computing time.
-    !     Updated for new kcomp1.out including condensed SOA - Alf Kirkevåg, May 2013
-    !     Extended for new SOA treatment - Alf Kirkevaag, September 2015.
-    !     Modified for optimized added masses and mass fractions for
-    !     concentrations from condensation, coagulation or cloud-processing
-    !     - Alf Kirkevaag, May 2016.
-    !     Modified for optimized added masses and mass fractions for concentrations from
-    !     condensation, coagulation or cloud-processing - Alf Kirkevaag, May 2016.
+    ! Purpose: To read in the AeroCom look-up tables for aerosol optical properties.
+    ! The grid for discrete input-values in the look-up tables is defined in opptab.
+    ! Tabulating the 'aerocomk'-files to save computing time.
+    ! Updated for new kcomp1.out including condensed SOA - Alf Kirkevåg, May 2013
+    ! Extended for new SOA treatment - Alf Kirkevaag, September 2015.
+    ! Modified for optimized added masses and mass fractions for concentrations from
+    ! from condensation, coagulation or cloud-processing - Alf Kirkevaag, May 2016.
 
     integer  :: ic, ifil, lin, iv
     integer  :: kcomp, irelh, ictot, ifac, ifbc, ifaq
@@ -594,7 +592,7 @@ contains
        close (ifil)
     end do
 
-  end subroutine initaeropt
+  end subroutine aerocom_init_aeropt
 
   ! ==========================================================
   subroutine intaeropt0 (this, lchnk, ncol, Nnatk)
