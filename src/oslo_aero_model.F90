@@ -76,18 +76,14 @@ module oslo_aero_model
   private :: aero_model_constants
 
   ! Misc private data
-  integer :: nmodes ! number of modes
   integer :: pblh_idx= 0
   integer :: ndx_h2so4, ndx_soa_lv, ndx_soa_sv ! for surf_area_dens
   logical :: convproc_do_aer
 
   ! Namelist variables
-  character(len=16) :: wetdep_list(pcnst) = ' '
-  character(len=16) :: drydep_list(pcnst) = ' '
-  real(r8)          :: sol_facti_cloud_borne   = 1._r8
-  real(r8)          :: sol_factb_interstitial  = 0.1_r8
-  real(r8)          :: sol_factic_interstitial = 0.4_r8
-  real(r8)          :: seasalt_emis_scale
+  real(r8) :: sol_facti_cloud_borne   = 1._r8
+  real(r8) :: sol_factb_interstitial  = 0.1_r8
+  real(r8) :: sol_factic_interstitial = 0.4_r8
 
 !=============================================================================
 contains
@@ -100,16 +96,10 @@ contains
     character(len=*), intent(in) :: nlfilename  ! filepath for file containing namelist input
 
     ! Local variables
-    integer           :: unitn, ierr
-    character(len=16) :: aer_wetdep_list(pcnst) = ' '      ! Namelist variable
-    character(len=16) :: aer_drydep_list(pcnst) = ' '      ! Namelist variable
-    logical           :: modal_strat_sulfate = .false.     ! TODO: Namelist variables only needed by CAM
-    logical           :: modal_accum_coarse_exch = .false. ! TODO: Namelist variables only needed by CAM
+    integer :: unitn, ierr
     character(len=*), parameter :: subname = 'aero_model_readnl'
 
-    namelist /aerosol_nl/ aer_wetdep_list, aer_drydep_list, sol_facti_cloud_borne, &
-         sol_factb_interstitial, sol_factic_interstitial, &
-         modal_strat_sulfate, modal_accum_coarse_exch, seasalt_emis_scale
+    namelist /aerosol_nl/ sol_facti_cloud_borne, sol_factb_interstitial, sol_factic_interstitial
     !-----------------------------------------------------------------------------
 
     ! Read namelist
@@ -124,23 +114,12 @@ contains
        end if
        close(unitn)
     end if
-
-    ! Broadcast namelist variables
-    call mpi_bcast(aer_wetdep_list, len(aer_wetdep_list(1))*pcnst, mpi_character, mstrid, mpicom, ierr)
-    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: aer_wetdep_list")
-    call mpi_bcast(aer_drydep_list, len(aer_drydep_list(1))*pcnst, mpi_character, mstrid, mpicom, ierr)
-    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: aer_drydep_list")
     call mpi_bcast(sol_facti_cloud_borne, 1, mpi_real8, mstrid, mpicom, ierr)
     if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: sol_facti_cloud_borne")
     call mpi_bcast(sol_factb_interstitial, 1, mpi_real8, mstrid, mpicom, ierr)
     if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: sol_factb_interstitial")
     call mpi_bcast(sol_factic_interstitial, 1, mpi_real8, mstrid, mpicom, ierr)
     if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: sol_factic_interstitial")
-    call mpi_bcast(seasalt_emis_scale, 1, mpi_real8, mstrid, mpicom, ierr)
-    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: seasalt_emis_scale")
-
-    wetdep_list = aer_wetdep_list
-    drydep_list = aer_drydep_list
 
     call oslo_aero_ctl_readnl(nlfilename)
     call oslo_aero_microp_readnl(nlfilename)
@@ -177,7 +156,7 @@ contains
     call oslo_aero_ocean_init()
     call oslo_aero_depos_init(pbuf2d)
     call oslo_aero_dust_init()
-    call oslo_aero_seasalt_init() !seasalt_emis_scale)
+    call oslo_aero_seasalt_init()
     call oslo_aero_wetdep_init()
 #ifdef AEROCOM
     call aerocom_init_aeropt()
@@ -481,7 +460,7 @@ contains
 
     ! Get mass mixing ratios at start of time step
     call vmr2mmr( vmr0, mmr_tend_ncols, mbar, ncol )
-    mmr_cond_vap_start_of_timestep(:ncol,:,COND_VAP_H2SO4) = mmr_tend_ncols(1:ncol,:,ndx_h2so4)
+    mmr_cond_vap_start_of_timestep(:ncol,:,COND_VAP_H2SO4)  = mmr_tend_ncols(1:ncol,:,ndx_h2so4)
     mmr_cond_vap_start_of_timestep(:ncol,:,COND_VAP_ORG_LV) = mmr_tend_ncols(1:ncol,:,ndx_soa_lv)
     mmr_cond_vap_start_of_timestep(:ncol,:,COND_VAP_ORG_SV) = mmr_tend_ncols(1:ncol,:,ndx_soa_sv)
     !
@@ -507,21 +486,21 @@ contains
     call setsox( ncol, lchnk, loffset, delt, pmid, pdel, tfld, mbar, cwat, &
          cldfr, cldnum, airdens, invariants, vmrcw, vmr, xphlwc, &
          aqso4, aqh2so4, aqso4_h2o2, aqso4_o3)
-    
+
     call outfld( 'AQSO4_H2O2', aqso4_h2o2(:ncol), ncol, lchnk)
     call outfld( 'AQSO4_O3',   aqso4_o3(:ncol),   ncol, lchnk)
     call outfld( 'XPH_LWC',    xphlwc(:ncol,:),   ncol, lchnk )
-    
+
     ! vmr tendency from aqchem and soa routines
     dvmrdt_sv1 = (vmr - dvmrdt_sv1)/delt
     dvmrcwdt_sv1 = (vmrcw - dvmrcwdt_sv1)/delt
-    
+
     if(ndx_h2so4 .gt. 0)then
        del_h2so4_aqchem(:ncol,:) = dvmrdt_sv1(:ncol,:,ndx_h2so4)*delt !"production rate" of H2SO4
     else
        del_h2so4_aqchem(:ncol,:) = 0.0_r8
     end if
-    
+
     do m = 1,gas_pcnst
        wrk(:ncol) = 0._r8
        do k = 1,pver
@@ -529,7 +508,7 @@ contains
        end do
        name = 'AQ_'//trim(solsym(m))
        call outfld( name, wrk(:ncol), ncol, lchnk )
-       
+
        !In oslo aero also write out the tendencies for the
        !cloud borne aerosols...
        n = physicsIndex(m)
@@ -583,10 +562,10 @@ contains
     call coagtend( mmr_tend_pcols, pmid, pdel, tfld, delt_inverse, ncol, lchnk)
 
     ! Convert cloud water to mmr again ==> values in buffer
-    call vmr2qqcw( lchnk, vmrcw, mbar, ncol, loffset, pbuf )
+    call vmr2qqcw( vmrcw, mbar, ncol, loffset, pbuf )
 
     ! Call cloud coagulation routines (all in mass mixing ratios)
-    call clcoag( mmr_tend_pcols, pmid, pdel, tfld, cldnum ,cldfr, delt_inverse, ncol, lchnk,loffset,pbuf)
+    call clcoag( mmr_tend_pcols, pmid, pdel, tfld, cldnum ,cldfr, delt_inverse, ncol, lchnk, loffset, pbuf)
 
     ! Make sure mmr==> vmr is done correctly
     mmr_tend_ncols(:ncol,:,:) = mmr_tend_pcols(:ncol,:,:)
@@ -659,29 +638,23 @@ contains
   end subroutine qqcw2vmr
 
   !=============================================================================
-  subroutine vmr2qqcw( lchnk, vmr, mbar, ncol, im, pbuf )
-    !-----------------------------------------------------------------
-    !	... Xfrom from volume to mass mixing ratio
-    !-----------------------------------------------------------------
-
-    use m_spc_id
+  subroutine vmr2qqcw( vmr, mbar, ncol, im, pbuf )
 
     !-----------------------------------------------------------------
-    !	... Dummy args
+    ! Convert from volume to mass mixing ratio
     !-----------------------------------------------------------------
-    integer, intent(in)     :: lchnk, ncol, im
-    real(r8), intent(in)    :: mbar(ncol,pver)
-    real(r8), intent(in)    :: vmr(ncol,pver,gas_pcnst)
+
+    ! Arguments
+    integer , intent(in) :: ncol, im
+    real(r8), intent(in) :: mbar(ncol,pver)
+    real(r8), intent(in) :: vmr(ncol,pver,gas_pcnst)
     type(physics_buffer_desc), pointer :: pbuf(:)
 
-    !-----------------------------------------------------------------
-    !	... Local variables
-    !-----------------------------------------------------------------
+    ! Local variables
     integer :: k, m
     real(r8), pointer :: fldcw(:,:)
-    !-----------------------------------------------------------------
-    !	... The non-group species
-    !-----------------------------------------------------------------
+
+    ! The non-group species
     do m = 1,gas_pcnst
        fldcw => qqcw_get_field(pbuf, m+im)
        if( adv_mass(m) /= 0._r8 .and. associated(fldcw)) then
@@ -699,26 +672,27 @@ contains
     ! Updated by Alf Kirkev May 2013
     ! Updated by Alf Grini February 2014
 
-    use oslo_aero_const
+    use oslo_aero_const, only: rTabMin, rTabMax, nk, normnk, rBinEdge, rBinMidpoint
+    use oslo_aero_const, only: volumeToNumber, numberToSurface, nBinsTab, rMinAquousChemistry
     use oslo_aero_utils
     use oslo_aero_share
 
     ! local variables
     integer  :: kcomp,i
-    real(r8) :: rhob(0:nmodes) !density of background aerosol in mode
+    real(r8) :: rhob(0:nmodes_oslo) !density of background aerosol in mode
     real(r8) :: rhorbc         !This has to do with fractal dimensions of bc, come back to this!!
     real(r8) :: sumnormnk
     real(r8) :: totalLogDelta
     real(r8) :: logDeltaBin
     real(r8) :: logNextEdge
+    !---------------------------------------
 
     rhob(:)            =-1.0_r8
     volumeToNumber(:)  =-1.0_r8
     numberToSurface(:) =-1.0_r8
 
     !Prepare modal properties
-    do i=0, nmodes
-
+    do i=0, nmodes_oslo
        if(getNumberOfTracersInMode(i) .gt. 0)then
 
           !Approximate density of mode
@@ -775,7 +749,7 @@ contains
     !Unclear if this should use the radii assuming growth or not!
     !Mostly used in code where it is sensible to assume some growth has
     !happened, so it is used here
-    do kcomp = 0,nmodes
+    do kcomp = 0,nmodes_oslo
        do i=1,nBinsTab
           !dN/dlogR (does not sum to one over size range)
           nk(kcomp,i) = calculatedNdLogR(rBinMidPoint(i), lifeCycleNumberMedianRadius(kcomp), lifeCycleSigma(kcomp))
@@ -786,7 +760,7 @@ contains
     enddo  ! kcomp
 
     !++test: Normalized size distribution must sum to one (accept 2% error)
-    do kcomp=0,nmodes
+    do kcomp=0,nmodes_oslo
        sumNormNk = sum(normnk(kcomp,:))
        if(abs(sum(normnk(kcomp,:)) - 1.0_r8) .gt. 2.0e-2_r8)then
           print*, "sum normnk", sum(normnk(kcomp,:))
@@ -805,33 +779,30 @@ contains
 
   end subroutine aero_model_constants
 
-  
+  !=============================================================================
   subroutine calcaersize_sub( ncol, t, h2ommr, pmid, pdel,wetnumberMedianDiameter,wetrho,   &
        wetNumberMedianDiameter_processmode, wetrho_processmode)
 
     ! Seland Calculates mean volume size and hygroscopic growth for use in  dry deposition
 
-    use oslo_aero_params, only: nmodes
     use oslo_aero_share
 
-    integer,  intent(in) :: ncol               ! number of columns
-    real(r8), intent(in) :: t(pcols,pver)      ! layer temperatures (K)
-    real(r8), intent(in) :: h2ommr(pcols,pver) ! layer specific humidity
-    real(r8), intent(in) :: pmid(pcols,pver)   ! layer pressure (Pa)
-    real(r8), intent(in) :: pdel(pcols,pver)  ! layer pressure thickness (Pa)
-
-    real(r8), intent(out):: wetNumberMedianDiameter(pcols,pver,0:nmodes)  
-    real(r8), intent(out):: wetrho(pcols,pver,0:nmodes) ! wet aerosol density
+    integer,  intent(in)  :: ncol               ! number of columns
+    real(r8), intent(in)  :: t(pcols,pver)      ! layer temperatures (K)
+    real(r8), intent(in)  :: h2ommr(pcols,pver) ! layer specific humidity
+    real(r8), intent(in)  :: pmid(pcols,pver)   ! layer pressure (Pa)
+    real(r8), intent(in)  :: pdel(pcols,pver)  ! layer pressure thickness (Pa)
+    real(r8), intent(out) :: wetNumberMedianDiameter(pcols,pver,0:nmodes_oslo)
+    real(r8), intent(out) :: wetrho(pcols,pver,0:nmodes_oslo) ! wet aerosol density
     real(r8), intent(out) :: wetNumberMedianDiameter_processmode(pcols,pver,numberOfProcessModeTracers)
     real(r8), intent(out) :: wetrho_processmode(pcols,pver,numberOfProcessModeTracers)
 
     !     local variables
-    real(r8) :: relhum(pcols,pver) ! Relative humidity  
-    integer  :: i,k,m,irelh,mm, tracerCounter
-    integer  :: l ! species index
+    integer  :: i,l,k,m,irelh,mm, tracerCounter
     real(r8) :: xrh(pcols,pver)
-    real(r8) :: qs(pcols,pver)        ! saturation specific humidity
-    real(r8) :: rmeanvol              ! Mean radius with respect to volume 
+    real(r8) :: relhum(pcols,pver) ! Relative humidity
+    real(r8) :: qs(pcols,pver)     ! saturation specific humidity
+    real(r8) :: rmeanvol           ! Mean radius with respect to volume
     integer  :: irh1(pcols,pver),irh2(pcols,pver)
     integer  :: t_irh1,t_irh2
     real(r8) :: t_rh1,t_rh2,t_xrh,rr1,rr2
@@ -850,16 +821,15 @@ contains
           xrh(i,k) = max(xrh(i,k),0.0_r8)
           xrh(i,k) = min(xrh(i,k),1.0_r8)
           relhum(i,k)=xrh(i,k)
-          xrh(i,k)=min(xrh(i,k),rhtab(10))                
+          xrh(i,k)=min(xrh(i,k),rhtab(10))
        end do
     end do
 
     !Find the relh-index in all grid-points
-    do irelh=1,SIZE(rhtab) - 1 
+    do irelh=1,SIZE(rhtab) - 1
        do k=1,pver
           do i=1,ncol
-             if(xrh(i,k).ge.rhtab(irelh).and. &
-                  xrh(i,k).le.rhtab(irelh+1)) then
+             if (xrh(i,k).ge.rhtab(irelh) .and. xrh(i,k).le.rhtab(irelh+1)) then
                 irh1(i,k)=irelh                !lower index
                 irh2(i,k)=irelh+1              !higher index
              end if
@@ -877,7 +847,7 @@ contains
           t_rh2  = rhtab(t_irh2)
           t_xrh  = xrh(i,k)
 
-          do m = 0, nmodes
+          do m = 0, nmodes_oslo
              !Do some weighting to mass mean property
              !weighting by 1.5 is number median ==> volumetric mean
              !http://dust.ess.uci.edu/facts/psd/psd.pdf
@@ -885,7 +855,7 @@ contains
              wetNumberMedianDiameter(i,k,m ) =  0.1e-6_r8 !Initialize to something..
              mixed_dry_rho = 1.e3_r8
 
-             tracerCounter = 0  
+             tracerCounter = 0
              do l = 1,getNumberOfBackgroundTracersInMode(m)
 
                 tracerCounter = tracerCounter + 1
@@ -903,12 +873,12 @@ contains
                 wetrad_tmp(tracerCounter) = (((t_rh2-t_xrh)*rr1+(t_xrh-t_rh1)*rr2)/ &
                      (t_rh2-t_rh1))*rmeanvol
 
-                !mixed density of dry particle                  
+                !mixed density of dry particle
                 dry_rhopart_tmp(tracerCounter) = getDryDensity(m,l)
 
              end do
 
-             !Find the average growth of this mode 
+             !Find the average growth of this mode
              !(still not taking into account how much we have!!)
              if(TracerCounter .gt. 0)then
 
@@ -923,7 +893,7 @@ contains
 
                 !wet density
                 wetrho(i,k,m) = mixed_dry_rho * volumeFractionAerosol   &
-                     + (1._r8-volumeFractionAerosol)*rhoh2o 
+                     + (1._r8-volumeFractionAerosol)*rhoh2o
 
                 !convert back to number median diameter (wet)
                 wetNumberMedianDiameter(i,k,m) = wetNumberMedianDiameter(i,k,m)*DEXP(-1.5_r8*(log(lifeCycleSigma(m)))**2)
@@ -957,7 +927,8 @@ contains
                   + (1.0_r8 - volumeFractionAerosol)*rhoh2o
 
              !convert back to number median diameter (wet)
-             wetNumberMedianDiameter_processMode(i,k,l) = wetNumberMedianDiameter_processMode(i,k,l)*DEXP(-1.5_r8*(log(processModeSigma(l)))**2)
+             wetNumberMedianDiameter_processMode(i,k,l) = &
+                  wetNumberMedianDiameter_processMode(i,k,l)*DEXP(-1.5_r8*(log(processModeSigma(l)))**2)
           end do     !process modes
        end do        !horizontal points
     end do           !layers
