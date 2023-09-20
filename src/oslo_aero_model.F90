@@ -33,13 +33,10 @@ module oslo_aero_model
   !
   use oslo_aero_depos,       only: oslo_aero_depos_init
   use oslo_aero_depos,       only: oslo_aero_depos_dry, oslo_aero_depos_wet, oslo_aero_wetdep_init
-  use oslo_aero_coag,        only: coagtend, clcoag
-  use oslo_aero_coag,        only: initializeCoagulationReceivers
-  use oslo_aero_coag,        only: initializeCoagulationCoefficients
-  use oslo_aero_coag,        only: initializeCoagulationOutput
   use oslo_aero_utils,       only: calculateNumberConcentration
+  use oslo_aero_coag,        only: initializeCoagulation, coagtend, clcoag
   use oslo_aero_condtend,    only: N_COND_VAP, COND_VAP_ORG_SV, COND_VAP_ORG_LV, COND_VAP_H2SO4
-  use oslo_aero_condtend,    only: registerCondensation, initializeCondensation, condtend
+  use oslo_aero_condtend,    only: initializeCondensation, condtend
   use oslo_aero_seasalt,     only: oslo_aero_seasalt_init, oslo_aero_seasalt_emis, seasalt_active
   use oslo_aero_dust,        only: oslo_aero_dust_init, oslo_aero_dust_emis, dust_active
   use oslo_aero_ocean,       only: oslo_aero_ocean_init, oslo_aero_dms_emis
@@ -130,7 +127,6 @@ contains
   subroutine aero_model_register()
 
     call aero_register()
-    call registerCondensation()
 
   end subroutine aero_model_register
 
@@ -769,13 +765,9 @@ contains
     enddo
     !--test
 
-    !Initialize coagulation
-    call initializeCoagulationReceivers()
-
-    !Calculate the coagulation coefficients Note: Inaccurate density used!
-    call initializeCoagulationCoefficients(rhob, lifeCycleNumberMedianRadius)
-
-    call initializeCoagulationOutput()
+    ! Initialize coagulation including Calculate the coagulation coefficients
+    ! Note: Inaccurate density used!
+    call initializeCoagulation(rhob, lifeCycleNumberMedianRadius)
 
   end subroutine aero_model_constants
 
