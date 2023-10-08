@@ -126,6 +126,13 @@ contains
     character(len=3)  :: c3
     !-------------------------------------------------------------------------
 
+    ! initialize output variables
+    per_lw_abs(:,:,:)  = 0._r8
+    per_tau(:,:,:)     = 0._r8
+    per_tau_w(:,:,:)   = 0._r8
+    per_tau_w_g(:,:,:) = 0._r8
+    per_tau_w_f(:,:,:) = 0._r8
+
     ! Volcanic optics for solar (SW) bands
     do band=1,nbands
        volc_ext_sun(1:ncol,1:pver,band) = 0.0_r8

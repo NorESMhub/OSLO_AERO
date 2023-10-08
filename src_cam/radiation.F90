@@ -883,11 +883,6 @@ subroutine radiation_tend( &
     ! Local variables used for calculating aerosol optics and direct and indirect forcings.
     ! aodvis and absvis are AOD and absorptive AOD for visible wavelength close to 0.55 um (0.35-0.64)
     ! Note that aodvis and absvis output should be devided by dayfoc to give physical (A)AOD values
-    real(r8) :: per_tau    (pcols,0:pver,nswbands)    ! aerosol extinction optical depth
-    real(r8) :: per_tau_w  (pcols,0:pver,nswbands)    ! aerosol single scattering albedo * tau
-    real(r8) :: per_tau_w_g(pcols,0:pver,nswbands)    ! aerosol assymetry parameter * w * tau
-    real(r8) :: per_tau_w_f(pcols,0:pver,nswbands)    ! aerosol forward scattered fraction * w * tau
-    real(r8) :: per_lw_abs (pcols,pver,nlwbands)      ! aerosol absorption optics depth (LW)
     real(r8) :: aodvis(pcols)                         ! AOD vis
     real(r8) :: absvis(pcols)                         ! absorptive AOD vis
     real(r8) :: clearodvis(pcols)
@@ -1236,15 +1231,9 @@ subroutine radiation_tend( &
 #ifdef OSLO_AERO
       if (dosw) then
 
-         per_lw_abs(:,:,:)  = 0._r8
-         per_tau(:,:,:)     = 0._r8
-         per_tau_w(:,:,:)   = 0._r8
-         per_tau_w_g(:,:,:) = 0._r8
-         per_tau_w_f(:,:,:) = 0._r8
-
          call oslo_aero_optical_params_calc(lchnk, ncol, 10.0_r8*state%pint, state%pmid,  &
               coszrs, pbuf, state, state%t, cld, &
-              per_tau, per_tau_w, per_tau_w_g, per_tau_w_f, per_lw_abs, aodvis, absvis)
+              aer_tau, aer_tau_w, aer_tau_w_g, aer_tau_w_f, aer_lw_abs, aodvis, absvis)
 
          call get_variability(sfac)
 
@@ -1267,7 +1256,7 @@ subroutine radiation_tend( &
                idrf = .true.
                call rad_rrtmg_sw( &
                     lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,               &
-                    cldfprime, per_tau*0.0_r8, per_tau_w, per_tau_w_g, per_tau_w_f, &
+                    cldfprime, aer_tau*0.0_r8, aer_tau_w, aer_tau_w_g, aer_tau_w_f, &
                     eccf, coszrs, rd%solin, sfac, cam_in%asdir,                     &
                     cam_in%asdif, cam_in%aldir, cam_in%aldif, qrs, rd%qrsc,         &
                     fsnt, rd%fsntc, rd%fsntoa, rd%fsutoa, rd%fsntoac,               &
@@ -1281,8 +1270,9 @@ subroutine radiation_tend( &
                ftem(:ncol,:pver) = qrs(:ncol,:pver)/cpair
                !
                ! Dump shortwave radiation information to history tape buffer (diagnostics)
-               !
-               ! Note that DRF fields are now from the per_tau=0 call (clean), no longer with per_tau from pmxsub
+               ! Note that DRF fields are now from the aer_tau=0 call (clean), no longer with
+               ! aer_tau from oslo_aero_optical_params_calc
+
                call outfld('QRS_DRF ',ftem  ,pcols,lchnk)
                ftem(:ncol,:pver) = rd%qrsc(:ncol,:pver)/cpair
                call outfld('QRSC_DRF',ftem  ,pcols,lchnk)
@@ -1300,7 +1290,7 @@ subroutine radiation_tend( &
                idrf = .false.
                call rad_rrtmg_sw( &
                   lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,          &
-                  cldfprime, per_tau, per_tau_w, per_tau_w_g, per_tau_w_f,   &
+                  cldfprime, aer_tau, aer_tau_w, aer_tau_w_g, aer_tau_w_f,   &
                   eccf, coszrs, rd%solin, sfac, cam_in%asdir,                &
                   cam_in%asdif, cam_in%aldir, cam_in%aldif, qrs, rd%qrsc,    &
                   fsnt, rd%fsntc, rd%fsntoa, rd%fsutoa, rd%fsntoac,          &
@@ -1328,9 +1318,9 @@ subroutine radiation_tend( &
 
       ! Calculate cloud-free fraction assuming random overlap
       ! (kind of duplicated from cloud_cover_diags::cldsav)
+      ! (note this duplicated code and may not be consistent with cldtot calculated elsewhere)
       cloudfree(1:ncol)    = 1.0_r8
       cloudfreemax(1:ncol) = 1.0_r8
-      !Find cloud-free fraction (note this duplicated code and may not be consistent with cldtot calculated elsewhere)
       do k = 1, pver
          do i=1,ncol
             cloudfree(i) = cloudfree(i) * cloudfreemax(i)
@@ -1340,8 +1330,8 @@ subroutine radiation_tend( &
 
       ! Calculate AOD (visible) for cloud free
       do i = 1, ncol
-         clearodvis(i)=cloudfree(i)*aodvis(i)
-         clearabsvis(i)=cloudfree(i)*absvis(i)
+         clearodvis(i)  = cloudfree(i)*aodvis(i)
+         clearabsvis(i) = cloudfree(i)*absvis(i)
       end do
 
       ! clear-sky AOD and absorptive AOD for visible wavelength close to 0.55 um (0.35-0.64)
@@ -1442,7 +1432,7 @@ subroutine radiation_tend( &
 
                call rad_rrtmg_lw( &
                     lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,  &
-                    per_lw_abs*0.0_r8, cldfprime, c_cld_lw_abs, qrl, rd%qrlc, &
+                    aer_lw_abs*0.0_r8, cldfprime, c_cld_lw_abs, qrl, rd%qrlc, &
                     flns, flnt, rd%flnsc, rd%flntc, cam_out%flwds,     &
                     rd%flut, rd%flutc, fnl, fcnl, rd%fldsc,            &
                     lu, ld)
@@ -1452,7 +1442,7 @@ subroutine radiation_tend( &
 
                call rad_rrtmg_lw( &
                     lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,  &
-                    per_lw_abs, cldfprime, c_cld_lw_abs, qrl, rd%qrlc, &
+                    aer_lw_abs, cldfprime, c_cld_lw_abs, qrl, rd%qrlc, &
                     flns, flnt, rd%flnsc, rd%flntc, cam_out%flwds,     &
                     rd%flut, rd%flutc, fnl, fcnl, rd%fldsc,            &
                     lu, ld)
@@ -1553,9 +1543,9 @@ subroutine radiation_tend( &
                      ! Add graupel to snow tau for cosp
                      if (cldfgrau_idx > 0 .and. graupel_in_rad) then
                         gb_snow_tau(i,k) = snow_tau(rrtmg_sw_cloudsim_band,i,k)*cldfsnow(i,k) + &
-                              grau_tau(rrtmg_sw_cloudsim_band,i,k)*cldfgrau(i,k)
+                                           grau_tau(rrtmg_sw_cloudsim_band,i,k)*cldfgrau(i,k)
                         gb_snow_lw(i,k)  = snow_lw_abs(rrtmg_lw_cloudsim_band,i,k)*cldfsnow(i,k) + &
-                              grau_lw_abs(rrtmg_lw_cloudsim_band,i,k)*cldfgrau(i,k)
+                                           grau_lw_abs(rrtmg_lw_cloudsim_band,i,k)*cldfgrau(i,k)
                      else
                         gb_snow_tau(i,k) = snow_tau(rrtmg_sw_cloudsim_band,i,k)*cldfsnow(i,k)
                         gb_snow_lw(i,k)  = snow_lw_abs(rrtmg_lw_cloudsim_band,i,k)*cldfsnow(i,k)
