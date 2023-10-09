@@ -342,16 +342,13 @@ contains
     use rate_diags,        only : rate_diags_calc, rate_diags_o3s_loss
     use mo_mass_xforms,    only : mmr2vmr, vmr2mmr, h2o_to_vmr, mmr2vmri
     use orbit,             only : zenith
-!
-! for aqueous chemistry and aerosol growth
-!
+    use aero_model,        only : aero_model_gasaerexch
+    use aero_model,        only : aero_model_strat_surfarea
+    !
+    ! for aqueous chemistry and aerosol growth
+    !
 #ifdef OSLO_AERO
     use oslo_aero_diurnal_var, only : set_diurnal_invariants
-    use oslo_aero_model,       only : aero_model_gasaerexch
-    use oslo_aero_model,       only : aero_model_strat_surfarea
-#else
-    use aero_model,            only : aero_model_gasaerexch
-    use aero_model,            only : aero_model_strat_surfarea
 #endif
     !-----------------------------------------------------------------------
     !        ... Dummy arguments

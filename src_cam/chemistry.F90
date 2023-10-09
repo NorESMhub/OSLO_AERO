@@ -163,11 +163,7 @@ end function chem_is
     use cfc11star,           only : register_cfc11star
     use mo_photo,            only : photo_register
     use mo_aurora,           only : aurora_register
-#ifdef OSLO_AERO
-    use oslo_aero_model,     only : aero_model_register
-#else
     use aero_model,          only : aero_model_register
-#endif
     use physics_buffer,      only : pbuf_add_field, dtype_r8
     use upper_bc,            only : ubc_fixed_conc
 
@@ -337,11 +333,10 @@ end function chem_is
 
     use tracer_cnst,      only: tracer_cnst_defaultopts, tracer_cnst_setopts
     use tracer_srcs,      only: tracer_srcs_defaultopts, tracer_srcs_setopts
+    use aero_model,       only: aero_model_readnl
 #ifdef OSLO_AERO
-    use oslo_aero_model,  only: aero_model_readnl
     use oslo_aero_dust,   only: oslo_aero_dust_readnl
 #else
-    use aero_model,       only: aero_model_readnl
     use dust_model,       only: dust_readnl
 #endif
     use gas_wetdep_opts,  only: gas_wetdep_readnl
@@ -649,11 +644,7 @@ end function chem_is_active
     use infnan,              only : nan, assignment(=)
     use mo_chem_utls,        only : get_spc_ndx
     use cam_abortutils,      only : endrun
-#ifdef OSLO_AERO
-    use oslo_aero_model,     only : aero_model_init
-#else
     use aero_model,          only : aero_model_init
-#endif
     use mo_setsox,           only : sox_inti
     use constituents,        only : sflxnam
     use fire_emissions,      only : fire_emissions_init
@@ -865,11 +856,7 @@ end function chem_is_active
 !================================================================================
   subroutine chem_emissions( state, cam_in, pbuf )
     use physics_buffer,   only: physics_buffer_desc
-#ifdef OSLO_AERO
-    use oslo_aero_model,  only: aero_model_emissions
-#else
     use aero_model,       only: aero_model_emissions
-#endif
     use camsrfexch,       only: cam_in_t
     use constituents,     only: sflxnam
     use cam_history,      only: outfld

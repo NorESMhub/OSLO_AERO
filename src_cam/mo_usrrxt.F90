@@ -609,11 +609,7 @@ contains
     use mo_setinv,     only : inv_o2_ndx=>o2_ndx, inv_h2o_ndx=>h2o_ndx
     use physics_buffer,only : physics_buffer_desc
     use carma_flags_mod, only : carma_hetchem_feedback
-#ifdef OSLO_AERO
-    use oslo_aero_model, only : aero_model_surfarea
-#else
     use aero_model,      only : aero_model_surfarea
-#endif
     use rad_constituents,only : rad_cnst_get_info
 
     implicit none
