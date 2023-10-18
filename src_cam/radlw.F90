@@ -5,6 +5,7 @@ module radlw
 ! Purpose: Longwave radiation calculations.
 !
 !-----------------------------------------------------------------------
+
 use shr_kind_mod,      only: r8 => shr_kind_r8
 use ppgrid,            only: pcols, pver, pverp
 use scamMod,           only: single_column, scm_crm_mode
@@ -184,6 +185,7 @@ subroutine rad_rrtmg_lw(lchnk   ,ncol      ,rrtmg_levs,r_state,       &
    emis(:ncol,:nbndlw) = 1._r8
    tsfc(:ncol) = r_state%tlev(:ncol,rrtmg_levs+1)
    taua_lw(:ncol, 1:rrtmg_levs-1, :nbndlw) = aer_lw_abs(:ncol,pverp-rrtmg_levs+1:pverp-1,:nbndlw)
+
 
    if (associated(lu)) lu(1:ncol,:,:) = 0.0_r8
    if (associated(ld)) ld(1:ncol,:,:) = 0.0_r8

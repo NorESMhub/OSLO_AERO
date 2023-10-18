@@ -656,12 +656,13 @@
       use mo_constants,     only : avogadro
       use mo_chem_utls,     only : get_spc_ndx
 #ifdef OSLO_AERO
-      use oslo_aero_dust,   only : dust_names
-      use oslo_aero_seasalt,only : sslt_names=>seasalt_names
+      use oslo_aero_dust,    only : dust_names
+      use oslo_aero_seasalt, only : sslt_names=>seasalt_names
 #else
       use dust_model,       only : dust_names
       use seasalt_model,    only : sslt_names=>seasalt_names
 #endif
+
       implicit none
 
 !-----------------------------------------------------------------------------

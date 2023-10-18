@@ -9,12 +9,10 @@ module oslo_aero_optical_params
   use cam_history,     only: outfld
   use physconst,       only: rair,pi
   use physics_types,   only: physics_state
-  use physics_buffer,  only: physics_buffer_desc, pbuf_get_index, pbuf_get_field, pbuf_old_tim_idx
   use wv_saturation,   only: qsat_water
   !
   use oslo_aero_utils, only: calculateNumberConcentration
   use oslo_aero_conc,  only: calculateBulkProperties, partitionMass
-  use oslo_aero_control,  only: oslo_aero_getopts
   use oslo_aero_sw_tables
   use oslo_aero_params
   use oslo_aero_const
@@ -29,20 +27,30 @@ module oslo_aero_optical_params
 contains
 !===============================================================================
 
-  subroutine oslo_aero_optical_params_calc(lchnk, ncol, pint, pmid, &
-       coszrs, pbuf, state, t, cld,                                 &
-       per_tau, per_tau_w, per_tau_w_g, per_tau_w_f, per_lw_abs, aodvis, absvis)
+  subroutine oslo_aero_optical_params_calc(lchnk, ncol, pint, pmid,                &
+       coszrs, state, t, cld, qm1, Nnatk,                                          &
+       per_tau, per_tau_w, per_tau_w_g, per_tau_w_f, per_lw_abs,                   &
+       volc_ext_sun, volc_omega_sun, volc_g_sun, volc_ext_earth, volc_omega_earth, &
+       aodvis, absvis)
 
     ! Input arguments
-    integer                   , intent(in)         :: lchnk             ! chunk identifier
-    integer                   , intent(in)         :: ncol              ! number of atmospheric columns
-    real(r8)                  , intent(in)         :: pint(pcols,pverp) ! Model interface pressures (10*Pa)
-    real(r8)                  , intent(in)         :: pmid(pcols,pver)  ! Model level pressures (Pa)
-    real(r8)                  , intent(in)         :: coszrs(pcols)     ! Cosine solar zenith angle
-    type(physics_buffer_desc) , pointer            :: pbuf(:)
-    type(physics_state)       , intent(in), target :: state
-    real(r8)                  , intent(in)         :: cld(pcols,pver)   ! cloud fraction
-    real(r8)                  , intent(in)         :: t(pcols,pver)     ! Model level temperatures (K)
+    integer , intent(in) :: lchnk                                 ! chunk identifier
+    integer , intent(in) :: ncol                                  ! number of atmospheric columns
+    real(r8), intent(in) :: coszrs(pcols)                         ! Cosine solar zenith angle
+    real(r8), intent(in) :: pint(pcols,pverp)                     ! Model interface pressures (10*Pa)
+    real(r8), intent(in) :: pmid(pcols,pver)                      ! Model level pressures (Pa)
+    real(r8), intent(in) :: t(pcols,pver)                         ! Model level temperatures (K)
+    real(r8), intent(in) :: cld(pcols,pver)                       ! cloud fraction
+    real(r8), intent(in) :: qm1(pcols,pver,pcnst)                 ! Specific humidity and tracers (kg/kg)
+    real(r8), intent(in) :: volc_ext_sun(pcols,pver,nbands)       ! volcanic aerosol extinction for solar bands, CMIP6
+    real(r8), intent(in) :: volc_omega_sun(pcols,pver,nbands)     ! volcanic aerosol SSA for solar bands, CMIP6
+    real(r8), intent(in) :: volc_g_sun(pcols,pver,nbands)         ! volcanic aerosol g for solar bands, CMIP6
+    real(r8), intent(in) :: volc_ext_earth(pcols,pver,nlwbands)   ! volcanic aerosol extinction for terrestrial bands, CMIP6
+    real(r8), intent(in) :: volc_omega_earth(pcols,pver,nlwbands) ! volcanic aerosol SSA for terrestrial bands, CMIP6
+    type(physics_state), intent(in), target :: state
+
+    ! Input-output arguments
+    real(r8), intent(inout) :: Nnatk(pcols,pver,0:nmodes)         ! aerosol mode number concentration
 
     ! Output arguments
     ! AOD and absorptive AOD for visible wavelength closest to 0.55 um (0.442-0.625)
@@ -56,13 +64,6 @@ contains
     real(r8), intent(out) :: absvis(pcols)                        ! AAOD vis
 
     ! Local variables
-    real(r8) :: Nnatk(pcols,pver,0:nmodes)            ! aerosol mode number concentration
-    real(r8) :: volc_ext_sun(pcols,pver,nbands)       ! volcanic aerosol extinction for solar bands, CMIP6
-    real(r8) :: volc_omega_sun(pcols,pver,nbands)     ! volcanic aerosol SSA for solar bands, CMIP6
-    real(r8) :: volc_g_sun(pcols,pver,nbands)         ! volcanic aerosol g for solar bands, CMIP6
-    real(r8) :: volc_ext_earth(pcols,pver,nlwbands)   ! volcanic aerosol extinction for terrestrial bands, CMIP6
-    real(r8) :: volc_omega_earth(pcols,pver,nlwbands) ! volcanic aerosol SSA for terrestrial bands, CMIP6
-    real(r8) :: qdirind(pcols,pver,pcnst)             ! Common tracers for indirect and direct calculations
     integer  :: i, k, ib, icol, mplus10
     integer  :: iloop
     logical  :: daylight(pcols)        ! SW calculations also at (polar) night in interpol* if daylight=.true.
@@ -115,76 +116,10 @@ contains
     real(r8) :: xfbcbgn(pcols,pver)
     integer  :: ifbcbgn1(pcols,pver)
     logical  :: lw_on   ! LW calculations are performed in interpol* if true
-    !
-    integer           :: band
-    integer           :: itim_old
-    integer           :: volc_idx = 0                            ! TODO: the following is hardwired for now
-    logical           :: has_prescribed_volcaero_cmip6 = .false. ! TODO: the following is hardwired for now
-    real(r8)          :: volc_fraction_coarse                    ! Fraction of volcanic aerosols going to coarse mode
-    real(r8), pointer :: rvolcmmr(:,:)                           ! stratospheric volcanoes aerosol mmr
-    real(r8), pointer :: volcopt(:,:)                            ! stratospheric volcano SW optical parameter (CMIP6)
-    character(len=3)  :: c3
     !-------------------------------------------------------------------------
 
-    ! initialize output variables
-    per_lw_abs(:,:,:)  = 0._r8
-    per_tau(:,:,:)     = 0._r8
-    per_tau_w(:,:,:)   = 0._r8
-    per_tau_w_g(:,:,:) = 0._r8
-    per_tau_w_f(:,:,:) = 0._r8
-
-    ! Volcanic optics for solar (SW) bands
-    do band=1,nbands
-       volc_ext_sun(1:ncol,1:pver,band) = 0.0_r8
-       volc_omega_sun(1:ncol,1:pver,band) = 0.999_r8
-       volc_g_sun(1:ncol,1:pver,band) = 0.5_r8
-    enddo
-    if (has_prescribed_volcaero_cmip6) then
-       itim_old = pbuf_old_tim_idx()
-       do band=1,nbands
-          write(c3,'(i3)') band
-          volc_idx = pbuf_get_index('ext_sun'//trim(adjustl(c3)))
-          call pbuf_get_field(pbuf, volc_idx, volcopt, start=(/1,1,itim_old/), kount=(/pcols,pver,1/) )
-          volc_ext_sun(1:ncol,1:pver,band)=volcopt(1:ncol,1:pver)
-
-          volc_idx = pbuf_get_index('omega_sun'//trim(adjustl(c3)))
-          call pbuf_get_field(pbuf, volc_idx, volcopt, start=(/1,1,itim_old/), kount=(/pcols,pver,1/) )
-          volc_omega_sun(1:ncol,1:pver,band)=volcopt(1:ncol,1:pver)
-
-          volc_idx = pbuf_get_index('g_sun'//trim(adjustl(c3)))
-          call pbuf_get_field(pbuf, volc_idx, volcopt, start=(/1,1,itim_old/), kount=(/pcols,pver,1/) )
-          volc_g_sun(1:ncol,1:pver,band)=volcopt(1:ncol,1:pver)
-       enddo
-    endif
-
-    !  Volcanic optics for terrestrial (LW) bands (g is not used here)
-    do band=1,nlwbands
-       volc_ext_earth(1:ncol,1:pver,band) = 0.0_r8
-       volc_omega_earth(1:ncol,1:pver,band) = 0.999_r8
-    enddo
-    if (has_prescribed_volcaero_cmip6) then
-       do band=1,nlwbands
-          write(c3,'(i3)') band
-          volc_idx = pbuf_get_index('ext_earth'//trim(adjustl(c3)))
-          call pbuf_get_field(pbuf, volc_idx,  volcopt,      start=(/1,1,itim_old/), kount=(/pcols,pver,1/) )
-          volc_ext_earth(1:ncol,1:pver,band)=volcopt(1:ncol,1:pver)
-
-          volc_idx = pbuf_get_index('omega_earth'//trim(adjustl(c3)))
-          call pbuf_get_field(pbuf, volc_idx,  volcopt,      start=(/1,1,itim_old/), kount=(/pcols,pver,1/) )
-          volc_omega_earth(1:ncol,1:pver,band)=volcopt(1:ncol,1:pver)
-       enddo
-    endif
-
-    qdirind(:ncol,:,:) = state%q(:ncol,:,:)
-    if (has_prescribed_volcaero_cmip6) then
-       call oslo_aero_getopts(volc_fraction_coarse_out = volc_fraction_coarse)
-       call pbuf_get_field(pbuf, volc_idx,  rvolcmmr, start=(/1,1,itim_old/), kount=(/pcols,pver,1/) )
-       qdirind(:ncol,:,l_so4_pr) = qdirind(:ncol,:,l_so4_pr) + (1.0_r8 - volc_fraction_coarse)*rvolcmmr(:ncol,:)
-       qdirind(:ncol,:,l_ss_a3)  = qdirind(:ncol,:,l_ss_a3)  + volc_fraction_coarse*rvolcmmr(:ncol,:)
-    end if
-
     ! calculate relative humidity for table lookup into rh grid
-    call qsat_water(state%t(1:ncol,1:pver), state%pmid(1:ncol,1:pver), es(1:ncol,1:pver), qs(1:ncol,1:pver), ncol, pver)
+    call qsat_water(state%t(1:ncol,1:pver), state%pmid(1:ncol,1:pver), es(1:ncol,1:pver), qs(1:ncol,1:pver))
 
     rht(1:ncol,1:pver) = state%q(1:ncol,1:pver,1) / qs(1:ncol,1:pver)
     rh_temp(1:ncol,1:pver) = min(rht(1:ncol,1:pver),1._r8)
@@ -237,9 +172,9 @@ contains
     ke(:,:,:,:)=0._r8
     asym(:,:,:,:)=0._r8
     ssa(:,:,:,:)=0._r8
-
     ! Find process tagged bulk aerosol properies (from the life cycle module):
-    call calculateBulkProperties(ncol, qdirind, rhoda, Nnatk, Ca, f_c, f_bc, &
+
+    call calculateBulkProperties(ncol, qm1, rhoda, Nnatk, Ca, f_c, f_bc, &
          f_aq, f_so4_cond, f_soa, faitbc, fnbc, f_soana)
 
     ! calculating vulume fractions from mass fractions:
@@ -402,7 +337,8 @@ contains
        ssatot(1:ncol,1:pver,ib) = ssatot(1:ncol,1:pver,ib) &
             + volc_ext_sun(1:ncol,1:pver,ib)*volc_omega_sun(1:ncol,1:pver,ib)
        asymtot(1:ncol,1:pver,ib) = asymtot(1:ncol,1:pver,ib) &
-            + volc_ext_sun(1:ncol,1:pver,ib)*volc_omega_sun(1:ncol,1:pver,ib)*volc_g_sun(1:ncol,1:pver,ib)
+            + volc_ext_sun(1:ncol,1:pver,ib)*volc_omega_sun(1:ncol,1:pver,ib) &
+            *volc_g_sun(1:ncol,1:pver,ib)
     enddo
     bevisvolc(1:ncol,1:pver) = volc_ext_sun(1:ncol,1:pver,4)
 

@@ -12,10 +12,12 @@ module mo_neu_wetdep
   use constituents,     only : pcnst
   use spmd_utils,       only : masterproc
   use cam_abortutils,   only : endrun
-  use shr_drydep_mod,   only : n_species_table, species_name_table, dheff
+  use seq_drydep_mod,   only : n_species_table, species_name_table, dheff
   use gas_wetdep_opts,  only : gas_wetdep_method, gas_wetdep_list, gas_wetdep_cnt
-  use phys_control,     only: phys_getopts ! OSLO_AERO
-  use mo_constants,     only: rgrav        ! OSLO_AERO
+#ifdef OSLO_AERO
+  use mo_constants, only: rgrav
+  use phys_control, only: phys_getopts
+#endif
 !
   implicit none
 !
@@ -28,9 +30,10 @@ module mo_neu_wetdep
   integer, allocatable, dimension(:) :: mapping_to_heff,mapping_to_mmr
   real(r8),allocatable, dimension(:) :: mol_weight
   logical ,allocatable, dimension(:) :: ice_uptake
-  integer                     :: index_cldice,index_cldliq,nh3_ndx,co2_ndx,so2_ndx
+  integer                     :: index_cldice,index_cldliq,nh3_ndx,co2_ndx
   logical                     :: debug   = .false.
   integer                     :: hno3_ndx = 0
+  integer                     :: h2o2_ndx = 0
 !
 ! diagnostics
 !
@@ -91,14 +94,30 @@ subroutine neu_wetdep_init
 !
 ! CCMI: added SO2t and NH_50W
 !
+      case( 'HYAC', 'CH3COOH' , 'HCOOH', 'EOOH', 'IEPOX' )
+         test_name = 'CH2O'
       case ( 'SOGB','SOGI','SOGM','SOGT','SOGX' )
          test_name = 'H2O2'
       case ( 'SO2t' )
          test_name = 'SO2'
-      case ( 'CLONO2','BRONO2','HCL','HOCL','HOBR','HBR', 'Pb', 'HF', 'COF2', 'COFCL')
+      case ( 'CLONO2','BRONO2','HCL','HOCL','HOBR','HBR', 'Pb', 'MACROOH', 'ISOPOOH', 'XOOH', 'H2SO4', 'HF', 'COF2', 'COFCL')
          test_name = 'HNO3'
       case ( 'NH_50W', 'NDEP', 'NHDEP', 'NH4', 'NH4NO3' )
          test_name = 'HNO3'
+      case ( 'ALKOOH', 'MEKOOH', 'TOLOOH' )
+         test_name = 'CH3OOH'
+      case( 'PHENOOH', 'BENZOOH', 'C6H5OOH', 'BZOOH', 'XYLOLOOH', 'XYLENOOH', 'HPALD' )
+         test_name = 'CH3OOH'
+      case( 'TERPOOH', 'TERP2OOH', 'MBOOOH' )
+         test_name = 'HNO3'
+      case( 'TERPROD1', 'TERPROD2' )
+         test_name = 'CH2O'
+      case( 'HMPROP' )
+          test_name = 'GLYALD'
+      case( 'NOA', 'ALKNIT', 'ISOPNITA', 'ISOPNITB', 'HONITR', 'ISOPNOOH' )
+         test_name = 'H2O2'
+      case( 'NC4CHO', 'NC4CH2OH', 'TERPNIT', 'NTERPOOH' )
+         test_name = 'H2O2'
       case(  'SOAGbb0' )  ! Henry's Law coeff. added for VBS SOA's, biomass burning is the same as fossil fuels
          test_name = 'SOAGff0'
       case(  'SOAGbb1' )
@@ -137,30 +156,26 @@ subroutine neu_wetdep_init
     if ( trim(gas_wetdep_list(m)) == 'HNO3' ) then
       hno3_ndx = m
     end if
-    if ( trim(test_name) == 'SO2' ) then
-      so2_ndx = m
-    end if
 !
   end do
 
    if (any ( mapping_to_heff(:) == -99 ))  call endrun('mo_neu_wet->depwetdep_init: unmapped species error' )
 !
-  if ( debug .and. masterproc ) then
-    write(iulog, '(a,i4)') 'co2_ndx',co2_ndx
-    write(iulog, '(a,i4)') 'nh3_ndx',nh3_ndx
-    write(iulog, '(a,i4)') 'so2_ndx',so2_ndx
+  if ( debug ) then
+    print '(a,i4)','co2_ndx',co2_ndx
+    print '(a,i4)','nh3_ndx',nh3_ndx
   end if
 !
 ! find mapping to species
 !
   mapping_to_mmr = -99
   do m=1,gas_wetdep_cnt
-    if ( debug .and. masterproc ) write(iulog, '(i4,a)') m,trim(gas_wetdep_list(m))
+    if ( debug ) print '(i4,a)',m,trim(gas_wetdep_list(m))
     call cnst_get_ind(gas_wetdep_list(m), mapping_to_mmr(m), abort=.false. )
-    if ( debug .and. masterproc ) write(iulog, '(a,i4)') 'mapping_to_mmr ',mapping_to_mmr(m)
+    if ( debug ) print '(a,i4)','mapping_to_mmr ',mapping_to_mmr(m)
     if ( mapping_to_mmr(m) <= 0 ) then
-      if (masterproc) write(iulog,*) 'problem with mapping_to_mmr of ',gas_wetdep_list(m)
-      call endrun('neu_wetdep_init: problem with mapping_to_mmr of '//trim(gas_wetdep_list(m)))
+      print *,'problem with mapping_to_mmr of ',gas_wetdep_list(m)
+      call endrun('problem with mapping_to_mmr of '//trim(gas_wetdep_list(m)))
     end if
   end do
 !
@@ -169,7 +184,7 @@ subroutine neu_wetdep_init
   do m=1,gas_wetdep_cnt
 !
     mol_weight(m) = cnst_mw(mapping_to_mmr(m))
-    if ( debug .and. masterproc ) write(iulog, '(i4,a,f8.4)') m,' mol_weight ',mol_weight(m)
+    if ( debug ) print '(i4,a,f8.4)',m,' mol_weight ',mol_weight(m)
     ice_uptake(m) = .false.
     if ( trim(gas_wetdep_list(m)) == 'HNO3' ) then
       ice_uptake(m) = .true.
@@ -190,6 +205,7 @@ subroutine neu_wetdep_init
     call addfld     ('WD_'//trim(gas_wetdep_list(m)),horiz_only, 'A','kg/m2/s','vertical integrated wet deposition flux')
     call addfld     ('HEFF_'//trim(gas_wetdep_list(m)),(/ 'lev' /), 'A','M/atm','Effective Henrys Law coeff.')
     if (history_chemistry) then
+       call add_default('DTWR_'//trim(gas_wetdep_list(m)), 1, ' ')
        call add_default('WD_'//trim(gas_wetdep_list(m)), 1, ' ')
     end if
   end do
@@ -215,10 +231,10 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
      prain, nevapr, cld, cmfdqr, wd_tend, wd_tend_int)
 !
   use ppgrid,           only : pcols, pver
+!!DEK
   use phys_grid,        only : get_area_all_p, get_rlat_all_p
   use shr_const_mod,    only : SHR_CONST_REARTH,SHR_CONST_G
   use cam_history,      only : outfld
-  use shr_const_mod,    only : pi => shr_const_pi
 !
   implicit none
 !
@@ -239,11 +255,11 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
 !
 ! local arrays and variables
 !
-  integer :: i,k,l,kk,m
+  integer :: i,k,l,kk,m,id
   real(r8), parameter                       :: rearth = SHR_CONST_REARTH    ! radius earth (m)
   real(r8), parameter                       :: gravit = SHR_CONST_G         ! m/s^2
   real(r8), dimension(ncol)                 :: area, wk_out
-  real(r8), dimension(ncol,pver)            :: cldice,cldliq,cldfrc,totprec,totevap,delz,p
+  real(r8), dimension(ncol,pver)            :: cldice,cldliq,cldfrc,totprec,totevap,delz,delp,p
   real(r8), dimension(ncol,pver)            :: rls,evaprate,mass_in_layer,temp
   real(r8), dimension(ncol,pver,gas_wetdep_cnt) :: trc_mass,heff,dtwr
   real(r8), dimension(ncol,pver,gas_wetdep_cnt) :: wd_mmr
@@ -261,13 +277,19 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
   real(r8), parameter       :: ph_inv = 1._r8/ph
   real(r8)                  :: e298, dhr
   real(r8), dimension(ncol) :: dk1s,dk2s,wrk
+!!DEK
+  real(r8) :: pi
   real(r8) :: lats(pcols)
-  real(r8) :: wrk_wd(pcols)   ! OSLO_AERO
-  logical  :: history_aerosol ! OSLO_AERO
-  real(r8), parameter :: rad2deg = 180._r8/pi
+
+#ifdef OSLO_AERO
+  real(r8) :: wrk_wd(pcols)
+  logical history_aerosol
+#endif
 !
 ! from cam/src/physics/cam/stratiform.F90
 !
+!!DEK
+  pi = 4._r8*atan(1.0_r8)
 
   if (.not.do_neu_wetdep) return
 !
@@ -309,6 +331,7 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
 !
       trc_mass(i,k,:) = mmr(i,kk,mapping_to_mmr(:)) * mass_in_layer(i,k)
 !
+      delp(i,k) = pdel(i,kk) * 0.01_r8          ! in hPa
       p   (i,k) = pmid(i,kk) * 0.01_r8          ! in hPa
 !
     end do
@@ -330,6 +353,7 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
   end do
 !
 ! compute effective Henry's law coefficients
+! code taken from models/drv/shr/seq_drydep_mod.F90
 !
   heff = 0._r8
   do k=1,pver
@@ -341,13 +365,14 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
     do m=1,gas_wetdep_cnt
 !
       l    = mapping_to_heff(m)
-      e298 = dheff(1,l)
-      dhr  = dheff(2,l)
+      id   = 6*(l - 1)
+      e298 = dheff(id+1)
+      dhr  = dheff(id+2)
       heff(:,k,m) = e298*exp( dhr*wrk(:) )
       test_flag = -99
-      if( dheff(3,l) /= 0._r8 .and. dheff(5,l) == 0._r8 ) then
-        e298 = dheff(3,l)
-        dhr  = dheff(4,l)
+      if( dheff(id+3) /= 0._r8 .and. dheff(id+5) == 0._r8 ) then
+        e298 = dheff(id+3)
+        dhr  = dheff(id+4)
         dk1s(:) = e298*exp( dhr*wrk(:) )
         where( heff(:,k,m) /= 0._r8 )
           heff(:,k,m) = heff(:,k,m)*(1._r8 + dk1s(:)*ph_inv)
@@ -357,20 +382,18 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
         endwhere
       end if
 !
-      if (k.eq.1 .and. maxval(test_flag) > 0 .and. debug .and. masterproc ) then
-         write(iulog, '(a,i4)') 'heff for m=',m
-      endif
+      if (k.eq.1 .and. maxval(test_flag) > 0 .and. debug ) print '(a,i4)','heff for m=',m
 !
-      if( dheff(5,l) /= 0._r8 ) then
-        if( nh3_ndx > 0 .or. co2_ndx > 0 .or. so2_ndx > 0 ) then
-          e298 = dheff(3,l)
-          dhr  = dheff(4,l)
+      if( dheff(id+5) /= 0._r8 ) then
+        if( nh3_ndx > 0 .or. co2_ndx > 0 ) then
+          e298 = dheff(id+3)
+          dhr  = dheff(id+4)
           dk1s(:) = e298*exp( dhr*wrk(:) )
-          e298 = dheff(5,l)
-          dhr  = dheff(6,l)
+          e298 = dheff(id+5)
+          dhr  = dheff(id+6)
           dk2s(:) = e298*exp( dhr*wrk(:) )
-          if( m == co2_ndx .or. m == so2_ndx ) then
-             heff(:,k,m) = heff(:,k,m)*(1._r8 + dk1s(:)*ph_inv*(1._r8 + dk2s(:)*ph_inv))
+          if( m == co2_ndx ) then
+             heff(:,k,m) = heff(:,k,m)*(1._r8 + dk1s(:)*ph_inv)*(1._r8 + dk2s(:)*ph_inv)
           else if( m == nh3_ndx ) then
              heff(:,k,m) = heff(:,k,m)*(1._r8 + dk1s(:)*ph/dk2s(:))
           else
@@ -383,13 +406,13 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
     end do
   end do
 !
-  if ( debug .and. masterproc ) then
-    write(iulog,'(a,50f8.2)')  'tckaqb     ',tckaqb
-    write(iulog,'(a,50e12.4)') 'heff       ',heff(1,1,:)
-    write(iulog,'(a,50i4)')    'ice_uptake ',ice_uptake
-    write(iulog,'(a,50f8.2)')  'mol_weight ',mol_weight(:)
-    write(iulog,'(a,50f8.2)')  'temp       ',temp(1,:)
-    write(iulog,'(a,50f8.2)')  'p          ',p   (1,:)
+  if ( debug ) then
+    print '(a,50f8.2)','tckaqb     ',tckaqb
+    print '(a,50e12.4)','heff      ',heff(1,1,:)
+    print '(a,50i4)'  ,'ice_uptake ',ice_uptake
+    print '(a,50f8.2)','mol_weight ',mol_weight(:)
+    print '(a,50f8.2)','temp       ',temp(1,:)
+    print '(a,50f8.2)','p          ',p   (1,:)
   end if
 !
 ! call J. Neu's subroutine
@@ -422,11 +445,11 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
   dtwr(1:ncol,:,:) = wd_mmr(1:ncol,:,:) - dtwr(1:ncol,:,:)
   dtwr(1:ncol,:,:) = dtwr(1:ncol,:,:) / delt
 
-! polarward of 60S, 60N and <200hPa set to zero!
+!!DEK polarward of 60S, 60N and <200hPa set to zero!
   call get_rlat_all_p(lchnk, pcols, lats )
   do k = 1, pver
     do i= 1, ncol
-      if ( abs( lats(i)*rad2deg ) > 60._r8 ) then
+      if ( abs( lats(i)*180._r8/pi ) > 60._r8 ) then
         if ( pmid(i,k) < 20000._r8) then
            dtwr(i,k,:) = 0._r8
         endif
@@ -453,28 +476,28 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
 !
 ! to be used in mo_chm_diags to compute wet_deposition_NOy_as_N and wet_deposition_NHx_as_N (units: kg/m2/s)
 !
-    if ( debug .and. masterproc ) then
-       write(iulog,*) 'mo_neu ',mapping_to_mmr(m),(wk_out(1:ncol))
-    endif
+    if ( debug) print *,'mo_neu ',mapping_to_mmr(m),(wk_out(1:ncol))
     wd_tend_int(1:ncol,mapping_to_mmr(m)) = wk_out(1:ncol)
 !
-  end do
-!
-#ifdef OSLO_AERO
-  !This is output normally in mo_chm_diags, but if neu wetdep, we have to output it here!
-  call phys_getopts( history_aerosol_out = history_aerosol)
-  if (history_aerosol) then
-     do m=1,gas_wetdep_cnt
-        wrk_wd(:ncol) = 0.0_r8
-        do k=1,pver
-           !Note sign: tendency is negative, so this becomes a positive flux!
-           wrk_wd(:ncol) = wrk_wd(:ncol) - wd_tend(1:ncol,k,mapping_to_mmr(m))*pdel(:ncol,k)*rgrav !kg/m2/sec
-        end do
-        call outfld('WD_A_'//trim(gas_wetdep_list(m)),wrk_wd(:ncol),ncol,lchnk)
-     end do
-  end if
-#endif
+   end do
 
+!This is output normally in mo_chm_diags, but
+!if neu wetdep, we have to output it here!
+#ifdef OSLO_AERO
+   call phys_getopts( history_aerosol_out = history_aerosol)
+   if(history_aerosol)then
+      do m=1,gas_wetdep_cnt
+         wrk_wd(:ncol) = 0.0_r8
+         do k=1,pver
+            !Note sign: tendency is negative, so this becomes a positive flux!
+            wrk_wd(:ncol) = wrk_wd(:ncol)  &
+                 - wd_tend(1:ncol,k,mapping_to_mmr(m))*pdel(:ncol,k)*rgrav !kg/m2/sec
+         end do
+         call outfld('WD_A_'//trim(gas_wetdep_list(m)),wrk_wd(:ncol),ncol,lchnk)
+      end do
+   end if
+#endif
+!
   if ( do_diag ) then
     call outfld('QT_RAIN_HNO3', qt_rain, ncol, lchnk )
     call outfld('QT_RIME_HNO3', qt_rime, ncol, lchnk )
@@ -521,7 +544,7 @@ end subroutine neu_wetdep_tend
       real(r8),  intent(inout) :: qt_wash(lpar)
       real(r8),  intent(inout) :: qt_evap(lpar)
 !
-      integer L,N,LE, LM1
+      integer I,J,L,N,LE, LM1
       real(r8), dimension(LPAR) :: CFXX
       real(r8), dimension(LPAR) :: QTT, QTTNEW
 
@@ -531,7 +554,7 @@ end subroutine neu_wetdep_tend
       real(r8) MASSLOSS
       real(r8) DOR,DNEW,DEMP,COLEFFSNOW,RHOSNOW
       real(r8) WEMP,REMP,RRAIN,RWASH
-      real(r8) QTPRECIP,QTRAIN,QTCXA,QTAX
+      real(r8) QTPRECIP,QTRAIN,QTCXA,QTAX,QTOC
 
       real(r8) FAMA,RAMA,DAMA,FCA,RCA,DCA
       real(r8) FAX,RAX,DAX,FCXA,RCXA,DCXA,FCXB,RCXB,DCXB
@@ -545,8 +568,9 @@ end subroutine neu_wetdep_tend
       real(r8) QTTOPCA,QTTOPAA,QTTOPCAX,QTTOPAAX
 
       real(r8) AMPCT,AMCLPCT,CLNEWPCT,CLNEWAMPCT,CLOLDPCT,CLOLDAMPCT
+      real(r8) RAXLOC,RCXALOC,RCXBLOC,RCALOC,RAMALOC,RCXPCT
 
-      real(r8) QTNETLCXA,QTNETLCXB,QTNETLAX
+      real(r8) QTNETLCXA,QTNETLCXB,QTNETLAX,QTNETL
       real(r8) QTDISSTAR
 
 
@@ -589,15 +613,15 @@ end subroutine neu_wetdep_tend
       real(r8), parameter :: four = 4._r8
       real(r8), parameter :: adj_factor = one + 10._r8*epsilon( one )
 !
-      integer :: LICETYP
+      integer :: LWASHTYP,LICETYP
 !
-      if ( debug .and. masterproc ) then
-        write(iulog,'(a,50f8.2)')  'tckaqb     ',tckaqb
-        write(iulog,'(a,50e12.4)') 'hstar      ',hstar(1,:)
-        write(iulog,'(a,50i4)')    'ice_uptake ',TCNION
-        write(iulog,'(a,50f8.2)')  'mol_weight ',TCMASS(:)
-        write(iulog,'(a,50f8.2)')  'temp       ',tem(:)
-        write(iulog,'(a,50f8.2)')  'p          ',pofl(:)
+      if ( debug ) then
+        print '(a,50f8.2)','tckaqb     ',tckaqb
+        print '(a,50e12.4)','hstar     ',hstar(1,:)
+        print '(a,50i4)'  ,'ice_uptake ',TCNION
+        print '(a,50f8.2)','mol_weight ',TCMASS(:)
+        print '(a,50f8.2)','temp       ',tem(:)
+        print '(a,50f8.2)','p          ',pofl(:)
       end if
 
 !-----------------------------------------------------------------------
@@ -702,6 +726,13 @@ level_loop : &
          QTRAINCXB  = zero
 
          RAMPCT = zero
+         RCXPCT = zero
+
+         RCXALOC = zero
+         RCXBLOC = zero
+         RAXLOC  = zero
+         RAMALOC = zero
+         RCALOC  = zero
 
          RPRECIP       = zero
          DELTARIMEMASS = zero
@@ -1303,6 +1334,23 @@ is_freezing_a : &
            endif
 upper_level : &
            if( L > 1 ) then
+             FAMA = max( FCXA + FCXB + FAX - CFR(LM1),zero )
+             if( FAX > zero ) then
+               RAXLOC = RAX/FAX
+             else
+               RAXLOC = zero
+             endif
+             if( FCXA > zero ) then
+               RCXALOC = RCXA/FCXA
+             else
+               RCXALOC = zero
+             endif
+             if( FCXB > zero ) then
+               RCXBLOC = RCXB/FCXB
+             else
+               RCXBLOC = zero
+             endif
+
              if( CFR(LM1) >= CFMIN ) then
                CFXX(LM1) = CFR(LM1)
              else
@@ -1324,23 +1372,29 @@ upper_level : &
 !  Don't do for lowest level
 !-----------------------------------------------------------------------
              if( FAX > zero ) then
+               RAXLOC = RAX/FAX
                AMPCT = max( zero,min( one,(CFXX(L) + FAX - CFXX(LM1))/FAX ) )
                AMCLPCT = one - AMPCT
              else
+               RAXLOC  = zero
                AMPCT   = zero
                AMCLPCT = zero
              endif
              if( FCXB > zero ) then
+               RCXBLOC = RCXB/FCXB
                CLNEWPCT = max( zero,min( (CFXX(LM1) - FCXA)/FCXB,one ) )
                CLNEWAMPCT = one - CLNEWPCT
              else
+               RCXBLOC    = zero
                CLNEWPCT   = zero
                CLNEWAMPCT = zero
              endif
              if( FCXA > zero ) then
+               RCXALOC = RCXA/FCXA
                CLOLDPCT = max( zero,min( CFXX(LM1)/FCXA,one ) )
                CLOLDAMPCT = one - CLOLDPCT
              else
+               RCXALOC    = zero
                CLOLDPCT   = zero
                CLOLDAMPCT = zero
              endif

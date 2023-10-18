@@ -10,7 +10,7 @@ module oslo_aero_control
   use namelist_utils,    only: find_group_name
   use cam_logfile,       only: iulog
   use cam_abortutils,    only: endrun
-  use atm_import_export, only: dms_from_ocn
+  use cam_cpl_indices,   only: index_x2a_Faoo_fdms_ocn
 
   implicit none
   private
@@ -96,11 +96,6 @@ contains
     call mpi_bcast(ocean_filepath, len(ocean_filepath), mpi_character, mstrid, mpicom, ierr)
     if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: ocean_filepath")
 
-    ! Reset dms_source if ocean is sending dms to atm
-    if (dms_from_ocn) then
-       dms_source = 'ocean_flux'
-    end if
-
     ! Error checking:
 
     ! Defaults for PBL and microphysics are set in build-namelist.  Check here that
@@ -125,17 +120,18 @@ contains
     endif
 
     ! Error check for dms_source from namelist
-    if ( dms_source =='ocean_flux' .or. &
-         dms_source =='kettle'     .or. &
-         dms_source =='lana'       .or. &
-         dms_source =='emission_file') then
-       if (masterproc) then
+    if (dms_source=='ocean_flux')then
+       if (index_x2a_Faoo_fdms_ocn == 0) then
+          call endrun("cam_oslo: dms source set to "//trim(dms_source)//" but bgc is off")
+       else
           write(iulog,*)"DMS emission source is : "// trim(dms_source)
-       end if
+       endif
+    elseif(dms_source=='kettle' .or.  dms_source=='lana' .or. dms_source=='emission_file')then
+       write(iulog,*)"DMS emission source is : "// trim(dms_source)
     else
-       call endrun("oslo_aero_control: no valid dms source from namelist: " //trim(dms_source))
+       call endrun("oslo_control: no valid dms source from namelist: " //trim(dms_source))
     endif
-
+    
     ! Error check for opom_source from namelist
     if ( opom_source=='no_file' .or. &
          opom_source=='nilsson' .or. &

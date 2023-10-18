@@ -38,15 +38,17 @@ contains
 #else
     use sox_cldaero_mod, only : sox_cldaero_init
 #endif
-
     implicit none
 
+
+    call phys_getopts( &
+         prog_modal_aero_out=modal_aerosols )
+
 #ifdef OSLO_AERO
-    modal_aerosols = .true.
-    cloud_borne = .true.
+   cloud_borne = .true.
+   modal_aerosols = .true.
 #else
-    call phys_getopts(prog_modal_aero_out=modal_aerosols )
-    cloud_borne = modal_aerosols
+   cloud_borne = modal_aerosols
 #endif
 
     !-----------------------------------------------------------------
@@ -188,6 +190,7 @@ contains
     use sox_cldaero_mod, only : sox_cldaero_update, sox_cldaero_create_obj, sox_cldaero_destroy_obj
     use cldaero_mod,     only : cldaero_conc_t
 #endif
+
     !
     implicit none
     !

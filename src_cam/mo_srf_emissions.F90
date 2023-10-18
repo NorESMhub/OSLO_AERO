@@ -5,9 +5,11 @@ module mo_srf_emissions
 
   use shr_kind_mod,  only : r8 => shr_kind_r8
   use chem_mods,     only : gas_pcnst
-  use spmd_utils,    only : masterproc
+  use spmd_utils,    only : masterproc,iam
+  use mo_tracname,   only : solsym
   use cam_abortutils,only : endrun
   use ioFileMod,     only : getfil
+  use ppgrid,        only : pcols, begchunk, endchunk
   use cam_logfile,   only : iulog
   use tracer_data,   only : trfld,trfile
 #ifdef OSLO_AERO
@@ -31,13 +33,14 @@ module mo_srf_emissions
 
   private
 
-  public  :: srf_emissions_inti, set_srf_emissions, set_srf_emissions_time
+  public  :: srf_emissions_inti, set_srf_emissions, set_srf_emissions_time 
 
-  logical, public, protected :: has_emis(gas_pcnst) = .false.
+  save
 
   real(r8), parameter :: amufac = 1.65979e-23_r8         ! 1.e4* kg / amu
+  logical :: has_emis(gas_pcnst)
   type(emission), allocatable :: emissions(:)
-  integer                     :: n_emis_files
+  integer                     :: n_emis_files 
   integer :: c10h16_ndx, isop_ndx
 #ifdef OSLO_AERO
   integer :: dms_ndx
@@ -52,12 +55,13 @@ contains
     !-----------------------------------------------------------------------
 
     use chem_mods,        only : adv_mass
-    use mo_chem_utls,     only : get_spc_ndx
+    use mo_constants,     only : d2r, pi, rearth
+    use string_utils,     only : to_upper
+    use mo_chem_utls,     only : get_spc_ndx 
     use tracer_data,      only : trcdata_init
     use cam_pio_utils,    only : cam_pio_openfile
     use pio,              only : pio_inquire, pio_nowrite, pio_closefile, pio_inq_varndims
-    use pio,              only : pio_inq_varname, pio_inq_vardimid, pio_inq_dimid
-    use pio,              only : file_desc_t, pio_get_att, PIO_NOERR, PIO_GLOBAL
+    use pio,              only : pio_inq_varname, file_desc_t, pio_get_att, PIO_NOERR, PIO_GLOBAL
     use pio,              only : pio_seterrorhandling, PIO_BCAST_ERROR,PIO_INTERNAL_ERROR
     use chem_surfvals,    only : flbc_list
     use string_utils,     only : GLC
@@ -82,15 +86,14 @@ contains
     character(len=16)  :: spc_name
     character(len=256) :: filename
 
-    character(len=16)  :: emis_species(size(srf_emis_specifier))
-    character(len=256) :: emis_filenam(size(srf_emis_specifier))
-    integer  :: emis_indexes(size(srf_emis_specifier))
-    integer  :: indx(size(srf_emis_specifier))
-    real(r8) :: emis_scalefactor(size(srf_emis_specifier))
+    character(len=16)  :: emis_species(gas_pcnst)
+    character(len=256) :: emis_filenam(gas_pcnst)
+    integer  :: emis_indexes(gas_pcnst)
+    integer  :: indx(gas_pcnst)
+    real(r8) :: emis_scalefactor(gas_pcnst)
 
-    integer :: vid, nvars, isec, num_dims_emis
-    integer :: vndims
-    logical, allocatable :: is_sector(:)
+    integer :: vid, nvars, isec
+    integer, allocatable :: vndims(:)
     type(file_desc_t) :: ncid
     character(len=32)  :: varname
     character(len=256) :: locfn
@@ -98,27 +101,25 @@ contains
     character(len=1), parameter :: filelist = ''
     character(len=1), parameter :: datapath = ''
     logical         , parameter :: rmv_file = .false.
-    logical :: unstructured
+
     character(len=32) :: emis_type = ' '
     character(len=80) :: file_interp_type = ' '
     character(len=256) :: tmp_string = ' '
     character(len=32) :: xchr = ' '
     real(r8) :: xdbl
-    integer :: time_dimid, ncol_dimid
-    integer, allocatable :: dimids(:)
 
     has_emis(:) = .false.
     nn = 0
     indx(:) = 0
 
-    count_emis: do n=1,size(srf_emis_specifier)
+    count_emis: do n=1,gas_pcnst
        if ( len_trim(srf_emis_specifier(n) ) == 0 ) then
           exit count_emis
        endif
 
        i = scan(srf_emis_specifier(n),'->')
        spc_name = trim(adjustl(srf_emis_specifier(n)(:i-1)))
-
+       
        ! need to parse out scalefactor ...
        tmp_string = adjustl(srf_emis_specifier(n)(i+2:))
        j = scan( tmp_string, '*' )
@@ -135,7 +136,7 @@ contains
 
        if (m > 0) then
           has_emis(m) = .true.
-       else
+       else 
           write(iulog,*) 'srf_emis_inti: spc_name ',spc_name,' is not included in the simulation'
           call endrun('srf_emis_inti: invalid surface emission specification')
        endif
@@ -166,7 +167,7 @@ contains
     end if
 
     !-----------------------------------------------------------------------
-    ! Sort the input files so that the emissions sources are summed in the
+    ! Sort the input files so that the emissions sources are summed in the 
     ! same order regardless of the order of the input files in the namelist
     !-----------------------------------------------------------------------
     if (n_emis_files > 0) then
@@ -176,7 +177,7 @@ contains
     !-----------------------------------------------------------------------
     ! 	... setup the emission type array
     !-----------------------------------------------------------------------
-    do m=1,n_emis_files
+    do m=1,n_emis_files 
        emissions(m)%spc_ndx          = emis_indexes(indx(m))
        emissions(m)%units            = 'Tg/y'
        emissions(m)%species          = emis_species(indx(m))
@@ -191,58 +192,27 @@ contains
     spc_loop: do m = 1, n_emis_files
 
        emissions(m)%nsectors = 0
-
-       if (masterproc) then
-          write(iulog,'(a,i3,a)') 'srf_emissions_inti m: ',m,' init file : '//trim(emissions(m)%filename)
-       endif
-
+       
        call getfil (emissions(m)%filename, locfn, 0)
        call cam_pio_openfile ( ncid, trim(locfn), PIO_NOWRITE)
-       ierr = pio_inquire (ncid, nVariables=nvars)
+       ierr = pio_inquire (ncid, nvariables=nvars)
 
-       call pio_seterrorhandling(ncid, PIO_BCAST_ERROR)
-       ierr = pio_inq_dimid( ncid, 'ncol', ncol_dimid )
-       unstructured = ierr==PIO_NOERR
-       call pio_seterrorhandling(ncid, PIO_INTERNAL_ERROR)
-
-       allocate(is_sector(nvars))
-       is_sector(:) = .false.
-
-       if (unstructured) then
-          ierr = pio_inq_dimid( ncid, 'time', time_dimid )
-       end if
+       allocate(vndims(nvars))
 
        do vid = 1,nvars
 
-          ierr = pio_inq_varndims (ncid, vid, vndims)
+          ierr = pio_inq_varndims (ncid, vid, vndims(vid))
 
-          if (unstructured) then
-             num_dims_emis = 2
-          else
-             num_dims_emis = 3
-          endif
-
-          if( vndims < num_dims_emis ) then
+          if( vndims(vid) < 3 ) then
              cycle
-          elseif( vndims > num_dims_emis ) then
+          elseif( vndims(vid) > 3 ) then
              ierr = pio_inq_varname (ncid, vid, varname)
-             write(iulog,*) 'srf_emis_inti: Skipping variable ', trim(varname),', ndims = ',vndims, &
+             write(iulog,*) 'srf_emis_inti: Skipping variable ', trim(varname),', ndims = ',vndims(vid), &
                   ' , species=',trim(emissions(m)%species)
              cycle
           end if
 
-          if (unstructured) then
-             allocate( dimids(vndims) )
-             ierr = pio_inq_vardimid( ncid, vid, dimids )
-             if ( any(dimids(:)==ncol_dimid) .and. any(dimids(:)==time_dimid) ) then
-                emissions(m)%nsectors = emissions(m)%nsectors+1
-                is_sector(vid)=.true.
-             endif
-             deallocate(dimids)
-          else
-             emissions(m)%nsectors = emissions(m)%nsectors+1
-             is_sector(vid)=.true.
-          end if
+          emissions(m)%nsectors = emissions(m)%nsectors+1
 
        enddo
 
@@ -255,15 +225,16 @@ contains
        isec = 1
 
        do vid = 1,nvars
-          if( is_sector(vid) ) then
+          if( vndims(vid) == 3 ) then
              ierr = pio_inq_varname(ncid, vid, emissions(m)%sectors(isec))
              isec = isec+1
           endif
+
        enddo
-       deallocate(is_sector)
+       deallocate(vndims)
 
        ! Global attribute 'input_method' overrides the srf_emis_type namelist setting on
-       ! a file-by-file basis.  If the emis file does not contain the 'input_method'
+       ! a file-by-file basis.  If the emis file does not contain the 'input_method' 
        ! attribute then the srf_emis_type namelist setting is used.
        call pio_seterrorhandling(ncid, PIO_BCAST_ERROR)
        ierr = pio_get_att(ncid, PIO_GLOBAL, 'input_method', file_interp_type)
@@ -291,9 +262,11 @@ contains
 
     c10h16_ndx = get_spc_ndx('C10H16')
     isop_ndx = get_spc_ndx('ISOP')
+
 #ifdef OSLO_AERO
     dms_ndx = get_spc_ndx('DMS')
 #endif
+
   end subroutine srf_emissions_inti
 
   subroutine set_srf_emissions_time( pbuf2d, state )
@@ -308,7 +281,7 @@ contains
 
     implicit none
 
-    type(physics_state), intent(in):: state(begchunk:endchunk)
+    type(physics_state), intent(in):: state(begchunk:endchunk)                 
     type(physics_buffer_desc), pointer :: pbuf2d(:,:)
 
     !-----------------------------------------------------------------------
@@ -375,7 +348,7 @@ contains
                                                      "kg/m^2/sec  " /)
     character(len=12) :: units
 
-    real(r8), dimension(ncol) :: rlats, rlons
+    real(r8), dimension(ncol) :: rlats, rlons 
 
     sflx(:,:) = 0._r8
 
@@ -411,11 +384,11 @@ contains
     tod = (calday - doy_loc) + .5_r8
 
 #ifdef OSLO_AERO
-    ! Zero DMS emissions if option is not "from file"
-    ! oslo_aero_dms_inq() Returns "true" if "emissions from file"
-    if (.not. oslo_aero_dms_inq()) then
-       if (dms_ndx > 0) then
-          sflx(:ncol,dms_ndx) = 0.0_r8
+    ! Remove DMS emissions if option is not "from file" 
+    ! Online emissions are treated in seasalt module
+    if (.not. oslo_aero_dms_inq())  then ! Returns "True" if "emissions from file"
+       if (dms_ndx .gt. 0)then
+          sflx(:,dms_ndx) = 0.0_r8
        end if
     end if
 #endif

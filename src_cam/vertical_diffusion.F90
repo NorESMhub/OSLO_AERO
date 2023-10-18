@@ -73,7 +73,7 @@ use ref_pres,         only : do_molec_diff, nbot_molec
 use phys_control,     only : phys_getopts
 use time_manager,     only : is_first_step
 #ifdef OSLO_AERO
-use oslo_aero_share,  only: getNumberOfAerosolTracers, fillAerosolTracerList
+  use oslo_aero_share, only: getNumberOfAerosolTracers, fillAerosolTracerList
 #endif
 
 implicit none
@@ -319,26 +319,25 @@ subroutine vertical_diffusion_init(pbuf2d)
   call cnst_get_ind( 'NUMLIQ', ixnumliq, abort=.false. )
   call cnst_get_ind( 'NUMICE', ixnumice, abort=.false. )
 
-  ! Set prog_modal_aero determines whether prognostic modal aerosols are present in the run.
-  ! Get the constituent indices of the number and mass mixing ratios of the modal
-  ! aerosols.
-  ! N.B. - This implementation assumes that the prognostic modal aerosols are
-  !        impacting the climate calculation (i.e., can get info from list 0).
+  ! prog_modal_aero determines whether prognostic modal aerosols are present in the run.
+  call phys_getopts(prog_modal_aero_out=prog_modal_aero)
+
 #ifdef OSLO_AERO
-  prog_modal_aero = .true.
+  prog_modal_aero = .TRUE.
   pmam_ncnst = getNumberOfAerosolTracers()
   allocate(pmam_cnst_idx(pmam_ncnst))
   call fillAerosolTracerList(pmam_cnst_idx)
 #else
-  call phys_getopts(prog_modal_aero_out=prog_modal_aero)
   if (prog_modal_aero) then
+     ! NOTE THAT THIS BREAKS THE CONCEPT OF KEEPEING MAM-AEROSOLS OUT OF
+     ! DIFFUSION, BUT IF YOU ARE USING MAM, YOU SHOULD NOT BEE HERE ANYWAY!!
+
      ! First need total number of mam constituents
      call rad_cnst_get_info(0, nmodes=nmodes)
      do m = 1, nmodes
         call rad_cnst_get_info(0, m, nspec=nspec)
         pmam_ncnst = pmam_ncnst + 1 + nspec
      end do
-
      allocate(pmam_cnst_idx(pmam_ncnst))
 
      ! Get the constituent indicies
@@ -450,8 +449,11 @@ subroutine vertical_diffusion_init(pbuf2d)
         enddo
      end if
 
-     ! Convert all constituents to wet before doing diffusion.
-     if( vdiff_select( fieldlist_wet, 'q', k ) .ne. '' ) call endrun( vdiff_select( fieldlist_wet, 'q', k ) )
+     if( cnst_get_type_byind(k) .eq. 'wet' ) then
+        if( vdiff_select( fieldlist_wet, 'q', k ) .ne. '' ) call endrun( vdiff_select( fieldlist_wet, 'q', k ) )
+     else
+        if( vdiff_select( fieldlist_dry, 'q', k ) .ne. '' ) call endrun( vdiff_select( fieldlist_dry, 'q', k ) )
+     endif
 
      ! ----------------------------------------------- !
      ! Select constituents for molecular diffusion     !
@@ -586,6 +588,7 @@ subroutine vertical_diffusion_init(pbuf2d)
         call add_default( 'DTV'       , history_budget_histfile_num, ' ' )
      end if
   end if
+
   if ( history_waccm ) then
      if (do_molec_diff) then
         call add_default ( 'TTPXMLC', 1, ' ' )
@@ -659,8 +662,6 @@ subroutine vertical_diffusion_tend( &
   !---------------------------------------------------- !
   use physics_buffer,     only : physics_buffer_desc, pbuf_get_field, pbuf_set_field
   use physics_types,      only : physics_state, physics_ptend, physics_ptend_init
-  use physics_types,      only : set_dry_to_wet, set_wet_to_dry
-
   use camsrfexch,         only : cam_in_t
   use cam_history,        only : outfld
 
@@ -670,24 +671,22 @@ subroutine vertical_diffusion_tend( &
   use hb_diff,            only : compute_hb_diff
   use wv_saturation,      only : qsat
   use molec_diff,         only : compute_molec_diff, vd_lu_qdecomp
-  use constituents,       only : qmincg, qmin, cnst_type
+  use constituents,       only : qmincg, qmin
   use diffusion_solver,   only : compute_vdiff, any, operator(.not.)
-  use air_composition,    only : cpairv, rairv !Needed for calculation of upward H flux
+  use physconst,          only : cpairv, rairv !Needed for calculation of upward H flux
   use time_manager,       only : get_nstep
   use constituents,       only : cnst_get_type_byind, cnst_name, &
        cnst_mw, cnst_fixed_ubc, cnst_fixed_ubflx
   use physconst,          only : pi
   use pbl_utils,          only : virtem, calc_obklen, calc_ustar
-  use upper_bc,           only : ubc_get_vals, ubc_fixed_temp
-  use upper_bc,           only : ubc_get_flxs
+  use upper_bc,           only : ubc_get_vals
   use coords_1d,          only : Coords1D
-  use phys_control,       only : cam_physpkg_is
 
   ! --------------- !
   ! Input Arguments !
   ! --------------- !
 
-  type(physics_state), intent(inout) :: state                     ! Physics state variables
+  type(physics_state), intent(in)    :: state                     ! Physics state variables
   type(cam_in_t),      intent(in)    :: cam_in                    ! Surface inputs
 
   real(r8),            intent(in)    :: ztodt                     ! 2 delta-t [ s ]
@@ -855,9 +854,6 @@ subroutine vertical_diffusion_tend( &
   ! Main Computation Begins !
   ! ----------------------- !
 
-  ! Assume 'wet' mixing ratios in diffusion code.
-  call set_dry_to_wet(state)
-
   rztodt = 1._r8 / ztodt
   lchnk  = state%lchnk
   ncol   = state%ncol
@@ -878,14 +874,17 @@ subroutine vertical_diffusion_tend( &
   tint(:ncol,pver+1) = state%t(:ncol,pver)
 
   ! Get upper boundary values
-  call ubc_get_vals( state%lchnk, ncol, state%pint, state%zi, ubc_t, ubc_mmr )
+  call ubc_get_vals( state%lchnk, ncol, state%pint, state%zi, state%t, state%q, state%omega, state%phis, &
+                     ubc_t, ubc_mmr, ubc_flux )
 
-  if (waccmx_mode) then
-     call ubc_get_flxs( state%lchnk, ncol, state%pint, state%zi, state%t, state%q, state%phis, ubc_flux )
-     ! For WACCM-X, set ubc temperature to extrapolate from next two lower interface level temperatures
-     tint(:ncol,1) = 1.5_r8*tint(:ncol,2)-.5_r8*tint(:ncol,3)
-  else if(ubc_fixed_temp) then
-     tint(:ncol,1) = ubc_t(:ncol)
+  ! Always have a fixed upper boundary T if molecular diffusion is active. Why ?
+  ! For WACCM-X, set ubc temperature to extrapolate from next two lower interface level temperatures
+  if (do_molec_diff) then
+     if (waccmx_mode) then
+        tint(:ncol,1) = 1.5_r8*tint(:ncol,2)-.5_r8*tint(:ncol,3)
+     else
+        tint (:ncol,1) = ubc_t(:ncol)
+     endif
   else
      tint(:ncol,1) = state%t(:ncol,1)
   end if
@@ -1059,9 +1058,8 @@ subroutine vertical_diffusion_tend( &
           + q_tmp(:ncol,:,ixcldice)
      slv_prePBL(:ncol,:pver) = sl_prePBL(:ncol,:pver) * ( 1._r8 + zvir*qt_prePBL(:ncol,:pver) )
 
-     do k = 1, pver
-        call qsat(state%t(1:ncol,k), state%pmid(1:ncol,k), tem2(1:ncol,k), ftem(1:ncol,k), ncol)
-     end do
+     call qsat(state%t(:ncol,:), state%pmid(:ncol,:), &
+          tem2(:ncol,:), ftem(:ncol,:))
      ftem_prePBL(:ncol,:) = state%q(:ncol,:,1)/ftem(:ncol,:)*100._r8
 
      call outfld( 'qt_pre_PBL   ', qt_prePBL,                 pcols, lchnk )
@@ -1106,12 +1104,7 @@ subroutine vertical_diffusion_tend( &
      tauy = 0._r8
      shflux = 0._r8
      cflux(:,1) = 0._r8
-     if (cam_physpkg_is("cam_dev")) then
-       ! surface fluxes applied in clubb emissions module
-       cflux(:,2:) = 0._r8
-     else
-       cflux(:,2:) = cam_in%cflx(:,2:)
-     end if
+     cflux(:,2:) = cam_in%cflx(:,2:)
   case default
      taux = cam_in%wsx
      tauy = cam_in%wsy
@@ -1165,7 +1158,7 @@ subroutine vertical_diffusion_tend( &
           p_dry , state%t      , rhoi_dry,  ztodt         , taux          , &
           tauy          , shflux             , cflux        , &
           kvh           , kvm                , kvq          , cgs           , cgh           , &
-          state%zi      , ksrftms            , dragblj      , &
+          state%zi      , ksrftms            , dragblj      , & 
           qmincg       , fieldlist_dry , fieldlist_molec,&
           u_tmp         , v_tmp              , q_tmp        , s_tmp         ,                 &
           tautmsx_temp  , tautmsy_temp       , dtk_temp     , topflx_temp   , errstring     , &
@@ -1181,22 +1174,20 @@ subroutine vertical_diffusion_tend( &
 
   end if
 
-#ifdef OSLO_AERO
-  ! Do nothing if OSLO_AERO
-  ! Oslo aero adds emissions together with dry deposition - so do not add the explicit
-  ! surface fluxes to the lowest layer
-#else
   if (prog_modal_aero) then
+
      ! Modal aerosol species not diffused, so just add the explicit surface fluxes to the
-     ! lowest layer.  **NOTE** This code assumes wet mmr.
-     
+     ! lowest layer
+
+     ! NOTE: Oslo aero adds emissions together with dry deposition
+#ifndef OSLO_AERO
      tmp1(:ncol) = ztodt * gravit * state%rpdel(:ncol,pver)
      do m = 1, pmam_ncnst
         l = pmam_cnst_idx(m)
-        q_tmp(:ncol,pver,l) = q_tmp(:ncol,pver,l) + tmp1(:ncol) * cflux(:ncol,l)
+        q_tmp(:ncol,pver,l) = q_tmp(:ncol,pver,l) + tmp1(:ncol) * cam_in%cflx(:ncol,l)
      enddo
-  end if
 #endif
+  end if
 
   ! -------------------------------------------------------- !
   ! Diagnostics and output writing after applying PBL scheme !
@@ -1283,6 +1274,7 @@ subroutine vertical_diffusion_tend( &
   ! Convert the new profiles into vertical diffusion tendencies.    !
   ! Convert KE dissipative heat change into "temperature" tendency. !
   ! --------------------------------------------------------------- !
+
   ! All variables are modified by vertical diffusion
 
   lq(:) = .TRUE.
@@ -1293,16 +1285,6 @@ subroutine vertical_diffusion_tend( &
   ptend%u(:ncol,:)       = ( u_tmp(:ncol,:) - state%u(:ncol,:) ) * rztodt
   ptend%v(:ncol,:)       = ( v_tmp(:ncol,:) - state%v(:ncol,:) ) * rztodt
   ptend%q(:ncol,:pver,:) = ( q_tmp(:ncol,:pver,:) - state%q(:ncol,:pver,:) ) * rztodt
-
-  ! Convert tendencies of dry constituents to dry basis.
-  do m = 1,pcnst
-     if (cnst_type(m).eq.'dry') then
-        ptend%q(:ncol,:pver,m) = ptend%q(:ncol,:pver,m)*state%pdel(:ncol,:pver)/state%pdeldry(:ncol,:pver)
-     endif
-  end do
-  ! convert wet mmr back to dry before conservation check
-  call set_wet_to_dry(state)
-
   if (.not. do_pbl_diags) then
      slten(:ncol,:)         = ( sl(:ncol,:) - sl_prePBL(:ncol,:) ) * rztodt
      qtten(:ncol,:)         = ( qt(:ncol,:) - qt_prePBL(:ncol,:) ) * rztodt
@@ -1362,16 +1344,14 @@ subroutine vertical_diffusion_tend( &
      u_aft_PBL(:ncol,:pver)   =  state%u(:ncol,:pver)          + ptend%u(:ncol,:pver)            * ztodt
      v_aft_PBL(:ncol,:pver)   =  state%v(:ncol,:pver)          + ptend%v(:ncol,:pver)            * ztodt
 
-     do k = 1, pver
-        call qsat(t_aftPBL(1:ncol,k), state%pmid(1:ncol,k), tem2(1:ncol,k), ftem(1:ncol,k), ncol)
-     end do
+     call qsat(t_aftPBL(:ncol,:pver), state%pmid(:ncol,:pver), &
+          tem2(:ncol,:pver), ftem(:ncol,:pver))
      ftem_aftPBL(:ncol,:pver) = qv_aft_PBL(:ncol,:pver) / ftem(:ncol,:pver) * 100._r8
 
      tten(:ncol,:pver)        = ( t_aftPBL(:ncol,:pver)    - state%t(:ncol,:pver) )              * rztodt
      rhten(:ncol,:pver)       = ( ftem_aftPBL(:ncol,:pver) - ftem_prePBL(:ncol,:pver) )          * rztodt
 
   end if
-
 
   ! -------------------------------------------------------------- !
   ! mass conservation check.........
@@ -1404,7 +1384,7 @@ subroutine vertical_diffusion_tend( &
                          'MASSCHECK vert diff : nstep,lon,lat,mass1,mass2,sum3,sflx,rel-diff : ', &
                          trim(cnst_name(m)), ' : ', nstep, state%lon(i)*180._r8/pi, state%lat(i)*180._r8/pi, &
                          sum1, sum2, sum3, sflx, abs(sum2-sum1)/sum1
-!xxx                    call endrun('vertical_diffusion_tend : mass not conserved' )
+                    call endrun('vertical_diffusion_tend : mass not conserved' )
                  endif
               endif
            enddo col_loop

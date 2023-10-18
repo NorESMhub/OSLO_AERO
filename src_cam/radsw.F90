@@ -5,6 +5,7 @@ module radsw
 ! Purpose: Solar radiation calculations.
 !
 !-----------------------------------------------------------------------
+
 use shr_kind_mod,    only: r8 => shr_kind_r8
 use ppgrid,          only: pcols, pver, pverp
 use cam_abortutils,  only: endrun
@@ -22,7 +23,6 @@ use radconstants,    only: idx_sw_diag
 implicit none
 
 private
-save
 
 real(r8) :: fractional_solar_irradiance(1:nbndsw) ! fraction of solar irradiance in each band
 real(r8) :: solar_band_irrad(1:nbndsw) ! rrtmg-assumed solar irradiance in each sw band
@@ -49,11 +49,15 @@ subroutine rad_rrtmg_sw(lchnk,ncol       ,rrtmg_levs   ,r_state      , &
                     qrs      ,qrsc       ,fsnt         ,fsntc        ,fsntoa,fsutoa, &
                     fsntoac  ,fsnirtoa   ,fsnrtoac     ,fsnrtoaq     ,fsns    , &
                     fsnsc    ,fsdsc      ,fsds         ,sols         ,soll    , &
+#ifdef OSLO_AERO
+                    solsd    ,solld      ,fns          ,fcns         ,idrf    , &
+#else
                     solsd    ,solld      ,fns          ,fcns         , &
+#endif
                     Nday     ,Nnite      ,IdxDay       ,IdxNite      , &
                     su       ,sd         ,                             &
                     E_cld_tau, E_cld_tau_w, E_cld_tau_w_g, E_cld_tau_w_f,  &
-                    old_convert, idrf)
+                    old_convert)
 
 
 !-----------------------------------------------------------------------
@@ -132,8 +136,7 @@ subroutine rad_rrtmg_sw(lchnk,ncol       ,rrtmg_levs   ,r_state      , &
    real(r8), optional, intent(in) :: E_cld_tau_w  (nbndsw, pcols, pver)      ! cloud optical 
    real(r8), optional, intent(in) :: E_cld_tau_w_g(nbndsw, pcols, pver)      ! cloud optical 
    real(r8), optional, intent(in) :: E_cld_tau_w_f(nbndsw, pcols, pver)      ! cloud optical 
-   logical , optional, intent(in) :: old_convert
-   logical , optional, intent(in) :: idrf
+   logical, optional, intent(in) :: old_convert
 
    ! Output arguments
 
@@ -160,6 +163,10 @@ subroutine rad_rrtmg_sw(lchnk,ncol       ,rrtmg_levs   ,r_state      , &
 
    real(r8), intent(out) :: fns(pcols,pverp)   ! net flux at interfaces
    real(r8), intent(out) :: fcns(pcols,pverp)  ! net clear-sky flux at interfaces
+
+#ifdef OSLO_AERO
+   logical, intent(in) :: idrf
+#endif
 
    real(r8), pointer, dimension(:,:,:) :: su ! shortwave spectral flux up
    real(r8), pointer, dimension(:,:,:) :: sd ! shortwave spectral flux down
@@ -305,6 +312,7 @@ subroutine rad_rrtmg_sw(lchnk,ncol       ,rrtmg_levs   ,r_state      , &
    qrsc(1:ncol,1:pver) = 0.0_r8
    fns(1:ncol,1:pverp) = 0.0_r8
    fcns(1:ncol,1:pverp) = 0.0_r8
+
 #ifndef OSLO_AERO
    if (single_column.and.scm_crm_mode) then 
 #endif
@@ -627,27 +635,28 @@ subroutine rad_rrtmg_sw(lchnk,ncol       ,rrtmg_levs   ,r_state      , &
    end if
 
    !  these outfld calls don't work for spmd only outfield in scm mode (nonspmd)
+   ! Following outputs added for CRM
 #ifndef OSLO_AERO
    if (single_column .and. scm_crm_mode) then 
 #endif
-      ! Following outputs added for CRM
       call ExpDayNite(fus,Nday, IdxDay, Nnite, IdxNite, 1, pcols, 1, pverp)
-      call ExpDayNite(fds,Nday, IdxDay, Nnite, IdxNite, 1, pcols, 1, pverp)
       call ExpDayNite(fusc,Nday, IdxDay, Nnite, IdxNite, 1, pcols, 1, pverp)
+      call ExpDayNite(fds,Nday, IdxDay, Nnite, IdxNite, 1, pcols, 1, pverp)
       call ExpDayNite(fdsc,Nday, IdxDay, Nnite, IdxNite, 1, pcols, 1, pverp)
       call outfld('FUS     ', fus,  pcols, lchnk)
-      call outfld('FDS     ', fds,  pcols, lchnk)
       call outfld('FUSC    ', fusc, pcols, lchnk)
+      call outfld('FDS     ', fds,  pcols, lchnk)
       call outfld('FDSC    ', fdsc, pcols, lchnk)
 #ifndef OSLO_AERO
    end if
 #endif
-   if (present(idrf)) then
-      if (idrf) then
-         call outfld('FUSCDRF ', fusc, pcols, lchnk)
-         call outfld('FDSCDRF ', fdsc, pcols, lchnk)
-      endif
-   end if
+
+#ifdef OSLO_AERO
+   if (idrf) then
+      call outfld('FUSCDRF ', fusc, pcols, lchnk)
+      call outfld('FDSCDRF ', fdsc, pcols, lchnk)
+   endif
+#endif
 
 end subroutine rad_rrtmg_sw
 
