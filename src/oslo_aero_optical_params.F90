@@ -12,13 +12,13 @@ module oslo_aero_optical_params
   use physics_buffer,  only: physics_buffer_desc, pbuf_get_index, pbuf_get_field, pbuf_old_tim_idx
   use wv_saturation,   only: qsat_water
   !
-  use oslo_aero_utils, only: calculateNumberConcentration
-  use oslo_aero_conc,  only: calculateBulkProperties, partitionMass
-  use oslo_aero_control,  only: oslo_aero_getopts
-  use oslo_aero_sw_tables
-  use oslo_aero_params
-  use oslo_aero_const
-  use oslo_aero_share
+  use oslo_aero_utils,     only: calculateNumberConcentration
+  use oslo_aero_conc,      only: calculateBulkProperties, partitionMass
+  use oslo_aero_control,   only: oslo_aero_getopts
+  use oslo_aero_sw_tables, only: inputForInterpol, eps
+  use oslo_aero_sw_tables, only: interpol0, interpol1, interpol2to3, interpol4, interpol5to10
+  use oslo_aero_params,    only: nmodes, nbmodes, nbands, nlwbands
+  use oslo_aero_share,     only: rhopart, l_so4_na, l_so4_pr, l_soa_na, l_ss_a3
 
   implicit none
   private

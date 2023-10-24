@@ -536,9 +536,9 @@ contains
        do i=1,gas_pcnst
           if(lifeCycleReceiver(i) .gt. 0)then
              long_name= trim(solsym(i))//"coagTend"
-             call outfld(long_name, coltend(:ncol,i), pcols, lchnk)
+             call outfld(long_name, coltend(:ncol,i), ncol, lchnk)
              long_name= trim(solsym(lifeCycleReceiver(i)))//"coagTend"
-             call outfld(long_name, coltend(:ncol,lifeCycleReceiver(i)),pcols,lchnk)
+             call outfld(long_name, coltend(:ncol,lifeCycleReceiver(i)),ncol,lchnk)
           end if
        end do
     endif
@@ -683,9 +683,9 @@ contains
        do i=1,gas_pcnst
           if(CloudAerReceiver(i) .gt. 0)then
              long_name= trim(solsym(i))//"clcoagTend"
-             call outfld(long_name, coltend(:ncol,i), pcols, lchnk)
+             call outfld(long_name, coltend(:ncol,i), ncol, lchnk)
              long_name= trim(solsym(CloudAerReceiver(i)))//"_OCWclcoagTend"
-             call outfld(long_name, coltend(:ncol,CloudAerReceiver(i)),pcols,lchnk)
+             call outfld(long_name, coltend(:ncol,CloudAerReceiver(i)),ncol,lchnk)
           end if
        end do
     endif

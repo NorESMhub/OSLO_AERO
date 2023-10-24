@@ -652,42 +652,42 @@ contains
 
     if (cam_physpkg_is("cam_dev")) then
        ! Updates for PUMAS v1.21+
-       call outfld('NIHFTEN',   nihf, pcols, lchnk)
-       call outfld('NIIMMTEN', niimm, pcols, lchnk)
-       call outfld('NIDEPTEN', nidep, pcols, lchnk)
-       call outfld('NIMEYTEN', nimey, pcols, lchnk)
+       call outfld('NIHFTEN',   nihf(:ncol,:), ncol, lchnk)
+       call outfld('NIIMMTEN', niimm(:ncol,:), ncol, lchnk)
+       call outfld('NIDEPTEN', nidep(:ncol,:), ncol, lchnk)
+       call outfld('NIMEYTEN', nimey(:ncol,:), ncol, lchnk)
     else
-       call outfld('NIHF',   nihf, pcols, lchnk)
-       call outfld('NIIMM', niimm, pcols, lchnk)
-       call outfld('NIDEP', nidep, pcols, lchnk)
-       call outfld('NIMEY', nimey, pcols, lchnk)
+       call outfld('NIHF',   nihf(:ncol,:), ncol, lchnk)
+       call outfld('NIIMM', niimm(:ncol,:), ncol, lchnk)
+       call outfld('NIDEP', nidep(:ncol,:), ncol, lchnk)
+       call outfld('NIMEY', nimey(:ncol,:), ncol, lchnk)
     end if
-    call outfld('NIREGM'    , regm    , pcols, lchnk)
-    call outfld('NISUBGRID' , subgrid , pcols, lchnk)
-    call outfld('NITROP_PD' , trop_pd , pcols, lchnk)
+    call outfld('NIREGM',    regm(:ncol,:),    ncol, lchnk)
+    call outfld('NISUBGRID', subgrid(:ncol,:), ncol, lchnk)
+    call outfld('NITROP_PD', trop_pd(:ncol,:), ncol, lchnk)
 
     if (use_preexisting_ice) then
-       call outfld('fhom'      ,fhom     , pcols, lchnk)
-       call outfld('WICE'      ,wice     , pcols, lchnk)
-       call outfld('WEFF'      ,weff     , pcols, lchnk)
+       call outfld('fhom', fhom(:ncol,:), ncol, lchnk)
+       call outfld('WICE', wice(:ncol,:), ncol, lchnk)
+       call outfld('WEFF', weff(:ncol,:), ncol, lchnk)
        if (cam_physpkg_is("cam_dev")) then
           ! Updates for PUMAS v1.21+
-          call outfld('INnso4TEN',INnso4 , pcols,lchnk)
-          call outfld('INnbcTEN',INnbc  , pcols,lchnk)
-          call outfld('INndustTEN',INndust, pcols,lchnk)
-          call outfld('INondustTEN',INondust, pcols,lchnk)
-          call outfld('INhetTEN',INhet  , pcols,lchnk)
-          call outfld('INhomTEN',INhom  , pcols,lchnk)
+          call outfld('INnso4TEN',     INnso4(:ncol,:), ncol, lchnk)
+          call outfld('INnbcTEN',       INnbc(:ncol,:), ncol, lchnk)
+          call outfld('INndustTEN',   INndust(:ncol,:), ncol, lchnk)
+          call outfld('INondustTEN', INondust(:ncol,:), ncol, lchnk)
+          call outfld('INhetTEN',       INhet(:ncol,:), ncol, lchnk)
+          call outfld('INhomTEN',       INhom(:ncol,:), ncol, lchnk)
        else
-          call outfld('INnso4  ',INnso4 , pcols,lchnk)
-          call outfld('INnbc   ',INnbc  , pcols,lchnk)
-          call outfld('INndust ',INndust, pcols,lchnk)
-          call outfld('INondust ',INondust, pcols,lchnk)
-          call outfld('INhet   ',INhet  , pcols,lchnk)
-          call outfld('INhom   ',INhom  , pcols,lchnk)
+          call outfld('INnso4  ',    INnso4(:ncol,:), ncol, lchnk)
+          call outfld('INnbc   ',     INnbc(:ncol,:), ncol, lchnk)
+          call outfld('INndust ',   INndust(:ncol,:), ncol, lchnk)
+          call outfld('INondust ', INondust(:ncol,:), ncol, lchnk)
+          call outfld('INhet   ',     INhet(:ncol,:), ncol, lchnk)
+          call outfld('INhom   ',     INhom(:ncol,:), ncol, lchnk)
        end if
-       call outfld('INFrehom'  ,INFrehom , pcols, lchnk)
-       call outfld('INFreIN '  ,INFreIN  , pcols, lchnk)
+       call outfld('INFrehom', INFrehom(:ncol,:), ncol, lchnk)
+       call outfld('INFreIN ',  INFreIN(:ncol,:), ncol, lchnk)
     end if
 
   end subroutine nucleate_ice_oslo_calc

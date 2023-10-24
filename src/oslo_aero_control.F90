@@ -80,7 +80,7 @@ contains
     call mpi_bcast(dms_source_type, len(dms_source_type), mpi_character, mstrid, mpicom, ierr)
     if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: dms_source_type")
     call mpi_bcast(dms_cycle_year, 1, mpi_integer, mstrid, mpicom, ierr)
-    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: cms_cycle_type")
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: dms_cycle_year")
 
     ! opom variables
     call mpi_bcast(opom_source, len(opom_source), mpi_character, mstrid, mpicom, ierr)
