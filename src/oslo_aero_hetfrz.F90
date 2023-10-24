@@ -465,32 +465,32 @@ contains
        end do
     end do
 
-    call outfld('bc_num',        total_aer_num(:,:,1),    pcols, lchnk)
-    call outfld('dst1_num',      total_aer_num(:,:,2),    pcols, lchnk)
-    call outfld('dst3_num',      total_aer_num(:,:,3),    pcols, lchnk)
+    call outfld('bc_num',        total_aer_num(:ncol,:,1),    ncol, lchnk)
+    call outfld('dst1_num',      total_aer_num(:ncol,:,2),    ncol, lchnk)
+    call outfld('dst3_num',      total_aer_num(:ncol,:,3),    ncol, lchnk)
 
-    call outfld('bcc_num',       coated_aer_num(:,:,1),   pcols, lchnk)
-    call outfld('dst1c_num',     coated_aer_num(:,:,2),   pcols, lchnk)
-    call outfld('dst3c_num',     coated_aer_num(:,:,3),   pcols, lchnk)
+    call outfld('bcc_num',       coated_aer_num(:ncol,:,1),   ncol, lchnk)
+    call outfld('dst1c_num',     coated_aer_num(:ncol,:,2),   ncol, lchnk)
+    call outfld('dst3c_num',     coated_aer_num(:ncol,:,3),   ncol, lchnk)
 
-    call outfld('bcuc_num',      uncoated_aer_num(:,:,1), pcols, lchnk)
-    call outfld('dst1uc_num',    uncoated_aer_num(:,:,2), pcols, lchnk)
-    call outfld('dst3uc_num',    uncoated_aer_num(:,:,3), pcols, lchnk)
+    call outfld('bcuc_num',      uncoated_aer_num(:ncol,:,1), ncol, lchnk)
+    call outfld('dst1uc_num',    uncoated_aer_num(:ncol,:,2), ncol, lchnk)
+    call outfld('dst3uc_num',    uncoated_aer_num(:ncol,:,3), ncol, lchnk)
 
-    call outfld('bc_a1_num',     total_interstitial_aer_num(:,:,1), pcols, lchnk)
-    call outfld('dst_a1_num',    total_interstitial_aer_num(:,:,2), pcols, lchnk)
-    call outfld('dst_a3_num',    total_interstitial_aer_num(:,:,3), pcols, lchnk)
+    call outfld('bc_a1_num',     total_interstitial_aer_num(:ncol,:,1), ncol, lchnk)
+    call outfld('dst_a1_num',    total_interstitial_aer_num(:ncol,:,2), ncol, lchnk)
+    call outfld('dst_a3_num',    total_interstitial_aer_num(:ncol,:,3), ncol, lchnk)
 
-    call outfld('bc_c1_num',     total_cloudborne_aer_num(:,:,1),   pcols, lchnk)
-    call outfld('dst_c1_num',    total_cloudborne_aer_num(:,:,2),   pcols, lchnk)
-    call outfld('dst_c3_num',    total_cloudborne_aer_num(:,:,3),   pcols, lchnk)
+    call outfld('bc_c1_num',     total_cloudborne_aer_num(:ncol,:,1),   ncol, lchnk)
+    call outfld('dst_c1_num',    total_cloudborne_aer_num(:ncol,:,2),   ncol, lchnk)
+    call outfld('dst_c3_num',    total_cloudborne_aer_num(:ncol,:,3),   ncol, lchnk)
 
-    call outfld('fn_bc_c1_num',  fn_cloudborne_aer_num(:,:,1),      pcols, lchnk)
-    call outfld('fn_dst_c1_num', fn_cloudborne_aer_num(:,:,2),      pcols, lchnk)
-    call outfld('fn_dst_c3_num', fn_cloudborne_aer_num(:,:,3),      pcols, lchnk)
+    call outfld('fn_bc_c1_num',  fn_cloudborne_aer_num(:ncol,:,1),      ncol, lchnk)
+    call outfld('fn_dst_c1_num', fn_cloudborne_aer_num(:ncol,:,2),      ncol, lchnk)
+    call outfld('fn_dst_c3_num', fn_cloudborne_aer_num(:ncol,:,3),      ncol, lchnk)
 
-    call outfld('na500',         na500,     pcols, lchnk)
-    call outfld('totna500',      tot_na500, pcols, lchnk)
+    call outfld('na500',         na500(:ncol,:),     ncol, lchnk)
+    call outfld('totna500',      tot_na500(:ncol,:), ncol, lchnk)
 
     ! frzimm, frzcnt, frzdep are the outputs of this parameterization used by the microphysics
     call pbuf_get_field(pbuf, frzimm_idx, frzimm)
@@ -594,34 +594,34 @@ contains
        end do
     end do
 
-    call outfld('FREQIMM', freqimm, pcols, lchnk)
-    call outfld('FREQCNT', freqcnt, pcols, lchnk)
-    call outfld('FREQDEP', freqdep, pcols, lchnk)
-    call outfld('FREQMIX', freqmix, pcols, lchnk)
+    call outfld('FREQIMM', freqimm(:ncol,:), ncol, lchnk)
+    call outfld('FREQCNT', freqcnt(:ncol,:), ncol, lchnk)
+    call outfld('FREQDEP', freqdep(:ncol,:), ncol, lchnk)
+    call outfld('FREQMIX', freqmix(:ncol,:), ncol, lchnk)
 
-    call outfld('DSTFREZIMM', nnuccc_dst, pcols, lchnk)
-    call outfld('DSTFREZCNT', nnucct_dst, pcols, lchnk)
-    call outfld('DSTFREZDEP', nnudep_dst, pcols, lchnk)
+    call outfld('DSTFREZIMM', nnuccc_dst(:ncol,:), ncol, lchnk)
+    call outfld('DSTFREZCNT', nnucct_dst(:ncol,:), ncol, lchnk)
+    call outfld('DSTFREZDEP', nnudep_dst(:ncol,:), ncol, lchnk)
 
-    call outfld('BCFREZIMM', nnuccc_bc, pcols, lchnk)
-    call outfld('BCFREZCNT', nnucct_bc, pcols, lchnk)
-    call outfld('BCFREZDEP', nnudep_bc, pcols, lchnk)
+    call outfld('BCFREZIMM', nnuccc_bc(:ncol,:), ncol, lchnk)
+    call outfld('BCFREZCNT', nnucct_bc(:ncol,:), ncol, lchnk)
+    call outfld('BCFREZDEP', nnudep_bc(:ncol,:), ncol, lchnk)
 
-    call outfld('NIMIX_IMM', niimm_bc+niimm_dst, pcols, lchnk)
-    call outfld('NIMIX_CNT', nicnt_bc+nicnt_dst, pcols, lchnk)
-    call outfld('NIMIX_DEP', nidep_bc+nidep_dst, pcols, lchnk)
+    call outfld('NIMIX_IMM', niimm_bc+niimm_dst(:ncol,:), ncol, lchnk)
+    call outfld('NIMIX_CNT', nicnt_bc+nicnt_dst(:ncol,:), ncol, lchnk)
+    call outfld('NIMIX_DEP', nidep_bc+nidep_dst(:ncol,:), ncol, lchnk)
 
-    call outfld('DSTNICNT', nicnt_dst, pcols, lchnk)
-    call outfld('DSTNIDEP', nidep_dst, pcols, lchnk)
-    call outfld('DSTNIIMM', niimm_dst, pcols, lchnk)
+    call outfld('DSTNICNT', nicnt_dst(:ncol,:), ncol, lchnk)
+    call outfld('DSTNIDEP', nidep_dst(:ncol,:), ncol, lchnk)
+    call outfld('DSTNIIMM', niimm_dst(:ncol,:), ncol, lchnk)
 
-    call outfld('BCNICNT', nicnt_bc, pcols, lchnk)
-    call outfld('BCNIDEP', nidep_bc, pcols, lchnk)
-    call outfld('BCNIIMM', niimm_bc, pcols, lchnk)
+    call outfld('BCNICNT', nicnt_bc(:ncol,:), ncol, lchnk)
+    call outfld('BCNIDEP', nidep_bc(:ncol,:), ncol, lchnk)
+    call outfld('BCNIIMM', niimm_bc(:ncol,:), ncol, lchnk)
 
-    call outfld('NUMICE10s', numice10s, pcols, lchnk)
-    call outfld('NUMIMM10sDST', numice10s_imm_dst, pcols, lchnk)
-    call outfld('NUMIMM10sBC', numice10s_imm_bc, pcols, lchnk)
+    call outfld('NUMICE10s',            numice10s(:ncol,:), ncol, lchnk)
+    call outfld('NUMIMM10sDST', numice10s_imm_dst(:ncol,:), ncol, lchnk)
+    call outfld('NUMIMM10sBC',   numice10s_imm_bc(:ncol,:), ncol, lchnk)
 
   end subroutine hetfrz_classnuc_oslo_calc
 

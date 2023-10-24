@@ -635,17 +635,17 @@ subroutine rad_rrtmg_sw(lchnk,ncol       ,rrtmg_levs   ,r_state      , &
       call ExpDayNite(fds,Nday, IdxDay, Nnite, IdxNite, 1, pcols, 1, pverp)
       call ExpDayNite(fusc,Nday, IdxDay, Nnite, IdxNite, 1, pcols, 1, pverp)
       call ExpDayNite(fdsc,Nday, IdxDay, Nnite, IdxNite, 1, pcols, 1, pverp)
-      call outfld('FUS     ', fus,  pcols, lchnk)
-      call outfld('FDS     ', fds,  pcols, lchnk)
-      call outfld('FUSC    ', fusc, pcols, lchnk)
-      call outfld('FDSC    ', fdsc, pcols, lchnk)
+      call outfld('FUS     ', fus(:ncol,:),  ncol, lchnk)
+      call outfld('FDS     ', fds(:ncol,:),  ncol, lchnk)
+      call outfld('FUSC    ', fusc(:ncol,:), ncol, lchnk)
+      call outfld('FDSC    ', fdsc(:ncol,:), ncol, lchnk)
 #ifndef OSLO_AERO
    end if
 #endif
    if (present(idrf)) then
       if (idrf) then
-         call outfld('FUSCDRF ', fusc, pcols, lchnk)
-         call outfld('FDSCDRF ', fdsc, pcols, lchnk)
+         call outfld('FUSCDRF ', fusc(:ncol,:), ncol, lchnk)
+         call outfld('FDSCDRF ', fdsc(:ncol,:), ncol, lchnk)
       endif
    end if
 

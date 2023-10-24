@@ -1273,19 +1273,19 @@ subroutine radiation_tend( &
                ! Note that DRF fields are now from the aer_tau=0 call (clean), no longer with
                ! aer_tau from oslo_aero_optical_params_calc
 
-               call outfld('QRS_DRF ',ftem  ,pcols,lchnk)
+               call outfld('QRS_DRF ',ftem(:ncol,:pver)  ,ncol,lchnk)
                ftem(:ncol,:pver) = rd%qrsc(:ncol,:pver)/cpair
-               call outfld('QRSC_DRF',ftem  ,pcols,lchnk)
-               call outfld('FSNT_DRF',fsnt(:)  ,pcols,lchnk)
-               call outfld('FSNS_DRF',fsns(:)  ,pcols,lchnk)
-               call outfld('FSNTCDRF',rd%fsntc(:) ,pcols,lchnk)
-               call outfld('FSNSCDRF',rd%fsnsc(:) ,pcols,lchnk)
+               call outfld('QRSC_DRF',ftem(:ncol,:pver)  ,ncol,lchnk)
+               call outfld('FSNT_DRF',fsnt(:ncol)  ,ncol,lchnk)
+               call outfld('FSNS_DRF',fsns(:ncol)  ,ncol,lchnk)
+               call outfld('FSNTCDRF',rd%fsntc(:ncol) ,ncol,lchnk)
+               call outfld('FSNSCDRF',rd%fsnsc(:ncol) ,ncol,lchnk)
 #ifdef AEROCOM
-               call outfld('FSUTADRF',rd%fsutoa(:),pcols,lchnk)
-               call outfld('FSDS_DRF',fsds(:)  ,pcols,lchnk)
+               call outfld('FSUTADRF',rd%fsutoa(:ncol),ncol,lchnk)
+               call outfld('FSDS_DRF',fsds(:ncol)  ,ncol,lchnk)
                ftem_1d(1:ncol) = fsds(1:ncol)-fsns(1:ncol)
-               call outfld('FSUS_DRF',ftem_1d,pcols,lchnk)
-               call outfld('FSDSCDRF',rd%fsdsc(:) ,pcols,lchnk)
+               call outfld('FSUS_DRF',ftem_1d,ncol,lchnk)
+               call outfld('FSDSCDRF',rd%fsdsc(:ncol) ,ncol,lchnk)
 #endif
                idrf = .false.
                call rad_rrtmg_sw( &
@@ -1336,9 +1336,9 @@ subroutine radiation_tend( &
 
       ! clear-sky AOD and absorptive AOD for visible wavelength close to 0.55 um (0.35-0.64)
       ! Note that caodvis and cabsvis output should be devided by dayfoc*cloudfree to give physical (A)AOD values
-      call outfld('CAODVIS ',clearodvis  ,pcols,lchnk)
-      call outfld('CABSVIS ',clearabsvis ,pcols,lchnk)
-      call outfld('CLDFREE ',cloudfree   ,pcols,lchnk)
+      call outfld('CAODVIS ',clearodvis(:ncol)  ,ncol,lchnk)
+      call outfld('CABSVIS ',clearabsvis(:ncol) ,ncol,lchnk)
+      call outfld('CLDFREE ',cloudfree(:ncol)   ,ncol,lchnk)
 #ifdef AEROCOM
       do i = 1, ncol
          clearod440(i)     = cloudfree(i)*dod440(i)
@@ -1347,11 +1347,11 @@ subroutine radiation_tend( &
          clearabs550(i)    = cloudfree(i)*abs550(i)
          clearabs550alt(i) = cloudfree(i)*abs550alt(i)
       end do
-      call outfld('CDOD440 ',clearod440  ,pcols,lchnk)
-      call outfld('CDOD550 ',clearod550  ,pcols,lchnk)
-      call outfld('CDOD870 ',clearod870  ,pcols,lchnk)
-      call outfld('CABS550 ',clearabs550  ,pcols,lchnk)
-      call outfld('CABS550A',clearabs550alt,pcols,lchnk)
+      call outfld('CDOD440 ',clearod440(:ncol)  ,ncol,lchnk)
+      call outfld('CDOD550 ',clearod550(:ncol)  ,ncol,lchnk)
+      call outfld('CDOD870 ',clearod870(:ncol)  ,ncol,lchnk)
+      call outfld('CABS550 ',clearabs550(:ncol)  ,ncol,lchnk)
+      call outfld('CABS550A',clearabs550alt(:ncol),ncol,lchnk)
 #endif
 #endif
 
@@ -1437,8 +1437,8 @@ subroutine radiation_tend( &
                     rd%flut, rd%flutc, fnl, fcnl, rd%fldsc,            &
                     lu, ld)
 
-               call outfld('FLNT_DRF',flnt(:)  ,pcols,lchnk)
-               call outfld('FLNTCDRF',rd%flntc(:) ,pcols,lchnk)
+               call outfld('FLNT_DRF',flnt(:ncol)  ,ncol,lchnk)
+               call outfld('FLNTCDRF',rd%flntc(:ncol) ,ncol,lchnk)
 
                call rad_rrtmg_lw( &
                     lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,  &
@@ -1449,7 +1449,7 @@ subroutine radiation_tend( &
 
                ! FLNT_ORG is just for temporary testing vs. FLNT
                ftem_1d(1:ncol) = cam_out%flwds(1:ncol) - flns(1:ncol)
-               call outfld('FLUS    ',ftem_1d ,pcols,lchnk)
+               call outfld('FLUS    ',ftem_1d(:ncol) ,ncol,lchnk)
 
                !  Output fluxes at 200 mb
                call vertinterp(ncol, pcols, pverp, state%pint, 20000._r8, fnl,  rd%fln200)
@@ -1530,7 +1530,7 @@ subroutine radiation_tend( &
          ! initialize and calculate emis
          emis(:,:) = 0._r8
          emis(:ncol,:) = 1._r8 - exp(-cld_lw_abs(rrtmg_lw_cloudsim_band,:ncol,:))
-         call outfld('EMIS', emis, pcols, lchnk)
+         call outfld('EMIS', emis(:ncol,:), ncol, lchnk)
 
          ! compute grid-box mean SW and LW snow optical depth for use by COSP
          gb_snow_tau(:,:) = 0._r8
@@ -1596,7 +1596,7 @@ subroutine radiation_tend( &
             ftem(i,k) = (qrs(i,k) + qrl(i,k))/cpair * (1.e5_r8/state%pmid(i,k))**cappa
          end do
       end do
-      call outfld('HR', ftem, pcols, lchnk)
+      call outfld('HR', ftem(:ncol,:), ncol, lchnk)
    end if
 
    ! convert radiative heating rates to Q*dp for energy conservation
@@ -1642,40 +1642,40 @@ subroutine radiation_output_sw(lchnk, ncol, icall, rd, pbuf, cam_out)
    call pbuf_get_field(pbuf, fsns_idx, fsns)
    call pbuf_get_field(pbuf, fsds_idx, fsds)
 
-   call outfld('SOLIN'//diag(icall),    rd%solin,      pcols, lchnk)
+   call outfld('SOLIN'//diag(icall),    rd%solin(:ncol),      ncol, lchnk)
 
    call outfld('QRS'//diag(icall),      qrs(:ncol,:)/cpair,     ncol, lchnk)
    call outfld('QRSC'//diag(icall),     rd%qrsc(:ncol,:)/cpair, ncol, lchnk)
 
-   call outfld('FSNT'//diag(icall),     fsnt,          pcols, lchnk)
-   call outfld('FSNTC'//diag(icall),    rd%fsntc,      pcols, lchnk)
-   call outfld('FSNTOA'//diag(icall),   rd%fsntoa,     pcols, lchnk)
-   call outfld('FSNTOAC'//diag(icall),  rd%fsntoac,    pcols, lchnk)
+   call outfld('FSNT'//diag(icall),     fsnt(:ncol),          ncol, lchnk)
+   call outfld('FSNTC'//diag(icall),    rd%fsntc(:ncol),      ncol, lchnk)
+   call outfld('FSNTOA'//diag(icall),   rd%fsntoa(:ncol),     ncol, lchnk)
+   call outfld('FSNTOAC'//diag(icall),  rd%fsntoac(:ncol),    ncol, lchnk)
 
    ftem(:ncol) = rd%fsntoa(:ncol) - rd%fsntoac(:ncol)
-   call outfld('SWCF'//diag(icall),     ftem,          pcols, lchnk)
+   call outfld('SWCF'//diag(icall),     ftem(:ncol),          ncol, lchnk)
 
-   call outfld('FSUTOA'//diag(icall),   rd%fsutoa,     pcols, lchnk)
+   call outfld('FSUTOA'//diag(icall),   rd%fsutoa(:ncol),     ncol, lchnk)
 
-   call outfld('FSNIRTOA'//diag(icall), rd%fsnirt,     pcols, lchnk)
-   call outfld('FSNRTOAC'//diag(icall), rd%fsnrtc,     pcols, lchnk)
-   call outfld('FSNRTOAS'//diag(icall), rd%fsnirtsq,   pcols, lchnk)
+   call outfld('FSNIRTOA'//diag(icall), rd%fsnirt(:ncol),     ncol, lchnk)
+   call outfld('FSNRTOAC'//diag(icall), rd%fsnrtc(:ncol),     ncol, lchnk)
+   call outfld('FSNRTOAS'//diag(icall), rd%fsnirtsq(:ncol),   ncol, lchnk)
 
-   call outfld('FSN200'//diag(icall),   rd%fsn200,     pcols, lchnk)
-   call outfld('FSN200C'//diag(icall),  rd%fsn200c,    pcols, lchnk)
+   call outfld('FSN200'//diag(icall),   rd%fsn200(:ncol),     ncol, lchnk)
+   call outfld('FSN200C'//diag(icall),  rd%fsn200c(:ncol),    ncol, lchnk)
 
-   call outfld('FSNR'//diag(icall),     rd%fsnr,       pcols, lchnk)
+   call outfld('FSNR'//diag(icall),     rd%fsnr(:ncol),       ncol, lchnk)
 
-   call outfld('SOLS'//diag(icall),     cam_out%sols,  pcols, lchnk)
-   call outfld('SOLL'//diag(icall),     cam_out%soll,  pcols, lchnk)
-   call outfld('SOLSD'//diag(icall),    cam_out%solsd, pcols, lchnk)
-   call outfld('SOLLD'//diag(icall),    cam_out%solld, pcols, lchnk)
+   call outfld('SOLS'//diag(icall),     cam_out%sols(:ncol),  ncol, lchnk)
+   call outfld('SOLL'//diag(icall),     cam_out%soll(:ncol),  ncol, lchnk)
+   call outfld('SOLSD'//diag(icall),    cam_out%solsd(:ncol), ncol, lchnk)
+   call outfld('SOLLD'//diag(icall),    cam_out%solld(:ncol), ncol, lchnk)
 
-   call outfld('FSNS'//diag(icall),     fsns,          pcols, lchnk)
-   call outfld('FSNSC'//diag(icall),    rd%fsnsc,      pcols, lchnk)
+   call outfld('FSNS'//diag(icall),     fsns(:ncol),          ncol, lchnk)
+   call outfld('FSNSC'//diag(icall),    rd%fsnsc(:ncol),      ncol, lchnk)
 
-   call outfld('FSDS'//diag(icall),     fsds,          pcols, lchnk)
-   call outfld('FSDSC'//diag(icall),    rd%fsdsc,      pcols, lchnk)
+   call outfld('FSDS'//diag(icall),     fsds(:ncol),          ncol, lchnk)
+   call outfld('FSDSC'//diag(icall),    rd%fsdsc(:ncol),      ncol, lchnk)
 
 end subroutine radiation_output_sw
 
@@ -1691,15 +1691,15 @@ subroutine radiation_output_cld(lchnk, ncol, rd)
    type(rad_out_t), intent(in) :: rd
    !----------------------------------------------------------------------------
 
-   call outfld('TOT_CLD_VISTAU',  rd%tot_cld_vistau,  pcols, lchnk)
-   call outfld('TOT_ICLD_VISTAU', rd%tot_icld_vistau, pcols, lchnk)
-   call outfld('LIQ_ICLD_VISTAU', rd%liq_icld_vistau, pcols, lchnk)
-   call outfld('ICE_ICLD_VISTAU', rd%ice_icld_vistau, pcols, lchnk)
+   call outfld('TOT_CLD_VISTAU',  rd%tot_cld_vistau(:ncol,:),  ncol, lchnk)
+   call outfld('TOT_ICLD_VISTAU', rd%tot_icld_vistau(:ncol,:), ncol, lchnk)
+   call outfld('LIQ_ICLD_VISTAU', rd%liq_icld_vistau(:ncol,:), ncol, lchnk)
+   call outfld('ICE_ICLD_VISTAU', rd%ice_icld_vistau(:ncol,:), ncol, lchnk)
    if (cldfsnow_idx > 0) then
-      call outfld('SNOW_ICLD_VISTAU', rd%snow_icld_vistau, pcols, lchnk)
+      call outfld('SNOW_ICLD_VISTAU', rd%snow_icld_vistau(:ncol,:), ncol, lchnk)
    endif
    if (cldfgrau_idx > 0 .and. graupel_in_rad) then
-      call outfld('GRAU_ICLD_VISTAU', rd%grau_icld_vistau, pcols, lchnk)
+      call outfld('GRAU_ICLD_VISTAU', rd%grau_icld_vistau(:ncol,:), ncol, lchnk)
    endif
 end subroutine radiation_output_cld
 
@@ -1733,28 +1733,28 @@ subroutine radiation_output_lw(lchnk, ncol, icall, rd, pbuf, cam_out, freqclr, f
    call outfld('QRL'//diag(icall),     qrl(:ncol,:)/cpair,     ncol, lchnk)
    call outfld('QRLC'//diag(icall),    rd%qrlc(:ncol,:)/cpair, ncol, lchnk)
 
-   call outfld('FLNT'//diag(icall),    flnt,          pcols, lchnk)
-   call outfld('FLNTC'//diag(icall),   rd%flntc,      pcols, lchnk)
+   call outfld('FLNT'//diag(icall),    flnt(:ncol),          ncol, lchnk)
+   call outfld('FLNTC'//diag(icall),   rd%flntc(:ncol),      ncol, lchnk)
 
-   call outfld('FREQCLR'//diag(icall), freqclr,       pcols, lchnk)
-   call outfld('FLNTCLR'//diag(icall), flntclr,       pcols, lchnk)
+   call outfld('FREQCLR'//diag(icall), freqclr(:ncol),       ncol, lchnk)
+   call outfld('FLNTCLR'//diag(icall), flntclr(:ncol),       ncol, lchnk)
 
-   call outfld('FLUT'//diag(icall),    rd%flut,       pcols, lchnk)
-   call outfld('FLUTC'//diag(icall),   rd%flutc,      pcols, lchnk)
+   call outfld('FLUT'//diag(icall),    rd%flut(:ncol),       ncol, lchnk)
+   call outfld('FLUTC'//diag(icall),   rd%flutc(:ncol),      ncol, lchnk)
 
    ftem(:ncol) = rd%flutc(:ncol) - rd%flut(:ncol)
-   call outfld('LWCF'//diag(icall),    ftem,          pcols, lchnk)
+   call outfld('LWCF'//diag(icall),    ftem(:ncol),          ncol, lchnk)
 
-   call outfld('FLN200'//diag(icall),  rd%fln200,     pcols, lchnk)
-   call outfld('FLN200C'//diag(icall), rd%fln200c,    pcols, lchnk)
+   call outfld('FLN200'//diag(icall),  rd%fln200(:ncol),     ncol, lchnk)
+   call outfld('FLN200C'//diag(icall), rd%fln200c(:ncol),    ncol, lchnk)
 
-   call outfld('FLNR'//diag(icall),    rd%flnr,       pcols, lchnk)
+   call outfld('FLNR'//diag(icall),    rd%flnr(:ncol),       ncol, lchnk)
 
-   call outfld('FLNS'//diag(icall),    flns,          pcols, lchnk)
-   call outfld('FLNSC'//diag(icall),   rd%flnsc,      pcols, lchnk)
+   call outfld('FLNS'//diag(icall),    flns(:ncol),          ncol, lchnk)
+   call outfld('FLNSC'//diag(icall),   rd%flnsc(:ncol),      ncol, lchnk)
 
-   call outfld('FLDS'//diag(icall),    cam_out%flwds, pcols, lchnk)
-   call outfld('FLDSC'//diag(icall),   rd%fldsc,      pcols, lchnk)
+   call outfld('FLDS'//diag(icall),    cam_out%flwds(:ncol), ncol, lchnk)
+   call outfld('FLDSC'//diag(icall),   rd%fldsc(:ncol),      ncol, lchnk)
 
 end subroutine radiation_output_lw
 

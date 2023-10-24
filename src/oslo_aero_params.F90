@@ -14,12 +14,12 @@ module oslo_aero_params
   public
 
   ! Define some aerosol types and their properties..
-  integer, parameter, public :: N_AEROSOL_TYPES      = 5
-  integer, parameter, public :: AEROSOL_TYPE_SULFATE = 1
-  integer, parameter, public :: AEROSOL_TYPE_BC      = 2
-  integer, parameter, public :: AEROSOL_TYPE_OM      = 3
-  integer, parameter, public :: AEROSOL_TYPE_DUST    = 4
-  integer, parameter, public :: AEROSOL_TYPE_SALT    = 5
+  integer, parameter :: N_AEROSOL_TYPES      = 5
+  integer, parameter :: AEROSOL_TYPE_SULFATE = 1
+  integer, parameter :: AEROSOL_TYPE_BC      = 2
+  integer, parameter :: AEROSOL_TYPE_OM      = 3
+  integer, parameter :: AEROSOL_TYPE_DUST    = 4
+  integer, parameter :: AEROSOL_TYPE_SALT    = 5
 
   ! NUMBERS BELOW ARE ESSENTIAL TO CALCULATE HYGROSCOPICITY AND THEREFORE INDIRECT EFFECT!
   ! These numbers define the "hygroscopicity parameter" Numbers are selected so that they give reasonable hygroscipity
@@ -36,7 +36,7 @@ module oslo_aero_params
   ! BC      : Does not really matter as long as soluble mass fraction is small
   !           However, numbers below reproduces values from MIRAGE paper
   !           New mass density (October 2016) is based on Bond and Bergstrom (2007): Light Absorption
-  !           by Carbonaceous Particles: An Investigative Review, Aerosol Science and Technology, 40:27•¡¹67.
+  !           by Carbonaceous Particles: An Investigative Review, Aerosol Science and Technology, 40:1, 27-67.
   ! OM      : Soluble mass fraction tuned to give B of MIRAGE Paper
   ! DUST    : The numbers give B of ~ 0.07 (high end of Kohler, Kreidenweis et al, GRL, vol 36, 2009.
   !                                  (10% as soluble mass fraction seems reasonable)
@@ -45,17 +45,17 @@ module oslo_aero_params
   !           Koepke, Hess, Schult and Shettle: Max-Plack-Institut fur Meteorolgie, report No. 243 "GLOBAL AEROSOL DATA SET"
   !           These values give "B" of 1.20 instead of 1.16 in MIRAGE paper.
 
-  character(len=8) :: aerosol_type_name(N_AEROSOL_TYPES) = &
+  character(len=8), protected :: aerosol_type_name(N_AEROSOL_TYPES) =          &
        (/"SULFATE ", "BC      ","OM      ", "DUST    ", "SALT    " /)
-  real(r8) :: aerosol_type_density(N_AEROSOL_TYPES) =               &
+  real(r8), protected :: aerosol_type_density(N_AEROSOL_TYPES) =               &
        (/1769.0_r8, 1800.0_r8,  1500.0_r8, 2600.0_r8,  2200.0_r8 /)   !kg/m3
-  real(r8) :: aerosol_type_molecular_weight(N_AEROSOL_TYPES) =      &
+  real(r8), protected :: aerosol_type_molecular_weight(N_AEROSOL_TYPES) =      &
        (/132.0_r8,  12.0_r8,    168.2_r8,  135.0_r8,   58.44_r8  /)   !kg/kmol
-  real(r8) :: aerosol_type_osmotic_coefficient(N_AEROSOL_TYPES) =   &
+  real(r8), protected :: aerosol_type_osmotic_coefficient(N_AEROSOL_TYPES) =   &
        (/0.7_r8,    1.111_r8,     1.0_r8,    1.0_r8,     1.0_r8    /) ![-]
-  real(r8) :: aerosol_type_soluble_mass_fraction(N_AEROSOL_TYPES) = &
+  real(r8), protected :: aerosol_type_soluble_mass_fraction(N_AEROSOL_TYPES) = &
        (/1.0_r8,    1.67e-7_r8, 0.8725_r8, 0.1_r8,     0.885_r8  /)   ![-]
-  real(r8) :: aerosol_type_number_of_ions(N_AEROSOL_TYPES) =        &
+  real(r8), protected :: aerosol_type_number_of_ions(N_AEROSOL_TYPES) =        &
        (/3.0_r8,    1.0_r8,     1.0_r8,    2.0_r8,     2.0_r8    /)   ![-]
 
   ! Define lognormal size parameters for each size mode (dry, at point of emission/production)

@@ -5,8 +5,8 @@ module oslo_aero_microp
   ! Author: Andrew Gettelman
   ! Based on code from: Hugh Morrison, Xiaohong Liu and Steve Ghan! May 2010
   ! Description in: Morrison and Gettelman, 2008. J. Climate (MG2008)
-  !    Gettelman et al., 2010 J. Geophys. Res. - Atmospheres (G2010)         
-  ! Modifications: A. Gettelman Nov 2010  - changed to support separation of 
+  !    Gettelman et al., 2010 J. Geophys. Res. - Atmospheres (G2010)
+  ! Modifications: A. Gettelman Nov 2010  - changed to support separation of
   !    microphysics and macrophysics and concentrate aerosol information here
   !---------------------------------------------------------------------------------
 
@@ -45,7 +45,7 @@ module oslo_aero_microp
   character(len=16)   :: eddy_scheme
   real(r8), parameter :: unset_r8 = huge(1.0_r8)
 
-  ! contact freezing due to dust, dust number mean radius (m), 
+  ! contact freezing due to dust, dust number mean radius (m),
   ! Zender et al JGR 2003 assuming number mode radius of 0.6 micron, sigma=2
   real(r8), parameter :: rn_dst1 = 0.258e-6_r8
   real(r8), parameter :: rn_dst2 = 0.717e-6_r8
@@ -71,7 +71,7 @@ module oslo_aero_microp
   integer :: dgnumwet_idx = -1
 
   ! prescribed aerosol bulk sulfur scale factor
-  real(r8) :: bulk_scale    
+  real(r8) :: bulk_scale
 
   integer :: npccn_idx, rndst_idx, nacon_idx
 
@@ -90,7 +90,7 @@ contains
     real(r8) :: microp_aero_bulk_scale  = 2._r8    ! prescribed aerosol bulk sulfur scale factor
 
     ! NOTE: the following are not currently used - but are needed to have the namelist work in cam
-    real(r8) :: microp_aero_npccn_scale = unset_r8 ! prescribed aerosol bulk sulfur scale factor 
+    real(r8) :: microp_aero_npccn_scale = unset_r8 ! prescribed aerosol bulk sulfur scale factor
     real(r8) :: microp_aero_wsub_scale  = unset_r8 ! subgrid vertical velocity (liquid) scale factor
     real(r8) :: microp_aero_wsubi_scale = unset_r8 ! subgrid vertical velocity (ice) scale factor
     real(r8) :: microp_aero_wsub_min    = unset_r8 ! subgrid vertical velocity (liquid) minimum
@@ -138,7 +138,7 @@ contains
 
   !=========================================================================================
   subroutine oslo_aero_microp_register
-    !----------------------------------------------------------------------- 
+    !-----------------------------------------------------------------------
     ! Register pbuf fields for aerosols needed by microphysics
     ! Author: Cheryl Craig October 2012
     !-----------------------------------------------------------------------
@@ -158,7 +158,7 @@ contains
 
   subroutine oslo_aero_microp_init()
 
-    !----------------------------------------------------------------------- 
+    !-----------------------------------------------------------------------
     ! Initialize constants for aerosols needed by microphysics
     ! Author: Andrew Gettelman May 2010
     !-----------------------------------------------------------------------
@@ -180,7 +180,7 @@ contains
 
     select case(trim(eddy_scheme))
     case ('diag_TKE')
-       tke_idx = pbuf_get_index('tke')   
+       tke_idx = pbuf_get_index('tke')
     case ('CLUBB_SGS')
        wp2_idx = pbuf_get_index('WP2_nadv')
     case default
@@ -217,7 +217,7 @@ contains
     integer :: itim_old
     type(physics_state) :: state1                             ! Local copy of state variable
     type(physics_ptend) :: ptend_loc
-    real(r8), pointer :: ast(:,:)        
+    real(r8), pointer :: ast(:,:)
     real(r8), pointer :: npccn(:,:)                           ! number of CCN (liquid activated)
     real(r8), pointer :: rndst(:,:,:)                         ! radius of 4 dust bins for contact freezing
     real(r8), pointer :: nacon(:,:,:)                         ! number in 4 dust bins for contact freezing
@@ -288,7 +288,7 @@ contains
     call pbuf_get_field(pbuf, cldo_idx, cldo, start=(/1,1,itim_old/), kount=(/pcols,pver,1/) )
 
     ! initialize output
-    npccn(1:ncol,1:pver)    = 0._r8  
+    npccn(1:ncol,1:pver)    = 0._r8
     nacon(1:ncol,1:pver,:)  = 0._r8
 
     ! set default or fixed dust bins for contact freezing
@@ -312,7 +312,7 @@ contains
     factnum(1:ncol,1:pver,0:nmodes_oslo) = 0._r8
     cam(:,:,:) = 0._r8
 
-    ! More refined computation of sub-grid vertical velocity 
+    ! More refined computation of sub-grid vertical velocity
     ! Set to be zero at the surface by initialization.
 
     select case (trim(eddy_scheme))
@@ -339,7 +339,7 @@ contains
           case ('diag_TKE', 'CLUBB_SGS')
              wsub(i,k) = sqrt(0.5_r8*(tke(i,k) + tke(i,k+1))*(2._r8/3._r8))
              wsub(i,k) = min(wsub(i,k),10._r8)
-          case default 
+          case default
              ! get sub-grid vertical velocity from diff coef.
              ! following morrison et al. 2005, JAS
              ! assume mixing length of 30 m
@@ -359,8 +359,8 @@ contains
        end do
     end do
 
-    call outfld('WSUB',   wsub, pcols, lchnk)
-    call outfld('WSUBI', wsubi, pcols, lchnk)
+    call outfld('WSUB',   wsub(:ncol,:), ncol, lchnk)
+    call outfld('WSUBI', wsubi(:ncol,:), ncol, lchnk)
 
     if (trim(eddy_scheme) == 'CLUBB_SGS') deallocate(tke)
 
@@ -403,7 +403,7 @@ contains
        end do
     end do
 
-    call outfld('LCLOUD', lcldn, pcols, lchnk)
+    call outfld('LCLOUD', lcldn(:ncol,:), ncol, lchnk)
 
     ! If not using preexsiting ice, then only use cloudbourne aerosol for the
     ! liquid clouds. This is the same behavior as CAM5.
@@ -446,10 +446,10 @@ contains
     do k = top_lev, pver
        do i = 1, ncol
           if (state1%t(i,k) < 269.15_r8) then
-             !fxm: I think model uses bins, not modes.. But to get it 
+             !fxm: I think model uses bins, not modes.. But to get it
              !approximately correct, use mode radius in first version
              nacon(i,k,2) = numberConcentration(i,k,MODE_IDX_DST_A2)
-             nacon(i,k,3) = numberConcentration(i,k,MODE_IDX_DST_A3) 
+             nacon(i,k,3) = numberConcentration(i,k,MODE_IDX_DST_A3)
              rndst(i,k,2) = lifeCycleNumberMedianRadius(MODE_IDX_DST_A2)
              rndst(i,k,3) = lifeCycleNumberMedianRadius(MODE_IDX_DST_A3)
              nacon(i,k,1) = 0.0_r8 !Set to zero to make sure

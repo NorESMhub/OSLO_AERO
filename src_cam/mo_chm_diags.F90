@@ -807,18 +807,18 @@ contains
           if(cloudTracerIndex > 0)then
              cloudTracerName = getCloudTracerName(n)
              call pbuf_get_field(pbuf, cloudTracerIndex, cloudTracerField )
-             call outfld ( trim(cloudTracerName), cloudTracerField, pcols, lchnk)
+             call outfld ( trim(cloudTracerName), cloudTracerField(:ncol,:), ncol, lchnk)
 
              ! Treat column burden (cloud tracer)
              mass_tmp(:ncol,:) = cloudTracerField(:ncol,:) *pdel(:ncol,:) * rgrav
              cb(:ncol) = sum(mass_tmp(:ncol,:),2)
-             call outfld(trim('cb_'//trim(cloudTracerName)), cb, pcols, lchnk)
+             call outfld(trim('cb_'//trim(cloudTracerName)), cb(:ncol), ncol, lchnk)
           endif
 
           ! Treat column burden (normal tracer)
           mass_tmp(:ncol,:) = mmr(:ncol,:,m) * pdel(:ncol,:) * rgrav
           cb(:ncol) = sum(mass_tmp(:ncol,:),2)
-          call outfld(trim('cb_'//trim(spc_name)), cb, pcols, lchnk)
+          call outfld(trim('cb_'//trim(spc_name)), cb(:ncol), ncol, lchnk)
 
           !Sum column burden per aerosol type
           if (aerosolType(n) > 0) then

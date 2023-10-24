@@ -6,7 +6,7 @@ module oslo_aero_condtend
   ! Note the parameterisation for conversion of externally mixed particles
   ! used the h2so4 lifetime onto the particles, and not a given
   ! increase in particle radius. Will be improved in future versions of the model
-  
+
   use shr_kind_mod,       only: r8 => shr_kind_r8
   use ppgrid,             only: pcols, pver, pverp
   use constituents,       only: pcnst  ! h2so4 and soa nucleation (cka)
@@ -153,7 +153,7 @@ contains
 
        ! calculating microphysical parameters from equations in Ch. 8 of Seinfeld & Pandis (1998):
        ! mean free path for molec in air (m)
-       mfv(cond_vap_idx)=1.0_r8/(pi*sqrt(1.0_r8+MolecularWeight/Mair)*(radair+radmol)**2*p0/(boltz*t0)) 
+       mfv(cond_vap_idx)=1.0_r8/(pi*sqrt(1.0_r8+MolecularWeight/Mair)*(radair+radmol)**2*p0/(boltz*t0))
 
        ! Solve eqn 11-4.4 in Poling et al
        ! (A bit hard to follow units here, but result in the book is in cm2/s)..
@@ -394,8 +394,8 @@ contains
 
           ! Assume only a fraction of ORG_LV left can contribute to nucleation
           ! fraction of soa_lv left that is assumend to have low enough volatility to nucleate.
-          soa_lv_forNucleation(i,k) = lvocfrac*intermediateConcentration(i,k,COND_VAP_ORG_LV) 
-          
+          soa_lv_forNucleation(i,k) = lvocfrac*intermediateConcentration(i,k,COND_VAP_ORG_LV)
+
           !Sum coagulation sink for nucleated so4 and soa particles over all receivers of coagulate. Needed for RM's nucleation code
           !OBS - looks like RM's coagulation sink is multiplied by 10^-12??
           modeIndexReceiverCoag = 0
@@ -581,19 +581,19 @@ contains
        do i=1,gas_pcnst
           if(lifeCycleReceiver(i) .gt. 0 )then
              long_name= trim(solsym(i))//"condTend"
-             call outfld(long_name, coltend(:ncol,i), pcols, lchnk)
+             call outfld(long_name, coltend(:ncol,i), ncol, lchnk)
              long_name= trim(solsym(lifeCycleReceiver(i)))//"condTend"
-             call outfld(long_name, coltend(:ncol,lifeCycleReceiver(i)),pcols,lchnk)
+             call outfld(long_name, coltend(:ncol,lifeCycleReceiver(i)),ncol,lchnk)
           end if
        end do
        long_name=trim(solsym(chemistryIndex(l_so4_a1)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_so4_a1)),pcols,lchnk)
+       call outfld(long_name, coltend(:ncol,chemistryIndex(l_so4_a1)),ncol,lchnk)
        long_name=trim(solsym(chemistryIndex(l_soa_a1)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_soa_a1)),pcols,lchnk)
+       call outfld(long_name, coltend(:ncol,chemistryIndex(l_soa_a1)),ncol,lchnk)
        long_name=trim(solsym(chemistryIndex(l_so4_na)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_so4_na)),pcols,lchnk)
+       call outfld(long_name, coltend(:ncol,chemistryIndex(l_so4_na)),ncol,lchnk)
        long_name=trim(solsym(chemistryIndex(l_soa_na)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_soa_na)),pcols,lchnk)
+       call outfld(long_name, coltend(:ncol,chemistryIndex(l_soa_na)),ncol,lchnk)
 
     endif
 
@@ -954,12 +954,12 @@ contains
     end do
 
     !-- Diagnostic output
-    call outfld('NUCLRATE', nuclrate_bin+nuclrate_pbl, pcols   ,lchnk)
-    call outfld('FORMRATE', formrate_bin+formrate_pbl, pcols   ,lchnk)
-    call outfld('COAGNUCL', coagnuc, pcols   ,lchnk)
-    call outfld('GRH2SO4', grh2so4, pcols   ,lchnk)
-    call outfld('GRSOA', grorg, pcols   ,lchnk)
-    call outfld('GR', gr, pcols   ,lchnk)
+    call outfld('NUCLRATE', nuclrate_bin(:ncol,:)+nuclrate_pbl(:ncol,:), ncol, lchnk)
+    call outfld('FORMRATE', formrate_bin(:ncol,:)+formrate_pbl(:ncol,:), ncol, lchnk)
+    call outfld('COAGNUCL', coagnuc(:ncol,:), ncol, lchnk)
+    call outfld('GRH2SO4',  grh2so4(:ncol,:), ncol, lchnk)
+    call outfld('GRSOA',    grorg(:ncol,:),   ncol, lchnk)
+    call outfld('GR',       gr(:ncol,:),      ncol, lchnk)
 
     return
   end subroutine aeronucl

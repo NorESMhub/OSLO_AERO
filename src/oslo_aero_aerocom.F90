@@ -29,6 +29,71 @@ module oslo_aero_aerocom
 contains
 !===============================================================================
 
+   subroutine aerocom_init()
+      call addfld ('EC550AER',(/'lev'/),'A','m-1     ','aerosol extinction coefficient')
+      call addfld ('ABS550_A',(/'lev'/),'A','m-1     ','aerosol absorption coefficient')
+      call addfld ('BS550AER',(/'lev'/),'A','m-1 sr-1','aerosol backscatter coefficient')
+!
+      call addfld ('EC550SO4',(/'lev'/),'A','m-1     ','SO4 aerosol extinction coefficient')
+      call addfld ('EC550BC ',(/'lev'/),'A','m-1     ','BC aerosol extinction coefficient')
+      call addfld ('EC550POM',(/'lev'/), 'A','m-1    ','POM aerosol extinction coefficient')
+      call addfld ('EC550SS ',(/'lev'/), 'A','m-1    ','SS aerosol extinction coefficient')
+      call addfld ('EC550DU ',(/'lev'/), 'A','m-1    ','DU aerosol extinction coefficient')
+!
+      call addfld ('A550_DU ' ,horiz_only, 'A','unitless', 'mineral abs. aerosol optical depth 550nm')
+      call addfld ('A550_SS ' ,horiz_only, 'A','unitless','sea-salt abs aerosol optical depth 550nm')
+      call addfld ('A550_SO4' ,horiz_only, 'A','unitless','SO4 aerosol abs. optical depth 550nm')
+      call addfld ('A550_POM' ,horiz_only, 'A','unitless', 'OC abs. aerosol optical depth 550nm')
+      call addfld ('A550_BC ' ,horiz_only, 'A','unitless', 'BC abs. aerosol optical depth 550nm')
+      call addfld ('D440_DU ',horiz_only, 'A','unitless','mineral aerosol optical depth 440nm')
+      call addfld ('D440_SS ',horiz_only, 'A','unitless','sea-salt aerosol optical depth 440nm')
+      call addfld ('D440_SO4',horiz_only, 'A','unitless','SO4 aerosol optical depth 440nm')
+      call addfld ('D440_POM',horiz_only, 'A','unitless','OC aerosol optical depth 440nm')
+      call addfld ('D440_BC ',horiz_only, 'A','unitless','BC aerosol optical depth 440nm')
+      call addfld ('D500_DU ',horiz_only, 'A','unitless','mineral aerosol optical depth 500nm')
+      call addfld ('D500_SS ',horiz_only, 'A','unitless','sea-salt aerosol optical depth 500nm')
+      call addfld ('D500_SO4',horiz_only, 'A','unitless','SO4 aerosol optical depth 500nm')
+      call addfld ('D500_POM',horiz_only, 'A','unitless','OC aerosol optical depth 500nm')
+      call addfld ('D500_BC ',horiz_only, 'A','unitless','BC aerosol optical depth 500nm')
+      call addfld ('D550_DU ',horiz_only, 'A','unitless','mineral aerosol optical depth 550nm')
+      call addfld ('D550_SS ',horiz_only, 'A','unitless','sea-salt aerosol optical depth 550nm')
+      call addfld ('D550_SO4',horiz_only, 'A','unitless','SO4 aerosol optical depth 550nm')
+      call addfld ('D550_POM',horiz_only, 'A','unitless','OC aerosol optical depth 550nm')
+      call addfld ('D550_BC ',horiz_only, 'A','unitless','BC aerosol optical depth 550nm')
+      call addfld ('D670_DU ',horiz_only, 'A','unitless','mineral aerosol optical depth 670nm')
+      call addfld ('D670_SS ',horiz_only, 'A','unitless','sea-salt aerosol optical depth 670nm')
+      call addfld ('D670_SO4',horiz_only, 'A','unitless','SO4 aerosol optical depth 670nm')
+      call addfld ('D670_POM',horiz_only, 'A','unitless','OC aerosol optical depth 670nm')
+      call addfld ('D670_BC ',horiz_only, 'A','unitless','BC aerosol optical depth 670nm')
+      call addfld ('D870_DU ',horiz_only, 'A','unitless','mineral aerosol optical depth 870nm')
+      call addfld ('D870_SS ',horiz_only, 'A','unitless','sea-salt aerosol optical depth 870nm')
+      call addfld ('D870_SO4',horiz_only, 'A','unitless','SO4 aerosol optical depth 870nm')
+      call addfld ('D870_POM',horiz_only, 'A','unitless','OC aerosol optical depth 870nm')
+      call addfld ('D870_BC ',horiz_only, 'A','unitless','BC aerosol optical depth 870nm')
+      call addfld ('DLT_DUST',horiz_only, 'A','unitless','mineral aerosol optical depth 550nm lt05')
+      call addfld ('DLT_SS  ',horiz_only, 'A','unitless','sea-salt aerosol optical depth 550nm lt05')
+      call addfld ('DLT_SO4 ',horiz_only, 'A','unitless','SO4 aerosol optical depth 550nm lt05')
+      call addfld ('DLT_POM ',horiz_only, 'A','unitless','OC aerosol optical depth 550nm lt05')
+      call addfld ('DLT_BC  ',horiz_only, 'A','unitless','BC aerosol optical depth 550nm lt05')
+      call addfld ('DGT_DUST',horiz_only, 'A','unitless','mineral aerosol optical depth 550nm gt05')
+      call addfld ('DGT_SS  ',horiz_only, 'A','unitless','sea-salt aerosol optical depth 550nm gt05')
+      call addfld ('DGT_SO4 ',horiz_only, 'A','unitless','SO4 aerosol optical depth 550nm gt05')
+      call addfld ('DGT_POM ',horiz_only, 'A','unitless','OC aerosol optical depth 550nm gt05')
+      call addfld ('DGT_BC  ',horiz_only, 'A','unitless','BC aerosol optical depth 550nm gt05')
+      call addfld ('NNAT_0  ',(/'lev'/),'A','1/cm3   ','Aerosol mode 0 number concentration')
+      call addfld ('NNAT_1  ',(/'lev'/),'A','1/cm3   ','Aerosol mode 1 number concentration')
+      call addfld ('NNAT_2  ',(/'lev'/),'A','1/cm3   ','Aerosol mode 2 number concentration')
+      call addfld ('NNAT_4  ',(/'lev'/),'A','1/cm3   ','Aerosol mode 4 number concentration')
+      call addfld ('NNAT_5  ',(/'lev'/),'A','1/cm3   ','Aerosol mode 5 number concentration')
+      call addfld ('NNAT_6  ',(/'lev'/),'A','1/cm3   ','Aerosol mode 6 number concentration')
+      call addfld ('NNAT_7  ',(/'lev'/),'A','1/cm3   ','Aerosol mode 7 number concentration')
+      call addfld ('NNAT_8  ',(/'lev'/),'A','1/cm3   ','Aerosol mode 8 number concentration')
+      call addfld ('NNAT_9  ',(/'lev'/),'A','1/cm3   ','Aerosol mode 9 number concentration')
+      call addfld ('NNAT_10 ',(/'lev'/),'A','1/cm3   ','Aerosol mode 10 number concentration')
+      call addfld ('NNAT_12 ',(/'lev'/),'A','1/cm3   ','Aerosol mode 12 number concentration')
+      call addfld ('NNAT_14 ',(/'lev'/),'A','1/cm3   ','Aerosol mode 14 number concentration')
+   end subroutine aerocom_init
+
   subroutine aerocom(Cam, Nnatk, pint, coszrs, deltah_km, batotlw, faitbc, f_soana, fnbc)
 
     ! This is currently called by oslo_aero_optical_params
@@ -421,7 +486,7 @@ contains
           akcxs(icol) =akcxs(icol)+cxstot(icol,k)*deltah_km(icol,k)
        enddo
     enddo
-    call outfld('AKCXS   ',akcxs ,pcols,lchnk)
+    call outfld('AKCXS   ',akcxs(:ncol) ,ncol,lchnk)
 
     do indx=1,nbmodes
        if (indx /= 3) then
@@ -429,9 +494,9 @@ contains
              cxsmrel(icol,indx) = cxsmtot(icol,indx)/(Camtot(icol,indx)+eps)
           enddo
           write(varName,'(A,I2.2)') "Camrel", indx
-          call outfld(varName, Camrel(:,:,indx), pcols, lchnk)
+          call outfld(varName, Camrel(:ncol,:,indx), ncol, lchnk)
           write(varName,'(A,I2.2)') "Cxsrel", indx
-          call outfld(varName, cxsmrel(:,indx), pcols, lchnk)
+          call outfld(varName, cxsmrel(:ncol,indx), ncol, lchnk)
        end if
     enddo
 
@@ -529,7 +594,7 @@ contains
           asydry_aer(icol,k) =asymtot(icol,k,ib)
        end do
     enddo
-    call outfld('ASYMMDRY',asydry_aer,pcols,lchnk)
+    call outfld('ASYMMDRY',asydry_aer(:ncol,:),ncol,lchnk)
 
     !..................!
 
@@ -551,13 +616,13 @@ contains
     end do
     ! These two fields should be close to equal, both representing absorption
     ! in the 3.077-3.846 um wavelenght band (i.e., a check of LUT for LW vs. SW).
-    call outfld('BATSW13 ',batotsw13,pcols,lchnk)
-    call outfld('BATLW01 ',batotlw01,pcols,lchnk)
+    call outfld('BATSW13 ',batotsw13(:ncol,:), ncol,lchnk)
+    call outfld('BATLW01 ',batotlw01(:ncol,:), ncol,lchnk)
 
     !..................!
 
-    call outfld('BETOTVIS',betotvis,pcols,lchnk)
-    call outfld('BATOTVIS',batotvis,pcols,lchnk)
+    call outfld('BETOTVIS',betotvis(:ncol,:), ncol,lchnk)
+    call outfld('BATOTVIS',batotvis(:ncol,:), ncol,lchnk)
 
     ! Initialize fields
     do icol=1,ncol
@@ -1501,7 +1566,6 @@ contains
     call outfld('NNAT_0  ',nnat_0 ,pcols,lchnk)
     call outfld('NNAT_1  ',nnat_1 ,pcols,lchnk)
     call outfld('NNAT_2  ',nnat_2 ,pcols,lchnk)
-    !=0 call outfld('NNAT_3  ',nnat_3 ,pcols,lchnk)
     call outfld('NNAT_4  ',nnat_4 ,pcols,lchnk)
     call outfld('NNAT_5  ',nnat_5 ,pcols,lchnk)
     call outfld('NNAT_6  ',nnat_6 ,pcols,lchnk)
@@ -1509,9 +1573,7 @@ contains
     call outfld('NNAT_8  ',nnat_8 ,pcols,lchnk)
     call outfld('NNAT_9  ',nnat_9 ,pcols,lchnk)
     call outfld('NNAT_10 ',nnat_10,pcols,lchnk)
-    !=0  call outfld('NNAT_11 ',nnat_11,pcols,lchnk)
     call outfld('NNAT_12 ',nnat_12,pcols,lchnk)
-    !=0  call outfld('NNAT_13 ',nnat_13,pcols,lchnk)
     call outfld('NNAT_14 ',nnat_14,pcols,lchnk)
 
     !c_er3d
