@@ -369,7 +369,7 @@ contains
   end subroutine calculateCoagulationCoefficient
 
   !================================================================
-  subroutine coagtend(  q, pmid, pdel, temperature, delt_inverse, ncol , lchnk)
+  subroutine coagtend(q, pmid, pdel, temperature, delt_inverse, ncol, lchnk)
 
     ! Time step routine for coagulation - called from chemistry
     ! Calculate the coagulation of small aerosols with larger particles and
@@ -377,13 +377,13 @@ contains
     ! 40 nm is assumed to have an efficient coagulation with other particles.
 
     !  input arguments
-    integer, intent(in)     :: ncol                        ! number of horizontal grid cells (columns)
-    real(r8), intent(inout) :: q(pcols,pver,gas_pcnst)     ! TMR [kg/kg] including moisture
-    real(r8), intent(in) :: pmid(pcols,pver)               ! [Pa] midpoint pressure
-    real(r8), intent(in) :: pdel(pcols,pver)
-    real(r8), intent(in) :: temperature(pcols,pver)        ! [K] temperature
-    real(r8), intent(in) :: delt_inverse                   ! [1/s] inverse time step
-    integer, intent(in)  :: lchnk                          ! [] chnk id needed for output
+    real(r8), intent(inout) :: q(:,:,:)         ! TMR [kg/kg] including moisture
+    real(r8), intent(in)    :: pmid(:,:)        ! [Pa] midpoint pressure
+    real(r8), intent(in)    :: pdel(:,:)
+    real(r8), intent(in)    :: temperature(:,:) ! [K] temperature
+    real(r8), intent(in)    :: delt_inverse     ! [1/s] inverse time step
+    integer, intent(in)     :: ncol             ! number of horizontal grid cells (columns)
+    integer, intent(in)     :: lchnk            ! [] chnk id needed for output
 
     ! local
     integer           :: k                   ! level counter
@@ -427,17 +427,15 @@ contains
 
                 !Find the lifecycle-specie receiving the coagulation
                 l_index_receiver = getTracerIndex(receiverMode(ireceiver) , iSpecie , .true.)
-
                 long_name = solsym(l_index_receiver) !For testing
-
 
                 if(.NOT. is_process_mode(l_index_receiver,.true.)) then
                    !Add up the number concentration of the receiving mode
-                   numberConcentration(iReceiver) = numberConcentration(iReceiver)     &  !previous value
-                        + q(i,k,l_index_receiver)                 &  !kg/kg
-                        / rhopart(physicsIndex(l_index_receiver))    &  !*[m3/kg] ==> m3/kg
-                        * volumeToNumber(receiverMode(ireceiver)) &  ![#/m3] ==> #/kg
-                        * rhoAir                                 !#/kg ==> #/m3
+                   numberConcentration(iReceiver) = numberConcentration(iReceiver) & !previous value
+                        + q(i,k,l_index_receiver)                                  & !kg/kg
+                        / rhopart(physicsIndex(l_index_receiver))                  & !*[m3/kg] ==> m3/kg
+                        * volumeToNumber(receiverMode(ireceiver))                  & ![#/m3] ==> #/kg
+                        * rhoAir                                                     !#/kg ==> #/m3
                 end if
              end do !Lifecycle "core" species in this mode
           enddo
@@ -547,22 +545,22 @@ contains
   end subroutine coagtend
 
   !================================================================
-  subroutine clcoag(  q, pmid, pdel, temperature, cldnum, cldfrc, delt_inverse, ncol , lchnk, im, pbuf)
+  subroutine clcoag(q, pmid, pdel, temperature, cldnum, cldfrc, delt_inverse, ncol, lchnk, im, pbuf)
 
     ! Calculate the coagulation of small aerosols with larger particles and
     ! cloud droplets. Only particles smaller that dry radius of
     ! 40 nm is assumed to have an efficient coagulation with other particles.
 
     !  input arguments
-    integer  , intent(in)    :: ncol                    ! number of horizontal grid cells (columns)
-    real(r8) , intent(inout) :: q(pcols,pver,gas_pcnst) ! TMR [kg/kg]  including moisture
-    real(r8) , intent(in)    :: pmid(pcols,pver)        ! [Pa] midpoint pressure
-    real(r8) , intent(in)    :: pdel(pcols,pver)
-    real(r8) , intent(in)    :: temperature(pcols,pver) ! [K] temperature
-    real(r8) , intent(in)    :: cldnum(ncol,pver)       ! Droplet concentration #/kg
-    real(r8) , intent(in)    :: cldfrc(ncol,pver)       ! Cloud volume fraction
-    real(r8) , intent(in)    :: delt_inverse            ! [1/s] inverse time step
-    integer  , intent(in)    :: lchnk                   ! [] chnk id needed for output
+    real(r8) , intent(inout) :: q(:,:,:)         ! TMR [kg/kg]  including moisture
+    real(r8) , intent(in)    :: pmid(:,:)        ! [Pa] midpoint pressure
+    real(r8) , intent(in)    :: pdel(:,:)
+    real(r8) , intent(in)    :: temperature(:,:) ! [K] temperature
+    real(r8) , intent(in)    :: cldnum(:,:)      ! Droplet concentration #/kg
+    real(r8) , intent(in)    :: cldfrc(:,:)      ! Cloud volume fraction
+    real(r8) , intent(in)    :: delt_inverse     ! [1/s] inverse time step
+    integer  , intent(in)    :: ncol             ! number of horizontal grid cells (columns)
+    integer  , intent(in)    :: lchnk            ! [] chnk id needed for output
     integer  , intent(in)    :: im
     type(physics_buffer_desc), pointer :: pbuf(:)
 
@@ -631,7 +629,6 @@ contains
                       !Can not loose more than we have
                       ! At present day assumed lost within the cloud
                       cloudLoss(i,k,l_index_donor) = min(cloudLoss(i,k,l_index_donor) , cldfrc(i,k)*q(i,k,l_index_donor))
-
 
                    end if !check on process modes
                 end do    !species in mode

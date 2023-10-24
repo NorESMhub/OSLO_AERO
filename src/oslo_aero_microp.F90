@@ -156,7 +156,7 @@ contains
 
   !=========================================================================================
 
-  subroutine oslo_aero_microp_init
+  subroutine oslo_aero_microp_init()
 
     !----------------------------------------------------------------------- 
     ! Initialize constants for aerosols needed by microphysics
@@ -164,11 +164,6 @@ contains
     !-----------------------------------------------------------------------
 
     ! local variables
-    integer  :: iaer, ierr
-    integer  :: m, n, nmodes, nspec
-
-    character(len=32) :: str32
-    character(len=*), parameter :: routine = 'oslo_aero_microp_init'
     logical :: history_amwg
     !-----------------------------------------------------------------------
 
@@ -220,7 +215,6 @@ contains
     ! all units mks unless otherwise stated
     integer :: i, k, m
     integer :: itim_old
-    integer :: nmodes
     type(physics_state) :: state1                             ! Local copy of state variable
     type(physics_ptend) :: ptend_loc
     real(r8), pointer :: ast(:,:)        
@@ -255,12 +249,12 @@ contains
     integer  :: lchnk, ncol
     real(r8) :: factnum(pcols,pver,0:nmodes_oslo)             ! activation fraction for aerosol number
     real(r8) :: qaercwpt(pcols,pver,pcnst)
-    logical  :: hasAerosol(pcols, pver, nmodes_oslo)
-    real(r8) :: f_acm(pcols,pver, nmodes_oslo)
-    real(r8) :: f_bcm(pcols,pver, nmodes_oslo)
-    real(r8) :: f_aqm(pcols, pver, nmodes_oslo)
-    real(r8) :: f_so4_condm(pcols, pver, nmodes_oslo)         !Needed in "get component fraction"
-    real(r8) :: f_soam(pcols, pver, nmodes_oslo)              !Needed in "get component fraction"
+    logical  :: hasAerosol(pcols,pver,nmodes_oslo)
+    real(r8) :: f_acm(pcols,pver,nmodes_oslo)
+    real(r8) :: f_bcm(pcols,pver,nmodes_oslo)
+    real(r8) :: f_aqm(pcols, pver,nmodes_oslo)
+    real(r8) :: f_so4_condm(pcols,pver,nmodes_oslo)           !Needed in "get component fraction"
+    real(r8) :: f_soam(pcols,pver,nmodes_oslo)                !Needed in "get component fraction"
     real(r8) :: numberConcentration(pcols,pver,0:nmodes_oslo) ![#/m3] number concentraiton
     real(r8) :: volumeConcentration(pcols,pver,nmodes_oslo)   ![m3/m3] volume concentration
     real(r8) :: hygroscopicity(pcols,pver,nmodes_oslo)        ![mol_{aer}/mol_{water}] hygroscopicity
