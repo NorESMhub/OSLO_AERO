@@ -6,9 +6,7 @@ module oslo_aero_seasalt
 
   use shr_kind_mod,    only: r8 => shr_kind_r8, cl => shr_kind_cl
   use ppgrid,          only: pcols, pver
-  use constituents,    only: cnst_name
-  use camsrfexch,      only: cam_in_t
-  use physics_types,   only: physics_state
+  use constituents,    only: cnst_name, pcnst
   !
   use oslo_aero_const, only: volumeToNumber
   use oslo_aero_ocean, only: oslo_aero_opom_inq, oslo_aero_opom_emis
@@ -54,27 +52,29 @@ contains
   end subroutine oslo_aero_seasalt_init
 
   !===============================================================================
-  subroutine oslo_aero_seasalt_emis(state, cam_in)
+  subroutine oslo_aero_seasalt_emis(ncol, lchnk, u, v, zm, ocnfrc, icefrc, sst, cflx)
 
     ! Arguments:
-    type(physics_state),    intent(in)    :: state   ! Physics state variables
-    type(cam_in_t), target, intent(inout) :: cam_in  ! import state
+    integer  , intent(in)    :: ncol  ![nbr] number of columns in use
+    integer  , intent(in)    :: lchnk !chunk index
+    real(r8) , intent(in)    :: u(pcols)
+    real(r8) , intent(in)    :: v(pcols)
+    real(r8) , intent(in)    :: zm(pcols)
+    real(r8) , intent(in)    :: ocnfrc(pcols)
+    real(r8) , intent(in)    :: icefrc(pcols)
+    real(r8) , intent(in)    :: sst(pcols)
+    real(r8) , intent(inout) :: cflx(pcols,pcnst)
 
     ! Local variables
-    integer             :: n                                   ![] counter for modes
-    integer             :: ncol                                ![nbr] number of columns in use
-    integer             :: lchnk                               !chunk index
-    real(r8)            :: whiteCapAreaFraction(pcols)         ![fraction]
-    real(r8)            :: open_ocean(pcols)                   ![fraction]
-    real(r8)            :: numberFlux(pcols,numberofSaltModes) ![#/m2/sec]
-    real(r8)            :: u10m(pcols)                         ![m/s]
-    real(r8), pointer   :: sst(:)                              ![frc] sea surface temperature
-    real(r8), pointer   :: ocnfrc(:)                           ![frc] ocean fraction
-    real(r8), pointer   :: icefrc(:)                           ![frc] ice fraction
-    real(r8)            :: spracklenOMOceanSource(pcols)       ![kg/m2/s] spracklen ocean source
-    real(r8)            :: onOMOceanSource(pcols)              ![kg/m2/s] OM source from Nilsson/O'Dowd
-    real(r8)            :: OMOceanSource(pcols)                ![kg/m2/s] new OM ocean source
-    real(r8), parameter :: z0= 0.0001_r8                       ![m] roughness length over ocean
+    integer  :: n                                   ![] counter for modes
+    real(r8) :: whiteCapAreaFraction(pcols)         ![fraction]
+    real(r8) :: open_ocean(pcols)                   ![fraction]
+    real(r8) :: numberFlux(pcols,numberofSaltModes) ![#/m2/sec]
+    real(r8) :: u10m(pcols)                         ![m/s]
+    real(r8) :: spracklenOMOceanSource(pcols)       ![kg/m2/s] spracklen ocean source
+    real(r8) :: onOMOceanSource(pcols)              ![kg/m2/s] OM source from Nilsson/O'Dowd
+    real(r8) :: OMOceanSource(pcols)                ![kg/m2/s] new OM ocean source
+    real(r8), parameter :: z0= 0.0001_r8            ![m] roughness length over ocean
 
     !New numbers are based on Salter et al. (2105):
     !www.atmos-chem-phys-discuss.net/15/13783/2015/doi:10.5194/acpd-15-13783-2015
@@ -90,21 +90,13 @@ contains
     !updated value for Salter et al. sea-salt treatment, which gives global annual SS_A1 emissions of
     !2.663 instead of 0.153 ng m-2 s-1 (i.e. ca 17 times more than the old sea-salt treatment):
     real(r8), parameter :: seasaltToSpracklenOM2 = 3.03_r8*0.153_r8/2.663_r8
+    !-----------------------------------------------------------------------
 
-    !number of columns in use
-    ncol = state%ncol
-    lchnk = state%lchnk
-
-    !pointers to land model variables
-    ocnfrc => cam_in%ocnfrac
-    icefrc => cam_in%icefrac
-    sst    => cam_in%sst
-
-    !start with midpoint wind speed
-    u10m(:ncol)=sqrt(state%u(:ncol,pver)**2+state%v(:ncol,pver)**2)
+    ! start with midpoint wind speed
+    u10m(:ncol)=sqrt(u(:ncol)**2 + v(:ncol)**2)
 
     ! move the winds to 10m high from the midpoint of the gridbox:
-    u10m(:ncol)=u10m(:ncol)*log(10._r8/z0)/log(state%zm(:ncol,pver)/z0)
+    u10m(:ncol)=u10m(:ncol)*log(10._r8/z0)/log(zm(:ncol)/z0)
 
     ! New whitecap area fraction / air entrainment flux from eqn. 6 in Salter et al. (2015)
     ! JCA & MS Using Hanson & Phillips 99 air entrainment vs. wind speed
@@ -125,15 +117,15 @@ contains
     end do
 
     do n=1,numberOfSaltModes
-       cam_in%cflx(:ncol, tracerMap(n)) = numberFlux(:ncol,n) & !#/m2/sec
-            / volumeToNumber(modeMap(n))                      & !==> m3/m2/sec
-            * rhopart(tracerMap(n))                             !==> kg/m2/sec
+       cflx(:ncol, tracerMap(n)) = numberFlux(:ncol,n)        & !#/m2/sec
+                                 / volumeToNumber(modeMap(n)) & !==> m3/m2/sec
+                                 * rhopart(tracerMap(n))        !==> kg/m2/sec
     end do
-    spracklenOMOceanSource(:ncol) = cam_in%cflx(:ncol, tracerMap(1))*seasaltToSpracklenOM2
+    spracklenOMOceanSource(:ncol) = cflx(:ncol, tracerMap(1))*seasaltToSpracklenOM2
 
     if (oslo_aero_opom_inq())then
-       call oslo_aero_opom_emis(cam_in%cflx(:ncol, tracerMap(1)), &
-            cam_in%cflx(:ncol,tracerMap(2)), cam_in%cflx(:ncol,tracerMap(3)), &
+       call oslo_aero_opom_emis(&
+            cflx(:ncol, tracerMap(1)), cflx(:ncol,tracerMap(2)), cflx(:ncol,tracerMap(3)), &
             open_ocean, ncol, lchnk, onOMOceanSource )
        OMOceanSource(:ncol) = onOMOceanSource(:ncol)
     else
@@ -141,7 +133,7 @@ contains
     endif
 
     !Add OM ocean source to cam_in
-    cam_in%cflx(:ncol,l_om_ni) = cam_in%cflx(:ncol,l_om_ni) + OMOceanSource(:ncol)
+    cflx(:ncol,l_om_ni) = cflx(:ncol,l_om_ni) + OMOceanSource(:ncol)
 
   end subroutine oslo_aero_seasalt_emis
 

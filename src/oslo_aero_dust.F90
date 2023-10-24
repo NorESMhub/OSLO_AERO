@@ -5,12 +5,12 @@ module oslo_aero_dust
   ! the soil erodibility factor is applied here.
 
   use shr_kind_mod,     only: r8 => shr_kind_r8, cl => shr_kind_cl
+  use spmd_utils,       only: mpicom, mstrid=>masterprocid, masterproc
+  use spmd_utils,       only: mpi_logical, mpi_real8, mpi_character, mpi_integer,  mpi_success
+  use namelist_utils,   only: find_group_name
   use ppgrid,           only: pcols, begchunk, endchunk
   use phys_grid,        only: get_ncols_p, get_rlat_all_p, get_rlon_all_p
-  use physics_types,    only: physics_state
-  use camsrfexch,       only: cam_in_t
-  use spmd_utils,       only: masterproc
-  use constituents,     only: cnst_name
+  use constituents,     only: cnst_name, pcnst
   use interpolate_data, only: lininterp_init, lininterp, lininterp_finish, interp_type
   use mo_constants,     only: pi, d2r
   use cam_logfile,      only: iulog
@@ -55,9 +55,6 @@ contains
 
   subroutine oslo_aero_dust_readnl(nlfile)
 
-    use namelist_utils,  only: find_group_name
-    use mpishorthand
-
     character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
     ! Local variables
@@ -79,11 +76,12 @@ contains
        end if
        close(unitn)
     end if
-#ifdef SPMD
     ! Broadcast namelist variables
-    call mpibcast(dust_emis_fact, 1,                   mpir8,   0, mpicom)
-    call mpibcast(soil_erod_file, len(soil_erod_file), mpichar, 0, mpicom)
-#endif
+    call mpi_bcast(dust_emis_fact, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: dust_emis_fact")
+    call mpi_bcast(soil_erod_file, len(soil_erod_file), mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: soil_erod_file")
+
   end subroutine oslo_aero_dust_readnl
 
   !===============================================================================
@@ -106,7 +104,7 @@ contains
   end subroutine oslo_aero_dust_init
 
   !===============================================================================
-  subroutine oslo_aero_dust_emis(state, cam_in)
+  subroutine oslo_aero_dust_emis(lchnk, ncol, dstflx, cflx)
 
     !----------------------------------------------------------------------- 
     ! Purpose: Interface to emission of all dusts.
@@ -115,19 +113,15 @@ contains
     !-----------------------------------------------------------------------
 
     ! Arguments:
-    type(physics_state),    intent(in)    :: state   ! Physics state variables
-    type(cam_in_t), target, intent(inout) :: cam_in  ! import state
+    integer  , intent(in)    :: lchnk
+    integer  , intent(in)    :: ncol
+    real(r8) , intent(in)    :: dstflx(pcols,4) 
+    real(r8) , intent(inout) :: cflx(pcols,pcnst) ! Surface fluxes
 
     ! Local variables
-    integer           :: lchnk
-    integer           :: ncol
-    integer           :: i,n
-    real(r8)          :: soil_erod_tmp(pcols)
-    real(r8)          :: totalEmissionFlux(pcols)
-    real(r8), pointer :: cflx(:,:)
-
-    lchnk = state%lchnk
-    ncol = state%ncol
+    integer  :: i,n
+    real(r8) :: soil_erod_tmp(pcols)
+    real(r8) :: totalEmissionFlux(pcols)
 
     ! Filter away unreasonable values for soil erodibility
     ! (using low values e.g. gives emissions in greenland..)
@@ -139,7 +133,7 @@ contains
 
     totalEmissionFlux(:) = 0.0_r8
     do i=1,ncol
-       totalEmissionFlux(i) = totalEmissionFlux(i) + sum(cam_in%dstflx(i,:))
+       totalEmissionFlux(i) = totalEmissionFlux(i) + sum(dstflx(i,:))
     end do
 
     ! Note that following CESM use of "dust_emis_fact", the emissions are 
@@ -149,7 +143,6 @@ contains
     ! As of NE-380: Oslo dust emissions are 2/3 of CAM emissions
     ! gives better AOD close to dust sources
 
-    cflx => cam_in%cflx
     do n = 1,numberOfDustModes
        cflx(:ncol, tracerMap(n)) = -1.0_r8*emis_fraction_in_mode(n) &
             *totalEmissionFlux(:ncol)*soil_erod_tmp(:ncol)/(dust_emis_fact)*1.15_r8  

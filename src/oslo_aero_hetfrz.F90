@@ -3,11 +3,11 @@ module oslo_aero_hetfrz
   !-----------------------------------------------------------------------
   ! Calculate heterogeneous freezing rates from classical nucleation theory
   !
-  ! Author: 
+  ! Author:
   !   Corinna Hoose, UiO, May 2009
-  !   Yong Wang and Xiaohong Liu, UWyo, 12/2012, 
+  !   Yong Wang and Xiaohong Liu, UWyo, 12/2012,
   !   implement in CAM5 and constrain uncertain parameters using natural dust and
-  !   BC(soot) datasets. 
+  !   BC(soot) datasets.
   !   Yong Wang and Xiaohong Liu, UWyo, 05/2013, implement the PDF-contact angle
   !   approach: Y. Wang et al., Atmos. Chem. Phys., 2014.
   !   Jack Chen, NCAR, 09/2015, modify calculation of dust activation fraction.
@@ -15,7 +15,8 @@ module oslo_aero_hetfrz
 
   use shr_kind_mod,      only: r8=>shr_kind_r8
   use shr_spfn_mod,      only: erf => shr_spfn_erf
-  use spmd_utils,        only: masterproc
+  use spmd_utils,        only: mpicom, mstrid=>masterprocid, masterproc
+  use spmd_utils,        only: mpi_logical, mpi_real8, mpi_character, mpi_success
   use ppgrid,            only: pcols, pver, begchunk, endchunk
   use physconst,         only: rair, cpair, rh2o, rhoh2o, mwh2o, tmelt, pi
   use constituents,      only: cnst_get_ind, pcnst
@@ -42,7 +43,7 @@ module oslo_aero_hetfrz
   private
 
   ! The following are called by microp_aero
-  public :: hetfrz_classnuc_oslo_readnl   
+  public :: hetfrz_classnuc_oslo_readnl
   public :: hetfrz_classnuc_oslo_register
   public :: hetfrz_classnuc_oslo_init
   public :: hetfrz_classnuc_oslo_calc
@@ -54,7 +55,9 @@ module oslo_aero_hetfrz
   private :: hetfrz_classnuc_init_pdftheta
 
   ! Namelist variables
-  logical :: hist_hetfrz_classnuc = .false.
+  logical  :: hist_hetfrz_classnuc = .false.
+  real(r8) :: hetfrz_bc_scalfac = -huge(1._r8) ! scaling factor for BC  (NOT USED)
+  real(r8) :: hetfrz_dust_scalfac = -huge(1._r8) ! scaling factor for dust (NOT USED)
 
   ! Vars set via init method.
   real(r8) :: mincld      ! minimum allowed cloud fraction
@@ -77,7 +80,7 @@ module oslo_aero_hetfrz
   ! The basis is converted from mass to volume.
   real(r8), allocatable :: aer_cb(:,:,:,:)
 
-  ! PDF theta model 
+  ! PDF theta model
   ! some variables for PDF theta model
   ! immersion freezing
   !
@@ -106,7 +109,6 @@ contains
   subroutine hetfrz_classnuc_oslo_readnl(nlfile)
 
     use namelist_utils, only: find_group_name
-    use mpishorthand
 
     character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
@@ -114,7 +116,7 @@ contains
     integer :: unitn, ierr
     character(len=*), parameter :: subname = 'hetfrz_classnuc_cam_readnl'
 
-    namelist /hetfrz_classnuc_nl/ hist_hetfrz_classnuc
+    namelist /hetfrz_classnuc_nl/ hist_hetfrz_classnuc, hetfrz_bc_scalfac, hetfrz_dust_scalfac
     !-----------------------------------------------------------------------------
 
     if (masterproc) then
@@ -128,10 +130,19 @@ contains
        end if
        close(unitn)
     end if
-#ifdef SPMD
-    ! Broadcast namelist variables
-    call mpibcast(hist_hetfrz_classnuc, 1, mpilog, 0, mpicom)
-#endif
+
+    call mpi_bcast(hist_hetfrz_classnuc, 1, mpi_logical, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: hist_hetfrz_classnuc")
+    call mpi_bcast(hetfrz_bc_scalfac, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: hetfrz_bc_scalfac")
+    call mpi_bcast(hetfrz_dust_scalfac, 1, mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: hetfrz_dust_scalfac")
+
+    if (masterproc) then
+       write(iulog,*) subname,': hist_hetfrz_classnuc = ',hist_hetfrz_classnuc
+       write(iulog,*) subname,': hetfrz_bc_scalfac    = ',hetfrz_bc_scalfac
+       write(iulog,*) subname,': hetfrz_dust_scalfac  = ',hetfrz_dust_scalfac
+    end if
 
   end subroutine hetfrz_classnuc_oslo_readnl
 
@@ -391,25 +402,20 @@ contains
     real(r8) :: numberMedianRadius(pcols,pver,nmodes_oslo) ! oslo aerosol specific
     real(r8) :: na500(pcols,pver)
     real(r8) :: tot_na500(pcols,pver)
+    integer  :: ncol, lchnk
     character(128) :: errstring   ! Error status
     !-------------------------------------------------------------------------------
 
-    associate( &
-         lchnk => state%lchnk,             &
-         ncol  => state%ncol,              &
-         t     => state%t,                 &
-         qc    => state%q(:pcols,:pver,cldliq_idx), &
-         nc    => state%q(:pcols,:pver,numliq_idx), &
-         pmid  => state%pmid               )
+    ncol  = state%ncol
+    lchnk = state%lchnk
 
     itim_old = pbuf_old_tim_idx()
     call pbuf_get_field(pbuf, ast_idx, ast, start=(/1,1,itim_old/), kount=(/pcols,pver,1/))
 
     rho(:,:) = 0._r8
-
     do k = top_lev, pver
        do i = 1, ncol
-          rho(i,k) = pmid(i,k)/(rair*t(i,k))
+          rho(i,k) = state%pmid(i,k)/(rair*state%t(i,k))
        end do
     end do
 
@@ -439,7 +445,7 @@ contains
     tot_na500                  = 0._r8
 
     !Get estimate of number of aerosols inside clouds
-    call calculateNumberConcentration(ncol, aer_cb, rho, CloudnumberConcentration)
+    call calculateNumberConcentration(ncol, aer_cb(:,:,:,lchnk), rho, CloudnumberConcentration)
     call calculateNumberMedianRadius(numberConcentration, volumeConcentration, lnSigma, numberMedianRadius, ncol)
     !End estimate of number inside clouds
 
@@ -459,32 +465,32 @@ contains
        end do
     end do
 
-    call outfld('bc_num',        total_aer_num(:,:,1),    pcols, lchnk)
-    call outfld('dst1_num',      total_aer_num(:,:,2),    pcols, lchnk)
-    call outfld('dst3_num',      total_aer_num(:,:,3),    pcols, lchnk)
+    call outfld('bc_num',        total_aer_num(:ncol,:,1),    ncol, lchnk)
+    call outfld('dst1_num',      total_aer_num(:ncol,:,2),    ncol, lchnk)
+    call outfld('dst3_num',      total_aer_num(:ncol,:,3),    ncol, lchnk)
 
-    call outfld('bcc_num',       coated_aer_num(:,:,1),   pcols, lchnk)
-    call outfld('dst1c_num',     coated_aer_num(:,:,2),   pcols, lchnk)
-    call outfld('dst3c_num',     coated_aer_num(:,:,3),   pcols, lchnk)
+    call outfld('bcc_num',       coated_aer_num(:ncol,:,1),   ncol, lchnk)
+    call outfld('dst1c_num',     coated_aer_num(:ncol,:,2),   ncol, lchnk)
+    call outfld('dst3c_num',     coated_aer_num(:ncol,:,3),   ncol, lchnk)
 
-    call outfld('bcuc_num',      uncoated_aer_num(:,:,1), pcols, lchnk)
-    call outfld('dst1uc_num',    uncoated_aer_num(:,:,2), pcols, lchnk)
-    call outfld('dst3uc_num',    uncoated_aer_num(:,:,3), pcols, lchnk)
+    call outfld('bcuc_num',      uncoated_aer_num(:ncol,:,1), ncol, lchnk)
+    call outfld('dst1uc_num',    uncoated_aer_num(:ncol,:,2), ncol, lchnk)
+    call outfld('dst3uc_num',    uncoated_aer_num(:ncol,:,3), ncol, lchnk)
 
-    call outfld('bc_a1_num',     total_interstitial_aer_num(:,:,1), pcols, lchnk)
-    call outfld('dst_a1_num',    total_interstitial_aer_num(:,:,2), pcols, lchnk)
-    call outfld('dst_a3_num',    total_interstitial_aer_num(:,:,3), pcols, lchnk)
+    call outfld('bc_a1_num',     total_interstitial_aer_num(:ncol,:,1), ncol, lchnk)
+    call outfld('dst_a1_num',    total_interstitial_aer_num(:ncol,:,2), ncol, lchnk)
+    call outfld('dst_a3_num',    total_interstitial_aer_num(:ncol,:,3), ncol, lchnk)
 
-    call outfld('bc_c1_num',     total_cloudborne_aer_num(:,:,1),   pcols, lchnk)
-    call outfld('dst_c1_num',    total_cloudborne_aer_num(:,:,2),   pcols, lchnk)
-    call outfld('dst_c3_num',    total_cloudborne_aer_num(:,:,3),   pcols, lchnk)
+    call outfld('bc_c1_num',     total_cloudborne_aer_num(:ncol,:,1),   ncol, lchnk)
+    call outfld('dst_c1_num',    total_cloudborne_aer_num(:ncol,:,2),   ncol, lchnk)
+    call outfld('dst_c3_num',    total_cloudborne_aer_num(:ncol,:,3),   ncol, lchnk)
 
-    call outfld('fn_bc_c1_num',  fn_cloudborne_aer_num(:,:,1),      pcols, lchnk)
-    call outfld('fn_dst_c1_num', fn_cloudborne_aer_num(:,:,2),      pcols, lchnk)
-    call outfld('fn_dst_c3_num', fn_cloudborne_aer_num(:,:,3),      pcols, lchnk)
+    call outfld('fn_bc_c1_num',  fn_cloudborne_aer_num(:ncol,:,1),      ncol, lchnk)
+    call outfld('fn_dst_c1_num', fn_cloudborne_aer_num(:ncol,:,2),      ncol, lchnk)
+    call outfld('fn_dst_c3_num', fn_cloudborne_aer_num(:ncol,:,3),      ncol, lchnk)
 
-    call outfld('na500',         na500,     pcols, lchnk)
-    call outfld('totna500',      tot_na500, pcols, lchnk)
+    call outfld('na500',         na500(:ncol,:),     ncol, lchnk)
+    call outfld('totna500',      tot_na500(:ncol,:), ncol, lchnk)
 
     ! frzimm, frzcnt, frzdep are the outputs of this parameterization used by the microphysics
     call pbuf_get_field(pbuf, frzimm_idx, frzimm)
@@ -530,20 +536,20 @@ contains
     do i = 1, ncol
        do k = top_lev, pver
 
-          if (t(i,k) > 235.15_r8 .and. t(i,k) < 269.15_r8) then
-             qcic = min(qc(i,k)/lcldm(i,k), 5.e-3_r8)
-             ncic = max(nc(i,k)/lcldm(i,k), 0._r8)
+          if (state%t(i,k) > 235.15_r8 .and. state%t(i,k) < 269.15_r8) then
+             qcic = min(state%q(i,k,cldliq_idx)/lcldm(i,k), 5.e-3_r8)
+             ncic = max(state%q(i,i,numliq_idx)/lcldm(i,k), 0._r8)
 
              con1 = 1._r8/(1.333_r8*pi)**0.333_r8
              r3lx = con1*(rho(i,k)*qcic/(rhoh2o*max(ncic*rho(i,k), 1.0e6_r8)))**0.333_r8 ! in m
              r3lx = max(4.e-6_r8, r3lx)
-             supersatice = svp_water(t(i,k))/svp_ice(t(i,k))
+             supersatice = svp_water(state%t(i,k))/svp_ice(state%t(i,k))
              fn(1) = factnum(i,k,MODE_IDX_OMBC_INTMIX_COAT_AIT)  ! bc accumulation mode
              fn(2) = factnum(i,k,MODE_IDX_DST_A2)                ! dust_a1 accumulation mode
              fn(3) = factnum(i,k,MODE_IDX_DST_A3)                ! dust_a3 coarse mode
 
              call hetfrz_classnuc_calc( &
-                  deltatin,  t(i,k),  pmid(i,k),  supersatice,   &
+                  deltatin,  state%t(i,k),  state%pmid(i,k),  supersatice,   &
                   fn,  r3lx,  ncic*rho(i,k)*1.0e-6_r8,  frzbcimm(i,k),  frzduimm(i,k),   &
                   frzbccnt(i,k),  frzducnt(i,k),  frzbcdep(i,k),  frzdudep(i,k),  hetraer(i,k,:), &
                   awcam(i,k,:), awfacm(i,k,:), dstcoat(i,k,:), total_aer_num(i,k,:),  &
@@ -588,36 +594,34 @@ contains
        end do
     end do
 
-    call outfld('FREQIMM', freqimm, pcols, lchnk)
-    call outfld('FREQCNT', freqcnt, pcols, lchnk)
-    call outfld('FREQDEP', freqdep, pcols, lchnk)
-    call outfld('FREQMIX', freqmix, pcols, lchnk)
+    call outfld('FREQIMM', freqimm(:ncol,:), ncol, lchnk)
+    call outfld('FREQCNT', freqcnt(:ncol,:), ncol, lchnk)
+    call outfld('FREQDEP', freqdep(:ncol,:), ncol, lchnk)
+    call outfld('FREQMIX', freqmix(:ncol,:), ncol, lchnk)
 
-    call outfld('DSTFREZIMM', nnuccc_dst, pcols, lchnk)
-    call outfld('DSTFREZCNT', nnucct_dst, pcols, lchnk)
-    call outfld('DSTFREZDEP', nnudep_dst, pcols, lchnk)
+    call outfld('DSTFREZIMM', nnuccc_dst(:ncol,:), ncol, lchnk)
+    call outfld('DSTFREZCNT', nnucct_dst(:ncol,:), ncol, lchnk)
+    call outfld('DSTFREZDEP', nnudep_dst(:ncol,:), ncol, lchnk)
 
-    call outfld('BCFREZIMM', nnuccc_bc, pcols, lchnk)
-    call outfld('BCFREZCNT', nnucct_bc, pcols, lchnk)
-    call outfld('BCFREZDEP', nnudep_bc, pcols, lchnk)
+    call outfld('BCFREZIMM', nnuccc_bc(:ncol,:), ncol, lchnk)
+    call outfld('BCFREZCNT', nnucct_bc(:ncol,:), ncol, lchnk)
+    call outfld('BCFREZDEP', nnudep_bc(:ncol,:), ncol, lchnk)
 
-    call outfld('NIMIX_IMM', niimm_bc+niimm_dst, pcols, lchnk)
-    call outfld('NIMIX_CNT', nicnt_bc+nicnt_dst, pcols, lchnk)
-    call outfld('NIMIX_DEP', nidep_bc+nidep_dst, pcols, lchnk)
+    call outfld('NIMIX_IMM', niimm_bc+niimm_dst(:ncol,:), ncol, lchnk)
+    call outfld('NIMIX_CNT', nicnt_bc+nicnt_dst(:ncol,:), ncol, lchnk)
+    call outfld('NIMIX_DEP', nidep_bc+nidep_dst(:ncol,:), ncol, lchnk)
 
-    call outfld('DSTNICNT', nicnt_dst, pcols, lchnk)
-    call outfld('DSTNIDEP', nidep_dst, pcols, lchnk)
-    call outfld('DSTNIIMM', niimm_dst, pcols, lchnk)
+    call outfld('DSTNICNT', nicnt_dst(:ncol,:), ncol, lchnk)
+    call outfld('DSTNIDEP', nidep_dst(:ncol,:), ncol, lchnk)
+    call outfld('DSTNIIMM', niimm_dst(:ncol,:), ncol, lchnk)
 
-    call outfld('BCNICNT', nicnt_bc, pcols, lchnk)
-    call outfld('BCNIDEP', nidep_bc, pcols, lchnk)
-    call outfld('BCNIIMM', niimm_bc, pcols, lchnk)
+    call outfld('BCNICNT', nicnt_bc(:ncol,:), ncol, lchnk)
+    call outfld('BCNIDEP', nidep_bc(:ncol,:), ncol, lchnk)
+    call outfld('BCNIIMM', niimm_bc(:ncol,:), ncol, lchnk)
 
-    call outfld('NUMICE10s', numice10s, pcols, lchnk)
-    call outfld('NUMIMM10sDST', numice10s_imm_dst, pcols, lchnk)
-    call outfld('NUMIMM10sBC', numice10s_imm_bc, pcols, lchnk)
-
-    end associate
+    call outfld('NUMICE10s',            numice10s(:ncol,:), ncol, lchnk)
+    call outfld('NUMIMM10sDST', numice10s_imm_dst(:ncol,:), ncol, lchnk)
+    call outfld('NUMIMM10sBC',   numice10s_imm_bc(:ncol,:), ncol, lchnk)
 
   end subroutine hetfrz_classnuc_oslo_calc
 

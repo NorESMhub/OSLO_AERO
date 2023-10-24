@@ -24,7 +24,7 @@ module oslo_aero_ndrop
   use oslo_aero_utils,   only: calculateNumberMedianRadius
   use oslo_aero_share,   only: getNumberOfTracersInMode, getNumberOfAerosolTracers, getTracerIndex
   use oslo_aero_share,   only: getCloudTracerName, getCloudTracerIndex, getConstituentFraction
-  use oslo_aero_share,   only: fillAerosolTracerList, fillInverseAerosolTracerList 
+  use oslo_aero_share,   only: fillAerosolTracerList, fillInverseAerosolTracerList
   use oslo_aero_params,  only: nmodes, nbmodes
   use oslo_aero_const,   only: smallNumber
 
@@ -132,9 +132,7 @@ contains
     alog2    = log(2._r8)
     alog3    = log(3._r8)
 
-    ! get info about the modal aerosols
-    ! get ntot_amode
-    ! TODO: make these local variables and don't allocate
+    ! get info about the modal aerosols, get ntot_amode
     ntot_amode = nmodes
     allocate( &
          nspec_amode(ntot_amode),  &
@@ -553,15 +551,15 @@ contains
        write(modeString,"(I2)"),n
        if(n .lt. 10) modeString="0"//adjustl(modeString)
        varName = "NMR"//trim(modeString)
-       call outfld(varName, numberMedianRadius(:,:,n), pcols, lchnk)
+       call outfld(varName, numberMedianRadius(:ncol,:,n), ncol, lchnk)
        varName = "NCONC"//trim(modeString)
-       call outfld(varName, numberConcentration(:,:,n),pcols, lchnk)
+       call outfld(varName, numberConcentration(:ncol,:,n),ncol, lchnk)
        varName = "VCONC"//trim(modeString)
-       call outfld(varName, volumeConcentration(:,:,n), pcols,lchnk)
+       call outfld(varName, volumeConcentration(:ncol,:,n), ncol,lchnk)
        varName = "SIGMA"//trim(modeString)
-       call outfld(varName, sigma(:,:,n), pcols,lchnk)
+       call outfld(varName, sigma(:ncol,:,n), ncol,lchnk)
        varName = "HYGRO"//trim(modeString)
-       call outfld(varName, hygroscopicity(:,:,n), pcols,lchnk)
+       call outfld(varName, hygroscopicity(:ncol,:,n), ncol,lchnk)
     end do
 
     alert = .FALSE.
@@ -572,7 +570,7 @@ contains
                ANY(numberConcentration(:ncol,k,m) .lt. 0.0_r8 ))then
              alert = .TRUE.
              lptr = k
-             print*,"STRANGE numberconc", m, minval(numberConcentration(:,:,:))*1.e-6_r8, "#/cm3", k, mm
+             print*,"STRANGE numberconc", m, minval(numberConcentration(:ncol,:,:))*1.e-6_r8, "#/cm3", k, mm
           endif
        enddo
     enddo
@@ -1403,16 +1401,16 @@ contains
 
     ! end of main loop over i/longitude ....................................
 
-    call outfld('NDROPCOL', ndropcol, pcols, lchnk)
-    call outfld('NDROPSRC', nsource,  pcols, lchnk)
-    call outfld('NDROPMIX', ndropmix, pcols, lchnk)
-    call outfld('WTKE    ', wtke,     pcols, lchnk)
+    call outfld('NDROPCOL', ndropcol(:ncol),   ncol, lchnk)
+    call outfld('NDROPSRC', nsource(:ncol,:),  ncol, lchnk)
+    call outfld('NDROPMIX', ndropmix(:ncol,:), ncol, lchnk)
+    call outfld('WTKE    ', wtke(:ncol,:),     ncol, lchnk)
 
     if (history_aerosol) then
        call ccncalc_oslo(state, pbuf, cs, hasAerosol, numberConcentration, volumeConcentration, &
             hygroscopicity, lnSigma, ccn)
        do l = 1, psat
-          call outfld(ccn_name(l), ccn(1,1,l), pcols, lchnk)
+          call outfld(ccn_name(l), ccn(1,1,l), ncol, lchnk)
        enddo
     end if
 
@@ -1422,8 +1420,8 @@ contains
           mm = mam_idx(m,l)
           lptr = getTracerIndex(m,l,.false.)
           if(.NOT. tendencyCounted(lptr))then
-             call outfld(fieldname(mm), coltend(:,lptr), pcols,lchnk)
-             call outfld(fieldname_cw(mm), coltend_cw(:,lptr), pcols,lchnk)
+             call outfld(fieldname(mm), coltend(:ncol,lptr), ncol, lchnk)
+             call outfld(fieldname_cw(mm), coltend_cw(:ncol,lptr), ncol, lchnk)
              tendencyCounted(lptr)=.TRUE.
           endif
        end do

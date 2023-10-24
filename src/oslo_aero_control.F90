@@ -4,10 +4,13 @@ module oslo_aero_control
   ! Provides a control interface to CAM-Oslo packages
   !-----------------------------------------------------------------------
 
-  use shr_kind_mod,    only: r8 => shr_kind_r8
-  use spmd_utils,      only: masterproc
-  use cam_logfile,     only: iulog
-  use cam_abortutils,  only: endrun
+  use shr_kind_mod,      only: r8 => shr_kind_r8
+  use spmd_utils,        only: mpicom, mstrid=>masterprocid, masterproc
+  use spmd_utils,        only: mpi_logical, mpi_real8, mpi_character, mpi_integer,  mpi_success
+  use namelist_utils,    only: find_group_name
+  use cam_logfile,       only: iulog
+  use cam_abortutils,    only: endrun
+  use atm_import_export, only: dms_from_ocn
 
   implicit none
   private
@@ -34,27 +37,23 @@ module oslo_aero_control
   integer                          :: dms_cycle_year   = 0 ! =unset_int?
   integer                          :: opom_cycle_year  = 0 ! =unset_int?
 
-!======================================================================= 
+!=======================================================================
 contains
-!======================================================================= 
+!=======================================================================
 
   subroutine oslo_aero_ctl_readnl(nlfile)
-
-    use namelist_utils,  only: find_group_name
-    use mpishorthand
 
     ! arguments
     character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
     ! local variables
     integer :: unitn, ierr
+    logical :: fileExists=.false.
     character(len=*), parameter :: subname = 'oslo_ctl_readnl'
-    logical                     :: dirExists=.FALSE.
-    logical                     :: fileExists=.FALSE.
 
     namelist /oslo_ctl_nl/ volc_fraction_coarse, aerotab_table_dir, dms_source, &
                            dms_source_type, opom_source, opom_source_type, &
-                           ocean_filename, ocean_filepath, dms_cycle_year, opom_cycle_year     
+                           ocean_filename, ocean_filepath, dms_cycle_year, opom_cycle_year
     !-----------------------------------------------------------------------------
 
     if (masterproc) then
@@ -68,68 +67,68 @@ contains
        end if
        close(unitn)
     end if
-#ifdef SPMD
+
     ! Broadcast namelist variables
-    call mpibcast(volc_fraction_coarse, 1 , mpir8, 0, mpicom)
-    call mpibcast(aerotab_table_dir, len(aerotab_table_dir) , mpichar, 0, mpicom)
+    call mpi_bcast(volc_fraction_coarse, 1 , mpi_real8, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: volc_fraction_coarse")
+    call mpi_bcast(aerotab_table_dir, len(aerotab_table_dir) , mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: aerotab_table_dir")
 
     ! dms variables
-    call mpibcast(dms_source, len(dms_source), mpichar, 0, mpicom)
-    call mpibcast(dms_source_type, len(dms_source_type)   , mpichar, 0, mpicom)
-    call mpibcast(dms_cycle_year, 1 , mpiint, 0, mpicom)
+    call mpi_bcast(dms_source, len(dms_source), mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: dms_source")
+    call mpi_bcast(dms_source_type, len(dms_source_type), mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: dms_source_type")
+    call mpi_bcast(dms_cycle_year, 1, mpi_integer, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: dms_cycle_year")
 
     ! opom variables
-    call mpibcast(opom_source, len(opom_source), mpichar, 0, mpicom)
-    call mpibcast(opom_source_type, len(opom_source_type), mpichar, 0, mpicom)
-    call mpibcast(opom_cycle_year, 1, mpiint, 0, mpicom)
+    call mpi_bcast(opom_source, len(opom_source), mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: opom_source")
+    call mpi_bcast(opom_source_type, len(opom_source_type), mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: opom_source_type")
+    call mpi_bcast(opom_cycle_year, 1, mpi_integer, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: opom_cycle_year")
 
     ! ocean variables
-    call mpibcast(ocean_filename, len(ocean_filename), mpichar, 0, mpicom)
-    call mpibcast(ocean_filepath, len(ocean_filepath), mpichar, 0, mpicom)
-#endif
+    call mpi_bcast(ocean_filename, len(ocean_filename), mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: ocean_filename")
+    call mpi_bcast(ocean_filepath, len(ocean_filepath), mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: ocean_filepath")
+
+    ! Reset dms_source if ocean is sending dms to atm
+    if (dms_from_ocn) then
+       dms_source = 'ocean_flux'
+    end if
 
     ! Error checking:
 
     ! Defaults for PBL and microphysics are set in build-namelist.  Check here that
     ! values have been set to guard against problems with hand edited namelists.
-    if(volc_fraction_coarse .lt. 0.0_r8 .OR. volc_fraction_coarse .gt. 1.0_r8)then
+    if(volc_fraction_coarse < 0.0_r8 .OR. volc_fraction_coarse > 1.0_r8)then
        write(iulog,*)'cam_oslo: illegal value of volc_fraction_coarse', volc_fraction_coarse
        call endrun('cam_oslo: illegal value of volc_fraction_coarse')
     end if
 
-#if defined CPRGNU || defined __GFORTRAN__
-    inquire( file=trim(aerotab_table_dir), exist=dirExists ) 
-#elif defined CPRINTEL
-    inquire( directory=trim(aerotab_table_dir), exist=dirExists )
-#else
-    !Don't know how to check this on other compilres.. Assume exists
-    !and let crash later..
-    dirExists = .true.
-#endif
-    if(.not. dirExists)then
-       call endrun("cam_oslo: can not find aerotab table directory "//trim(aerotab_table_dir))
-    else
+    if (masterproc) then
        write(iulog,*)"Reading aerosol tables from : " // trim(aerotab_table_dir)
     endif
 
     ! Error check for OCEAN file
-    ! can ocean file be found?
     inquire( file=trim(ocean_filepath)//'/'//trim(ocean_filename), exist=fileExists )
     if(.not. fileExists)then
        call endrun("oslo_aero_control: can not find ocean file "//trim(ocean_filepath)//'/'//trim(ocean_filename))
     else
-       write(iulog,*)"Reading ocean tracers from : " // trim(ocean_filepath)//'/'//trim(ocean_filename)
+       if (masterproc) then
+          write(iulog,*)"Reading ocean tracers from : " // trim(ocean_filepath)//'/'//trim(ocean_filename)
+       end if
     endif
 
     ! Error check for dms_source from namelist
-    if (dms_source=='ocean_flux')then
-       ! TODO: need to reimplement this so that index_x2a_Faoo_fdms is not used - this is only valid for mct
-       ! if (index_x2a_Faoo_fdms_ocn == 0) then
-       !    call endrun("cam_oslo: dms source set to "//trim(dms_source)//" but bgc is off")
-       ! else
-       !    write(iulog,*)"DMS emission source is : "// trim(dms_source)
-       ! endif
-    elseif (dms_source=='kettle' .or.  dms_source=='lana' .or. dms_source=='emission_file')then
+    if ( dms_source =='ocean_flux' .or. &
+         dms_source =='kettle'     .or. &
+         dms_source =='lana'       .or. &
+         dms_source =='emission_file') then
        if (masterproc) then
           write(iulog,*)"DMS emission source is : "// trim(dms_source)
        end if
@@ -138,8 +137,12 @@ contains
     endif
 
     ! Error check for opom_source from namelist
-    if(opom_source=='no_file' .or. opom_source=='nilsson' .or. opom_source=='odowd')then
-       write(iulog,*)"Ocean POM emission source is : "// trim(opom_source)
+    if ( opom_source=='no_file' .or. &
+         opom_source=='nilsson' .or. &
+         opom_source=='odowd') then
+       if (masterproc) then
+          write(iulog,*)"Ocean POM emission source is : "// trim(opom_source)
+       end if
     else
        call endrun("oslo_aero_control: no valid opom source from namelist: " //trim(opom_source))
     endif
@@ -163,20 +166,20 @@ contains
     ! Purpose: Return runtime settings
     !-----------------------------------------------------------------------
 
-    real(r8)                         , intent(out), optional :: volc_fraction_coarse_out 
-    character(len=dir_string_length) , intent(out), optional :: aerotab_table_dir_out
-    character(len=dir_string_length) , intent(out), optional :: ocean_filename_out
-    character(len=dir_string_length) , intent(out), optional :: ocean_filepath_out
-    character(len=20)                , intent(out), optional :: dms_source_out
-    character(len=32)                , intent(out), optional :: dms_source_type_out
-    integer                          , intent(out), optional :: dms_cycle_year_out
-    character(len=20)                , intent(out), optional :: opom_source_out
-    character(len=32)                , intent(out), optional :: opom_source_type_out
-    integer                          , intent(out), optional :: opom_cycle_year_out
+    real(r8)         , intent(out), optional :: volc_fraction_coarse_out
+    character(len=*) , intent(out), optional :: aerotab_table_dir_out
+    character(len=*) , intent(out), optional :: ocean_filename_out
+    character(len=*) , intent(out), optional :: ocean_filepath_out
+    character(len=*) , intent(out), optional :: dms_source_out
+    character(len=*) , intent(out), optional :: dms_source_type_out
+    integer          , intent(out), optional :: dms_cycle_year_out
+    character(len=*) , intent(out), optional :: opom_source_out
+    character(len=*) , intent(out), optional :: opom_source_type_out
+    integer          , intent(out), optional :: opom_cycle_year_out
 
     if ( present(volc_fraction_coarse_out ) ) volc_fraction_coarse_out = volc_fraction_coarse
     if ( present(aerotab_table_dir_out    ) ) aerotab_table_dir_out = aerotab_table_dir
-    if ( present(ocean_filename_out       ) ) ocean_filename_out  = ocean_filename 
+    if ( present(ocean_filename_out       ) ) ocean_filename_out  = ocean_filename
     if ( present(ocean_filepath_out       ) ) ocean_filepath_out  = ocean_filepath
     if ( present(dms_source_out           ) ) dms_source_out      = dms_source
     if ( present(dms_source_type_out      ) ) dms_source_type_out = dms_source_type
