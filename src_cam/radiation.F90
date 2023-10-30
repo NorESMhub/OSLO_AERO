@@ -45,7 +45,7 @@ module radiation
 #ifdef OSLO_AERO
   use prescribed_volcaero,      only: has_prescribed_volcaero, has_prescribed_volcaero_cmip6, solar_bands, terrestrial_bands
   use oslo_aero_optical_params, only: oslo_aero_optical_params_calc
-  use oslo_aero_params,         only: nmodes, nbmodes
+  use oslo_aero_params,         only: nmodes_oslo=> nmodes, nbmodes
 #endif
 
   implicit none
@@ -864,7 +864,7 @@ contains
     real(r8) :: clearod440(pcols),clearod550(pcols),clearod870(pcols),clearabs550(pcols),clearabs550alt(pcols)
 #endif
     real(r8) :: ftem_1d(pcols)                        ! work-array to avoid NAN and pcols/ncol confusion
-    real(r8) :: Nnatk(pcols,pver,0:nmodes)            ! Modal aerosol number concentration
+    real(r8) :: Nnatk(pcols,pver,0:nmodes_oslo)       ! Modal aerosol number concentration
     real(r8) :: batotlw(pcols,pver,nlwbands)          ! spectral aerosol absportion extinction in LW
     real(r8) :: rhoda(pcols,pver)                     ! air mass density, unit kg/m^3
     real(r8) :: pmxrgnrf(pcols,pverp)                 ! temporary copy of pmxrgn
