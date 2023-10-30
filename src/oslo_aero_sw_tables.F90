@@ -39,7 +39,7 @@ module oslo_aero_sw_tables
   use shr_kind_mod            , only: r8 => shr_kind_r8
   use ppgrid                  , only: pcols, pver
   use cam_logfile             , only: iulog
-  !
+  use spmd_utils              , only: masterproc
   use oslo_aero_control       , only: oslo_aero_getopts, dir_string_length
   use oslo_aero_linear_interp , only: lininterpol3dim, lininterpol4dim, lininterpol5dim
   use oslo_aero_params        , only: nmodes, nbmodes, nbands, nlwbands
@@ -240,8 +240,9 @@ contains
        endif
     enddo
 
-    write(iulog,*)'mode 0 ok'
-
+    if (masterproc) then
+       write(iulog,*)'kcompN tables: mode 0 ok'
+    end if
 
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
     ! Mode 1 (H2SO4 and SOA + condesate from H2SO4 and SOA)
@@ -305,9 +306,9 @@ contains
           enddo
        enddo
     enddo
-
-    write(iulog,*)'mode 1 ok'
-
+    if (masterproc) then
+       write(iulog,*)'kcompN tables: mode 1 ok'
+    end if
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
     ! Modes 2 to 3 (BC/OC + condensate from H2SO4 and SOA)
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
@@ -374,7 +375,9 @@ contains
        enddo
     enddo
 
-    write(iulog,*)'modes 2-3 ok'
+    if (masterproc) then
+       write(iulog,*)'kcompN tables: modes 2-3 ok'
+    end if
 
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
     ! Mode 4 (BC&OC + condensate from H2SO4 and SOA + wet phase (NH4)2SO4)
@@ -447,7 +450,9 @@ contains
        enddo
     enddo
 
-    write(iulog,*)'mode 4 ok'
+    if (masterproc) then
+       write(iulog,*)'kcompN tables: mode 4 ok'
+    end if
 
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
     ! Modes 5 to 10 (SO4(Ait75) and mineral and seasalt-modes + cond./coag./aq.)
@@ -523,7 +528,9 @@ contains
        enddo
     enddo
 
-    write(iulog,*)'modes 5-10 ok'
+    if (masterproc) then
+       write(iulog,*)'kcompN tables: modes 5-10 ok'
+    end if
 
     do ifil=40,50
        close (ifil)
