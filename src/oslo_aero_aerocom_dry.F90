@@ -2,6 +2,11 @@ module oslo_aero_aerocom_dry
 
 #ifdef AEROCOM
 
+  ! modal mass concentrations (cint), area (aaero) and volume (vaero)
+  ! (for AeroCom determination of particle effective radii) of each constituent.
+  ! cint*05 and cint*125 are for r<0.5um and r>1.25um, respectively.
+  ! aaeros and vaeros are integrated over r<0.5um, and aaerol and vaerol over r>0.5um.
+
   use shr_kind_mod            , only: r8 => shr_kind_r8
   use ppgrid                  , only: pcols, pver
   use cam_logfile             , only: iulog
@@ -16,70 +21,28 @@ module oslo_aero_aerocom_dry
   implicit none
   private
 
-  ! Set by aerocom_init_dryp Mode0
+  public :: aerocom_init_dryp
+  public :: intdrypar0
+  public :: intdrypar1
+  public :: intdrypar2to3
+  public :: intdrypar4
+  public :: intdrypar5to10
+
+  ! Set by Mode0
   real(r8) :: a0cintbg, a0cintbg05, a0cintbg125
   real(r8) :: a0aaeros, a0aaerol, a0vaeros, a0vaerol
 
-  ! Used by aerocom_init_dryp Mode1
+  ! Set by Mode1
   real(r8) :: a1var(19,6,16,6)
 
-  ! Used by aerocom_init_dryp Mode2to3
+  ! Set by Mode2to3
   real(r8) :: a2to3var(19,16,6,2:3)
 
-  ! Used by aeromcom_init_dryp Mode4
+  ! Set by Mode4
   real(r8) :: a4var(19,6,16,6,6)
 
-  ! Used by aerocom_init_dryp Mode5
+  ! Set by Mode5to10
   real(r8) :: a5to10var(19,6,6,6,6,5:10)
-
-  type, public :: aerodry_prop_type
-     ! modal mass concentrations (cint), area (aaero) and volume (vaero)
-     ! (for AeroCom determination of particle effective radii) of each constituent.
-     ! cint*05 and cint*125 are for r<0.5um and r>1.25um, respectively.
-     ! aaeros and vaeros are integrated over r<0.5um, and aaerol and vaerol over r>0.5um.
-
-     real(r8) :: cintbg(pcols,pver,0:nbmodes)
-     real(r8) :: cintbg05(pcols,pver,0:nbmodes)
-     real(r8) :: cintbg125(pcols,pver,0:nbmodes)
-     real(r8) :: cintbc(pcols,pver,0:nbmodes)
-     real(r8) :: cintbc05(pcols,pver,0:nbmodes)
-     real(r8) :: cintbc125(pcols,pver,0:nbmodes)
-     real(r8) :: cintoc(pcols,pver,0:nbmodes)
-     real(r8) :: cintoc05(pcols,pver,0:nbmodes)
-     real(r8) :: cintoc125(pcols,pver,0:nbmodes)
-     real(r8) :: cintsc(pcols,pver,0:nbmodes)
-     real(r8) :: cintsc05(pcols,pver,0:nbmodes)
-     real(r8) :: cintsc125(pcols,pver,0:nbmodes)
-     real(r8) :: cintsa(pcols,pver,0:nbmodes)
-     real(r8) :: cintsa05(pcols,pver,0:nbmodes)
-     real(r8) :: cintsa125(pcols,pver,0:nbmodes)
-     real(r8) :: aaeros(pcols,pver,0:nbmodes)
-     real(r8) :: aaerol(pcols,pver,0:nbmodes)
-     real(r8) :: vaeros(pcols,pver,0:nbmodes)
-     real(r8) :: vaerol(pcols,pver,0:nbmodes)
-
-     real(r8) :: aaerosn(pcols,pver,nbmp1:nmodes)
-     real(r8) :: aaeroln(pcols,pver,nbmp1:nmodes)
-     real(r8) :: vaerosn(pcols,pver,nbmp1:nmodes)
-     real(r8) :: vaeroln(pcols,pver,nbmp1:nmodes)
-     real(r8) :: cknorm(pcols,pver,0:nmodes)
-     real(r8) :: cknlt05(pcols,pver,0:nmodes)
-     real(r8) :: ckngt125(pcols,pver,0:nmodes)
-
-   contains
-     procedure :: intdrypar0
-     procedure :: intdrypar1
-     procedure :: intdrypar2to3
-     procedure :: intdrypar4
-     procedure :: intdrypar5to10
-     procedure :: zero
-     procedure :: update
-
-  end type aerodry_prop_type
-
-  type(aerodry_prop_type), public :: aerodry_prop
-
-  public :: aerocom_init_dryp
 
 ! ==========================================================
 contains
@@ -143,9 +106,9 @@ contains
     ! no ictot-, ifac-, ifbc- or ifaq-dependency for this mode,
     ! since BC(ax) is purely externally mixed
 
-    a0cintbg=cintbg
-    a0cintbg05=cintbg05
-    a0cintbg125=cintbg125
+    a0cintbg    = cintbg
+    a0cintbg05  = cintbg05
+    a0cintbg125 = cintbg125
 
     a0aaeros=aaeros
     a0aaerol=aaerol
@@ -479,56 +442,141 @@ contains
 
   end subroutine aerocom_init_dryp
 
-  ! ==========================================================
-  subroutine intdrypar0 (this, ncol, Nnatk)
+  !===============================================================================
+  subroutine intdrypar0 (                                           &
+       lchnk, ncol, Nnatk,                                          &
+       cintbg, cintbg05, cintbg125, cintbc, cintbc05, cintbc125,    &
+       cintoc, cintoc05, cintoc125, cintsc, cintsc05, cintsc125,    &
+       cintsa, cintsa05, cintsa125, aaeros, aaerol, vaeros, vaerol, &
+       cknorm,cknlt05,ckngt125)
 
-    ! arguments
-    class (aerodry_prop_type):: this
-    integer  , intent(in)    :: ncol                       ! number of atmospheric columns
-    real(r8) , intent(in)    :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration 
+    ! Modal mass concentrations (cint), area (aaero) and volume (vaero)
+    ! (for AeroCom determination of particle effective radii) of each constituent. cint*05
+    ! and cint*125 are  for r<0.5um and r>1.25um, respectively. aaeros and vaeros are
+    ! integrated over r<0.5um, and aaerol and vaerol over r>0.5um.
 
-    ! local variables
-    real(r8) :: a, b, e, eps
+    ! Arguments
+    integer , intent(in)    :: lchnk                      ! chunk identifier
+    integer , intent(in)    :: ncol                       ! number of atmospheric columns
+    real(r8), intent(in)    :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8), intent(inout) :: cknorm(pcols,pver,0:nmodes)
+    real(r8), intent(inout) :: cknlt05(pcols,pver,0:nmodes)
+    real(r8), intent(inout) :: ckngt125(pcols,pver,0:nmodes)
+    real(r8), intent(out)   :: cintbg(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbg05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbg125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: aaeros(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: aaerol(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: vaeros(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: vaerol(pcols,pver,0:nbmodes)
+
+    ! Local variables
     integer  :: i, ierr, kcomp, k, icol
-    parameter (eps=1.0e-60_r8)
-    !-----------------------------------------------------------
+    real(r8) :: a, b, e
+    real(r8), parameter :: eps=1.0e-60_r8
+    !-------------------------------------------------------------------------
 
     ! Mode 0, BC(ax):
     kcomp=0
-    call aerodry_prop%zero(kcomp,ncol)
+
+    ! initialize output fields
     do k=1,pver
        do icol=1,ncol
-          if(Nnatk(icol,k,kcomp) > 0.0_r8) then
-             this%cintbg(icol,k,kcomp)    = a0cintbg
-             this%cintbg05(icol,k,kcomp)  = a0cintbg05
-             this%cintbg125(icol,k,kcomp) = a0cintbg125
-             this%cintbc(icol,k,kcomp)    = eps
-             this%cintbc05(icol,k,kcomp)  = eps
-             this%cintbc125(icol,k,kcomp) = eps
-             this%cintoc(icol,k,kcomp)    = eps
-             this%cintoc05(icol,k,kcomp)  = eps
-             this%cintoc125(icol,k,kcomp) = eps
-             this%cintsc(icol,k,kcomp)    = eps
-             this%cintsc05(icol,k,kcomp)  = eps
-             this%cintsc125(icol,k,kcomp) = eps
-             this%cintsa(icol,k,kcomp)    = eps
-             this%cintsa05(icol,k,kcomp)  = eps
-             this%cintsa125(icol,k,kcomp) = eps
-             this%aaeros(icol,k,kcomp)    = a0aaeros
-             this%aaerol(icol,k,kcomp)    = a0aaerol
-             this%vaeros(icol,k,kcomp)    = a0vaeros
-             this%vaerol(icol,k,kcomp)    = a0vaerol
+          cintbg(icol,k,kcomp)    =0.0_r8
+          cintbg05(icol,k,kcomp)  =0.0_r8
+          cintbg125(icol,k,kcomp) =0.0_r8
+          cintbc(icol,k,kcomp)    =0.0_r8
+          cintbc05(icol,k,kcomp)  =0.0_r8
+          cintbc125(icol,k,kcomp) =0.0_r8
+          cintoc(icol,k,kcomp)    =0.0_r8
+          cintoc05(icol,k,kcomp)  =0.0_r8
+          cintoc125(icol,k,kcomp) =0.0_r8
+          cintsc(icol,k,kcomp)    =0.0_r8
+          cintsc05(icol,k,kcomp)  =0.0_r8
+          cintsc125(icol,k,kcomp) =0.0_r8
+          cintsa(icol,k,kcomp)    =0.0_r8
+          cintsa05(icol,k,kcomp)  =0.0_r8
+          cintsa125(icol,k,kcomp) =0.0_r8
+          aaeros(icol,k,kcomp)    =0.0_r8
+          aaerol(icol,k,kcomp)    =0.0_r8
+          vaeros(icol,k,kcomp)    =0.0_r8
+          vaerol(icol,k,kcomp)    =0.0_r8
+       end do
+    end do
+
+    do k=1,pver
+       do icol=1,ncol
+          if(Nnatk(icol,k,kcomp)>0.0_r8) then
+             do i=1,19  ! variable number
+                if(i==1) then
+                   cintbg(icol,k,kcomp)=a0cintbg
+                elseif(i==2) then
+                   cintbg05(icol,k,kcomp)=a0cintbg05
+                elseif(i==3) then
+                   cintbg125(icol,k,kcomp)=a0cintbg125
+                elseif(i==4) then
+                   cintbc(icol,k,kcomp)=eps
+                elseif(i==5) then
+                   cintbc05(icol,k,kcomp)=eps
+                elseif(i==6) then
+                   cintbc125(icol,k,kcomp)=eps
+                elseif(i==7) then
+                   cintoc(icol,k,kcomp)=eps
+                elseif(i==8) then
+                   cintoc05(icol,k,kcomp)=eps
+                elseif(i==9) then
+                   cintoc125(icol,k,kcomp)=eps
+                elseif(i==10) then
+                   cintsc(icol,k,kcomp)=eps
+                elseif(i==11) then
+                   cintsc05(icol,k,kcomp)=eps
+                elseif(i==12) then
+                   cintsc125(icol,k,kcomp)=eps
+                elseif(i==13) then
+                   cintsa(icol,k,kcomp)=eps
+                elseif(i==14) then
+                   cintsa05(icol,k,kcomp)=eps
+                elseif(i==15) then
+                   cintsa125(icol,k,kcomp)=eps
+                elseif(i==16) then
+                   aaeros(icol,k,kcomp)=a0aaeros
+                elseif(i==17) then
+                   aaerol(icol,k,kcomp)=a0aaerol
+                elseif(i==18) then
+                   vaeros(icol,k,kcomp)=a0vaeros
+                elseif(i==19) then
+                   vaerol(icol,k,kcomp)=a0vaerol
+                endif
+             end do ! i=1,19
           endif
-          this%cknorm(icol,k,kcomp)  = a0cintbg
-          this%cknlt05(icol,k,kcomp) = a0cintbg05
-          this%ckngt125(icol,k,kcomp)= a0cintbg125
+
+          cknorm(icol,k,kcomp)  = a0cintbg
+          cknlt05(icol,k,kcomp) = a0cintbg05
+          ckngt125(icol,k,kcomp)= a0cintbg125
        end do ! icol
     end do ! k
 
   end subroutine intdrypar0
 
-  ! ==========================================================
-  subroutine intdrypar1 (this, ncol, Nnatk, xfombg, ifombg1, xct, ict1, xfac, ifac1)
+  !===============================================================================
+  subroutine intdrypar1 (&
+       lchnk, ncol, Nnatk, xfombg, ifombg1, xct, ict1, xfac, ifac1, &
+       cintbg, cintbg05, cintbg125, cintbc, cintbc05, cintbc125,    &
+       cintoc, cintoc05, cintoc125, cintsc, cintsc05, cintsc125,    &
+       cintsa, cintsa05, cintsa125, aaeros, aaerol, vaeros, vaerol, &
+       aaerosn,aaeroln,vaerosn,vaeroln,cknorm,cknlt05,ckngt125)
 
     ! Output arguments: Modal mass concentrations (cint), area (aaero) and volume (vaero)
     ! (for AeroCom determination of particle effective radii) of each constituent. cint*05
@@ -536,39 +584,86 @@ contains
     ! integrated over r<0.5um, and aaerol and vaerol over r>0.5um.
 
     ! Arguments
-    class(aerodry_prop_type) :: this
-    integer, intent(in)   :: ncol                        ! number of atmospheric columns
-    real(r8), intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
-    real(r8), intent(in)  :: xfombg(pcols,pver)         ! SOA/(SOA+H2SO4) for the background mode (1)
-    integer,  intent(in)  :: ifombg1(pcols,pver)
-    real(r8), intent(in)  :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
-    integer,  intent(in)  :: ict1(pcols,pver,nmodes)
-    real(r8), intent(in)  :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
-    integer,  intent(in)  :: ifac1(pcols,pver,nbmodes)
+    integer , intent(in)    :: lchnk                      ! chunk identifier
+    integer , intent(in)    :: ncol                       ! number of atmospheric columns
+    real(r8), intent(in)    :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8), intent(in)    :: xfombg(pcols,pver)         ! SOA/(SOA+H2SO4) for the background mode (1)
+    integer , intent(in)    :: ifombg1(pcols,pver)
+    real(r8), intent(in)    :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
+    integer,  intent(in)    :: ict1(pcols,pver,nmodes)
+    real(r8), intent(in)    :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
+    integer,  intent(in)    :: ifac1(pcols,pver,nbmodes)
+    real(r8), intent(inout) :: aaerosn(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: aaeroln(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: vaerosn(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: vaeroln(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: cknorm(pcols,pver,0:nmodes)
+    real(r8), intent(inout) :: cknlt05(pcols,pver,0:nmodes)
+    real(r8), intent(inout) :: ckngt125(pcols,pver,0:nmodes)
+    real(r8), intent(out)   :: cintbg(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbg05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbg125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: aaeros(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: aaerol(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: vaeros(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: vaerol(pcols,pver,0:nbmodes)
 
     ! Local variables
-    real(r8) :: a, b, e, eps
     integer  :: iv, kcomp, k, icol
     integer  :: t_ifo1, t_ifo2
     integer  :: t_ict1, t_ict2, t_ifc1, t_ifc2
+    real(r8) :: a, b, e
     real(r8) :: t_xct,  t_cat1, t_cat2
     real(r8) :: t_fac1, t_fac2, t_xfac
     real(r8) :: t_fombg1, t_fombg2, t_xfombg, t_xfombgn
     real(r8) :: d2mx(3), dxm1(3), invd(3)
     real(r8) :: opt3d(2,2,2)
     real(r8) :: opt1, opt2, opt
-    parameter (e=2.718281828_r8, eps=1.0e-60_r8)
+    !-------------------------------------------------------------------------
 
-    !---------------------
     ! Mode 1, SO4(Ait):
-    !---------------------
     kcomp=1
-    call this%zero(kcomp,ncol)
+
+    ! initialize output fields
+    do k=1,pver
+       do icol=1,ncol
+          cintbg(icol,k,kcomp)    =0.0_r8
+          cintbg05(icol,k,kcomp)  =0.0_r8
+          cintbg125(icol,k,kcomp) =0.0_r8
+          cintbc(icol,k,kcomp)    =0.0_r8
+          cintbc05(icol,k,kcomp)  =0.0_r8
+          cintbc125(icol,k,kcomp) =0.0_r8
+          cintoc(icol,k,kcomp)    =0.0_r8
+          cintoc05(icol,k,kcomp)  =0.0_r8
+          cintoc125(icol,k,kcomp) =0.0_r8
+          cintsc(icol,k,kcomp)    =0.0_r8
+          cintsc05(icol,k,kcomp)  =0.0_r8
+          cintsc125(icol,k,kcomp) =0.0_r8
+          cintsa(icol,k,kcomp)    =0.0_r8
+          cintsa05(icol,k,kcomp)  =0.0_r8
+          cintsa125(icol,k,kcomp) =0.0_r8
+          aaeros(icol,k,kcomp)    =0.0_r8
+          aaerol(icol,k,kcomp)    =0.0_r8
+          vaeros(icol,k,kcomp)    =0.0_r8
+          vaerol(icol,k,kcomp)    =0.0_r8
+       end do
+    end do
 
     do k=1,pver
        do icol=1,ncol
           if(Nnatk(icol,k,kcomp)>0.0_r8) then
-
              ! Collect all the vector elements into temporary storage
              ! to avoid cache conflicts and excessive cross-referencing
              t_ifo1 = ifombg1(icol,k)
@@ -599,7 +694,6 @@ contains
              invd(3) = 1.0_r8/(t_fac2-t_fac1)
 
              do iv=1,19  ! variable number
-
                 ! end points as basis for multidimentional linear interpolation
                 opt3d(1,1,1)=a1var(iv,t_ifo1,t_ict1,t_ifc1)
                 opt3d(1,1,2)=a1var(iv,t_ifo1,t_ict1,t_ifc2)
@@ -616,53 +710,116 @@ contains
                 ! finally, interpolation in the fombg dimension
                 opt = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
 
-                ! update the properties
-                call this%update(kcomp, k, icol, iv, opt)
-
+                if(iv==1) then
+                   cintbg(icol,k,kcomp)=opt
+                elseif(iv==2) then
+                   cintbg05(icol,k,kcomp)=opt
+                elseif(iv==3) then
+                   cintbg125(icol,k,kcomp)=opt
+                elseif(iv==4) then
+                   cintbc(icol,k,kcomp)=opt
+                elseif(iv==5) then
+                   cintbc05(icol,k,kcomp)=opt
+                elseif(iv==6) then
+                   cintbc125(icol,k,kcomp)=opt
+                elseif(iv==7) then
+                   cintoc(icol,k,kcomp)=opt
+                elseif(iv==8) then
+                   cintoc05(icol,k,kcomp)=opt
+                elseif(iv==9) then
+                   cintoc125(icol,k,kcomp)=opt
+                elseif(iv==10) then
+                   cintsc(icol,k,kcomp)=opt
+                elseif(iv==11) then
+                   cintsc05(icol,k,kcomp)=opt
+                elseif(iv==12) then
+                   cintsc125(icol,k,kcomp)=opt
+                elseif(iv==13) then
+                   cintsa(icol,k,kcomp)=opt
+                elseif(iv==14) then
+                   cintsa05(icol,k,kcomp)=opt
+                elseif(iv==15) then
+                   cintsa125(icol,k,kcomp)=opt
+                elseif(iv==16) then
+                   aaeros(icol,k,kcomp)=opt
+                elseif(iv==17) then
+                   aaerol(icol,k,kcomp)=opt
+                elseif(iv==18) then
+                   vaeros(icol,k,kcomp)=opt
+                elseif(iv==19) then
+                   vaerol(icol,k,kcomp)=opt
+                endif
              end do ! iv=1,19
-          endif
+          endif ! if (Nnatk(icol,k,kcomp)>0.0_r8)
        end do ! icol
     end do ! k
-
 
     ! Dry parameters for externally mixed mode 11, SO4(n):
     kcomp=11
     do k=1,pver
        do icol=1,ncol
-          ! Neither total background concentrations (OM + sulfate)
-          ! nor areas & volumes depend on fombg:
-          this%cknorm(icol,k,kcomp)   = a1var(1,1,1,1)
-          this%cknlt05(icol,k,kcomp)  = a1var(2,1,1,1)
-          this%ckngt125(icol,k,kcomp) = a1var(3,1,1,1)
-          this%aaerosn(icol,k,kcomp)  = a1var(16,1,1,1)
-          this%aaeroln(icol,k,kcomp)  = a1var(17,1,1,1)
-          this%vaerosn(icol,k,kcomp)  = a1var(18,1,1,1)
-          this%vaeroln(icol,k,kcomp)  = a1var(19,1,1,1)
+          cknorm(icol,k,kcomp)   = a1var(1,1,1,1)
+          cknlt05(icol,k,kcomp)  = a1var(2,1,1,1)
+          ckngt125(icol,k,kcomp) = a1var(3,1,1,1)
+          aaerosn(icol,k,kcomp)  = a1var(16,1,1,1)
+          aaeroln(icol,k,kcomp)  = a1var(17,1,1,1)
+          vaerosn(icol,k,kcomp)  = a1var(18,1,1,1)
+          vaeroln(icol,k,kcomp)  = a1var(19,1,1,1)
        end do ! icol
     end do ! k
 
   end subroutine intdrypar1
 
-  ! ==========================================================
-  subroutine intdrypar2to3 (this, ncol, Nnatk, xct, ict1, xfac, ifac1)
+  !===============================================================================
+  subroutine intdrypar2to3 (&
+       lchnk, ncol, Nnatk, xct, ict1, xfac, ifac1,                  &
+       cintbg, cintbg05, cintbg125, cintbc, cintbc05, cintbc125,    &
+       cintoc, cintoc05, cintoc125, cintsc, cintsc05, cintsc125,    &
+       cintsa, cintsa05, cintsa125, aaeros, aaerol, vaeros, vaerol, &
+       aaerosn,aaeroln,vaerosn,vaeroln,cknorm,cknlt05,ckngt125)
 
-    ! Modal mass concentrations (cint), area (aaero)
-    ! and volume (vaero) (for AeroCom determination of particle
-    ! effective radii) of each constituent. cint*05 and cint*125 are
-    ! for r<0.5um and r>1.25um, respectively. aaeros and vaeros are
+    ! Output arguments: Modal mass concentrations (cint), area (aaero) and volume (vaero)
+    ! (for AeroCom determination of particle effective radii) of each constituent. cint*05
+    ! and cint*125 are  for r<0.5um and r>1.25um, respectively. aaeros and vaeros are
     ! integrated over r<0.5um, and aaerol and vaerol over r>0.5um.
 
-    ! arguments
-    class(aerodry_prop_type) :: this
-    integer  , intent(in) :: ncol                        ! number of atmospheric columns
-    real(r8) , intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
-    real(r8) , intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
-    integer  , intent(in) :: ict1(pcols,pver,nmodes)
-    real(r8) , intent(in) :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
-    integer  , intent(in) :: ifac1(pcols,pver,nbmodes)
+    ! Arguments
+    integer , intent(in)    :: lchnk ! chunk identifier
+    integer , intent(in)    :: ncol  ! number of atmospheric columns
+    real(r8), intent(in)    :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8), intent(in)    :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
+    integer , intent(in)    :: ict1(pcols,pver,nmodes)
+    real(r8), intent(in)    :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
+    integer,  intent(in)    :: ifac1(pcols,pver,nbmodes)
+    real(r8), intent(inout) :: aaerosn(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: aaeroln(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: vaerosn(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: vaeroln(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: cknorm(pcols,pver,0:nmodes)
+    real(r8), intent(inout) :: cknlt05(pcols,pver,0:nmodes)
+    real(r8), intent(inout) :: ckngt125(pcols,pver,0:nmodes)
+    real(r8), intent(out)   :: cintbg(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbg05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbg125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: aaeros(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: aaerol(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: vaeros(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: vaerol(pcols,pver,0:nbmodes)
 
-    ! local variables
-    real(r8) :: a, b, e, eps
+    ! Local variables
+    real(r8) :: a, b, e
     integer  :: iv, kcomp, k, icol
     integer  :: t_ict1, t_ict2
     real(r8) :: t_xct,  t_cat1, t_cat2
@@ -671,15 +828,37 @@ contains
     real(r8) :: d2mx(2), dxm1(2), invd(2)
     real(r8) :: opt2d(2,2)
     real(r8) :: opt1, opt2, opt
-    parameter (e=2.718281828_r8, eps=1.0e-60_r8)
+    !-------------------------------------------------------------------------
 
     ! Modes 1-3,  SO4(Ait), BC(Ait) and OC(Ait):
-
     do kcomp=2,3
-       call this%zero(kcomp, ncol)
-    end do
+       ! initialize output fields
+       do k=1,pver
+          do icol=1,ncol
+             cintbg(icol,k,kcomp)    =0.0_r8
+             cintbg05(icol,k,kcomp)  =0.0_r8
+             cintbg125(icol,k,kcomp) =0.0_r8
+             cintbc(icol,k,kcomp)    =0.0_r8
+             cintbc05(icol,k,kcomp)  =0.0_r8
+             cintbc125(icol,k,kcomp) =0.0_r8
+             cintoc(icol,k,kcomp)    =0.0_r8
+             cintoc05(icol,k,kcomp)  =0.0_r8
+             cintoc125(icol,k,kcomp) =0.0_r8
+             cintsc(icol,k,kcomp)    =0.0_r8
+             cintsc05(icol,k,kcomp)  =0.0_r8
+             cintsc125(icol,k,kcomp) =0.0_r8
+             cintsa(icol,k,kcomp)    =0.0_r8
+             cintsa05(icol,k,kcomp)  =0.0_r8
+             cintsa125(icol,k,kcomp) =0.0_r8
+             aaeros(icol,k,kcomp)    =0.0_r8
+             aaerol(icol,k,kcomp)    =0.0_r8
+             vaeros(icol,k,kcomp)    =0.0_r8
+             vaerol(icol,k,kcomp)    =0.0_r8
+          end do
+       end do
+    end do ! kcomp
 
-    kcomp = 1
+    kcomp=2
     do k=1,pver
        do icol=1,ncol
           if(Nnatk(icol,k,kcomp)>0.0_r8) then
@@ -707,23 +886,61 @@ contains
              do iv=1,19  ! variable number
 
                 ! end points as basis for multidimentional linear interpolation
-                opt2d(1,1) = a2to3var(iv,t_ict1,t_ifc1,kcomp)
-                opt2d(1,2) = a2to3var(iv,t_ict1,t_ifc2,kcomp)
-                opt2d(2,1) = a2to3var(iv,t_ict2,t_ifc1,kcomp)
-                opt2d(2,2) = a2to3var(iv,t_ict2,t_ifc2,kcomp)
+                opt2d(1,1)=a2to3var(iv,t_ict1,t_ifc1,kcomp)
+                opt2d(1,2)=a2to3var(iv,t_ict1,t_ifc2,kcomp)
+                opt2d(2,1)=a2to3var(iv,t_ict2,t_ifc1,kcomp)
+                opt2d(2,2)=a2to3var(iv,t_ict2,t_ifc2,kcomp)
 
                 ! interpolation in the fac dimension
-                opt1 = (d2mx(2)*opt2d(1,1)+dxm1(2)*opt2d(1,2))*invd(2)
-                opt2 = (d2mx(2)*opt2d(2,1)+dxm1(2)*opt2d(2,2))*invd(2)
+                opt1=(d2mx(2)*opt2d(1,1)+dxm1(2)*opt2d(1,2))*invd(2)
+                opt2=(d2mx(2)*opt2d(2,1)+dxm1(2)*opt2d(2,2))*invd(2)
 
                 ! finally, interpolation in the cat dimension
                 opt = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
 
-                call this%update(kcomp, k, icol, iv, opt)
-             end do
-          end if
-       end do
-    end do
+                if(iv==1) then
+                   cintbg(icol,k,kcomp)=opt
+                elseif(iv==2) then
+                   cintbg05(icol,k,kcomp)=opt
+                elseif(iv==3) then
+                   cintbg125(icol,k,kcomp)=opt
+                elseif(iv==4) then
+                   cintbc(icol,k,kcomp)=opt
+                elseif(iv==5) then
+                   cintbc05(icol,k,kcomp)=opt
+                elseif(iv==6) then
+                   cintbc125(icol,k,kcomp)=opt
+                elseif(iv==7) then
+                   cintoc(icol,k,kcomp)=opt
+                elseif(iv==8) then
+                   cintoc05(icol,k,kcomp)=opt
+                elseif(iv==9) then
+                   cintoc125(icol,k,kcomp)=opt
+                elseif(iv==10) then
+                   cintsc(icol,k,kcomp)=opt
+                elseif(iv==11) then
+                   cintsc05(icol,k,kcomp)=opt
+                elseif(iv==12) then
+                   cintsc125(icol,k,kcomp)=opt
+                elseif(iv==13) then
+                   cintsa(icol,k,kcomp)=opt
+                elseif(iv==14) then
+                   cintsa05(icol,k,kcomp)=opt
+                elseif(iv==15) then
+                   cintsa125(icol,k,kcomp)=opt
+                elseif(iv==16) then
+                   aaeros(icol,k,kcomp)=opt
+                elseif(iv==17) then
+                   aaerol(icol,k,kcomp)=opt
+                elseif(iv==18) then
+                   vaeros(icol,k,kcomp)=opt
+                elseif(iv==19) then
+                   vaerol(icol,k,kcomp)=opt
+                endif
+             end do ! iv=1,19
+          endif
+       end do ! icol
+    end do ! k
 
     ! Dry parameters for externally mixed modes modes 12-13,
     ! BC(n) and OC(n):
@@ -731,49 +948,78 @@ contains
     do kcomp=12,13    ! using dummy initialization for kcomp=3
        do k=1,pver
           do icol=1,ncol
-             this%cknorm(icol,k,kcomp)  = a2to3var(1,1,1,kcomp-10)
-             this%cknlt05(icol,k,kcomp) = a2to3var(2,1,1,kcomp-10)
-             this%ckngt125(icol,k,kcomp)= a2to3var(3,1,1,kcomp-10)
-             this%aaerosn(icol,k,kcomp) = a2to3var(16,1,1,kcomp-10)
-             this%aaeroln(icol,k,kcomp) = a2to3var(17,1,1,kcomp-10)
-             this%vaerosn(icol,k,kcomp) = a2to3var(18,1,1,kcomp-10)
-             this%vaeroln(icol,k,kcomp) = a2to3var(19,1,1,kcomp-10)
+             cknorm(icol,k,kcomp)  = a2to3var(1,1,1,kcomp-10)
+             cknlt05(icol,k,kcomp) = a2to3var(2,1,1,kcomp-10)
+             ckngt125(icol,k,kcomp)= a2to3var(3,1,1,kcomp-10)
+             aaerosn(icol,k,kcomp) = a2to3var(16,1,1,kcomp-10)
+             aaeroln(icol,k,kcomp) = a2to3var(17,1,1,kcomp-10)
+             vaerosn(icol,k,kcomp) = a2to3var(18,1,1,kcomp-10)
+             vaeroln(icol,k,kcomp) = a2to3var(19,1,1,kcomp-10)
           end do ! icol
        end do ! k
     end do  ! kcomp
 
   end subroutine intdrypar2to3
 
-  ! ==========================================================
-  subroutine intdrypar4 (this, ncol, Nnatk, xfbcbg, ifbcbg1, &
-       xfbcbgn, ifbcbgn1, xct, ict1, xfac, ifac1, xfaq, ifaq1)
+  !===============================================================================
+  subroutine intdrypar4 (lchnk, ncol, Nnatk, xfbcbg, ifbcbg1, xfbcbgn, ifbcbgn1, &
+       xct, ict1, xfac, ifac1, xfaq, ifaq1,                         &
+       cintbg, cintbg05, cintbg125, cintbc, cintbc05, cintbc125,    &
+       cintoc, cintoc05, cintoc125, cintsc, cintsc05, cintsc125,    &
+       cintsa, cintsa05, cintsa125, aaeros, aaerol, vaeros, vaerol, &
+       aaerosn,aaeroln,vaerosn,vaeroln,cknorm,cknlt05,ckngt125)
 
-    ! Output arguments: Modal mass concentrations (cint), area (aaero)
-    ! and volume (vaero) (for AeroCom determination of particle
-    ! effective radii) of each constituent. cint*05 and cint*125 are
-    ! for r<0.5um and r>1.25um, respectively. aaeros and vaeros are
+    ! Output arguments: Modal mass concentrations (cint), area (aaero) and volume (vaero)
+    ! (for AeroCom determination of particle effective radii) of each constituent. cint*05
+    ! and cint*125 are  for r<0.5um and r>1.25um, respectively. aaeros and vaeros are
     ! integrated over r<0.5um, and aaerol and vaerol over r>0.5um.
 
-    ! arguments
-    class(aerodry_prop_type) :: this
-    integer  , intent(in) :: ncol                       ! number of atmospheric columns
-    real(r8) , intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
-    real(r8) , intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
-    integer  , intent(in) :: ict1(pcols,pver,nmodes)
-    real(r8) , intent(in) :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
-    integer  , intent(in) :: ifac1(pcols,pver,nbmodes)
-    real(r8) , intent(in) :: xfaq(pcols,pver,nbmodes)   ! modal SO4(aq)/SO4
-    integer  , intent(in) :: ifaq1(pcols,pver,nbmodes)
-    real(r8) , intent(in) :: xfbcbg(pcols,pver)         ! mass fraction BC/(BC+OC) for the background mode (4)
-    integer  , intent(in) :: ifbcbg1(pcols,pver)
-    real(r8) , intent(in) :: xfbcbgn(pcols,pver)        ! mass fraction BC/(BC+OC) for the background mode (14)
-    integer  , intent(in) :: ifbcbgn1(pcols,pver)
+    ! Arguments
+    integer , intent(in)    :: lchnk                       ! chunk identifier
+    integer , intent(in)    :: ncol                        ! number of atmospheric columns
+    real(r8), intent(in)    :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8), intent(in)    :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
+    integer , intent(in)    :: ict1(pcols,pver,nmodes)
+    real(r8), intent(in)    :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
+    integer , intent(in)    :: ifac1(pcols,pver,nbmodes)
+    real(r8), intent(in)    :: xfaq(pcols,pver,nbmodes)   ! modal SO4(aq)/SO4
+    integer , intent(in)    :: ifaq1(pcols,pver,nbmodes)
+    real(r8), intent(in)    :: xfbcbg(pcols,pver)         ! mass fraction BC/(BC+OC) for the background mode (4)
+    integer , intent(in)    :: ifbcbg1(pcols,pver)
+    real(r8), intent(in)    :: xfbcbgn(pcols,pver)        ! mass fraction BC/(BC+OC) for the background mode (14)
+    integer , intent(in)    :: ifbcbgn1(pcols,pver)
+    real(r8), intent(inout) :: aaerosn(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: aaeroln(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: vaerosn(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: vaeroln(pcols,pver,nbmp1:nmodes)
+    real(r8), intent(inout) :: cknorm(pcols,pver,0:nmodes)
+    real(r8), intent(inout) :: cknlt05(pcols,pver,0:nmodes)
+    real(r8), intent(inout) :: ckngt125(pcols,pver,0:nmodes)
+    real(r8), intent(out)   :: cintbg(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbg05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbg125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: aaeros(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: aaerol(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: vaeros(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: vaerol(pcols,pver,0:nbmodes)
 
-    ! local variables
-    real(r8) :: a, b, e, eps
+    ! Local variables
     integer  :: iv, kcomp, k, icol
     integer  :: t_ifb1, t_ifb2
     integer  :: t_ict1, t_ict2, t_ifc1, t_ifc2, t_ifa1, t_ifa2
+    real(r8) :: a, b, e
     real(r8) :: t_fbcbg1, t_fbcbg2
     real(r8) :: t_faq1, t_faq2, t_xfaq
     real(r8) :: t_fac1, t_fac2, t_xfac
@@ -782,11 +1028,35 @@ contains
     real(r8) :: d2mx(4), dxm1(4), invd(4)
     real(r8) :: opt4d(2,2,2,2)
     real(r8) :: opt1, opt2, opt
-    parameter (e=2.718281828_r8, eps=1.0e-60_r8)
+    !-------------------------------------------------------------------------
 
     ! Mode 4, BC&OC(Ait):
     kcomp=4
-    call this%zero(kcomp, ncol)
+
+    ! initialize output fields
+    do k=1,pver
+       do icol=1,ncol
+          cintbg(icol,k,kcomp)=0.0_r8
+          cintbg05(icol,k,kcomp)=0.0_r8
+          cintbg125(icol,k,kcomp)=0.0_r8
+          cintbc(icol,k,kcomp)=0.0_r8
+          cintbc05(icol,k,kcomp)=0.0_r8
+          cintbc125(icol,k,kcomp)=0.0_r8
+          cintoc(icol,k,kcomp)=0.0_r8
+          cintoc05(icol,k,kcomp)=0.0_r8
+          cintoc125(icol,k,kcomp)=0.0_r8
+          cintsc(icol,k,kcomp)=0.0_r8
+          cintsc05(icol,k,kcomp)=0.0_r8
+          cintsc125(icol,k,kcomp)=0.0_r8
+          cintsa(icol,k,kcomp)=0.0_r8
+          cintsa05(icol,k,kcomp)=0.0_r8
+          cintsa125(icol,k,kcomp)=0.0_r8
+          aaeros(icol,k,kcomp)=0.0_r8
+          aaerol(icol,k,kcomp)=0.0_r8
+          vaeros(icol,k,kcomp)=0.0_r8
+          vaerol(icol,k,kcomp)=0.0_r8
+       end do
+    end do
 
     do k=1,pver
        do icol=1,ncol
@@ -829,7 +1099,6 @@ contains
              invd(4) = 1.0_r8/(t_faq2-t_faq1)
 
              do iv=1,19  ! variable number
-
                 ! end points as basis for multidimentional linear interpolation
                 opt4d(1,1,1,1)=a4var(iv,t_ifb1,t_ict1,t_ifc1,t_ifa1)
                 opt4d(1,1,1,2)=a4var(iv,t_ifb1,t_ict1,t_ifc1,t_ifa2)
@@ -854,9 +1123,48 @@ contains
                 ! finally, interpolation in the fbcbg dimension
                 opt = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
 
-                call this%update(kcomp, k, icol, iv, opt)
-             end do
+                if(iv==1) then
+                   cintbg(icol,k,kcomp)=opt
+                elseif(iv==2) then
+                   cintbg05(icol,k,kcomp)=opt
+                elseif(iv==3) then
+                   cintbg125(icol,k,kcomp)=opt
+                elseif(iv==4) then
+                   cintbc(icol,k,kcomp)=opt
+                elseif(iv==5) then
+                   cintbc05(icol,k,kcomp)=opt
+                elseif(iv==6) then
+                   cintbc125(icol,k,kcomp)=opt
+                elseif(iv==7) then
+                   cintoc(icol,k,kcomp)=opt
+                elseif(iv==8) then
+                   cintoc05(icol,k,kcomp)=opt
+                elseif(iv==9) then
+                   cintoc125(icol,k,kcomp)=opt
+                elseif(iv==10) then
+                   cintsc(icol,k,kcomp)=opt
+                elseif(iv==11) then
+                   cintsc05(icol,k,kcomp)=opt
+                elseif(iv==12) then
+                   cintsc125(icol,k,kcomp)=opt
+                elseif(iv==13) then
+                   cintsa(icol,k,kcomp)=opt
+                elseif(iv==14) then
+                   cintsa05(icol,k,kcomp)=opt
+                elseif(iv==15) then
+                   cintsa125(icol,k,kcomp)=opt
+                elseif(iv==16) then
+                   aaeros(icol,k,kcomp)=opt
+                elseif(iv==17) then
+                   aaerol(icol,k,kcomp)=opt
+                elseif(iv==18) then
+                   vaeros(icol,k,kcomp)=opt
+                elseif(iv==19) then
+                   vaerol(icol,k,kcomp)=opt
+                endif
+             end do ! iv=1,19
           endif
+
        end do ! icol
     end do ! k
 
@@ -874,71 +1182,89 @@ contains
           dxm1(1) = (t_xfbcbg-t_fbcbg1)
           invd(1) = 1.0_r8/(t_fbcbg2-t_fbcbg1)
 
-          !  Only interpolation in the fbcbg dimension for mode 14
+          ! Only interpolation in the fbcbg dimension for mode 14
           opt1 = a4var(1,1,1,1,1)
           opt2 = a4var(1,2,1,1,1)
-          this%cknorm(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
-
+          cknorm(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
           opt1 = a4var(2,1,1,1,1)
           opt2 = a4var(2,2,1,1,1)
-          this%cknlt05(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
-
+          cknlt05(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
           opt1 = a4var(3,1,1,1,1)
           opt2 = a4var(3,2,1,1,1)
-          this%ckngt125(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
-
-          ! (The remaining variables are actually independent of fbcbg,
-          ! but we follow the same procedure anyway:)
-
+          ckngt125(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
           opt1 = a4var(16,1,1,1,1)
           opt2 = a4var(16,2,1,1,1)
-          this%aaerosn(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
-
+          ! (The remaining variables are actually independent of fbcbg,
+          ! but we follow the same procedure anyway:)
+          aaerosn(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
           opt1 = a4var(17,1,1,1,1)
           opt2 = a4var(17,2,1,1,1)
-          this%aaeroln(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
-
+          aaeroln(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
           opt1 = a4var(18,1,1,1,1)
           opt2 = a4var(18,2,1,1,1)
-          this%vaerosn(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
-
+          vaerosn(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
           opt1 = a4var(19,1,1,1,1)
           opt2 = a4var(19,2,1,1,1)
-          this%vaeroln(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
+          vaeroln(icol,k,kcomp) = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
 
        end do ! icol
     end do ! k
 
   end subroutine intdrypar4
 
-  ! ==========================================================
-  subroutine intdrypar5to10 (this, ncol, Nnatk, xct, ict1, &
-       xfac, ifac1, xfbc, ifbc1, xfaq, ifaq1)
+  !===============================================================================
+  subroutine intdrypar5to10 (lchnk, ncol, Nnatk, xct, ict1,              &
+       xfac, ifac1, xfbc, ifbc1, xfaq, ifaq1,                      &
+       cintbg, cintbg05, cintbg125, cintbc, cintbc05, cintbc125,   &
+       cintoc, cintoc05, cintoc125, cintsc, cintsc05, cintsc125,   &
+       cintsa, cintsa05, cintsa125, aaeros, aaerol, vaeros, vaerol,&
+       cknorm,cknlt05,ckngt125)
 
-    ! Output arguments: Modal mass concentrations (cint), area (aaero)
-    ! and volume (vaero) (for AeroCom determination of particle
-    ! effective radii) of each constituent. cint*05 and cint*125 are
-    ! for r<0.5um and r>1.25um, respectively. aaeros and vaeros are
+    ! Output arguments: Modal mass concentrations (cint), area (aaero) and volume (vaero)
+    ! (for AeroCom determination of particle effective radii) of each constituent. cint*05
+    ! and cint*125 are  for r<0.5um and r>1.25um, respectively. aaeros and vaeros are
     ! integrated over r<0.5um, and aaerol and vaerol over r>0.5um.
 
-    ! arguments
-    class(aerodry_prop_type) :: this
-    integer  , intent(in) :: ncol                       ! number of atmospheric columns
-    real(r8) , intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
-    real(r8) , intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
-    integer  , intent(in) :: ict1(pcols,pver,nmodes)
-    real(r8) , intent(in) :: xfac(pcols,pver,nbmodes)   ! modal (OC+BC)/(SO4+BC+OC)
-    integer  , intent(in) :: ifac1(pcols,pver,nbmodes)
-    real(r8) , intent(in) :: xfbc(pcols,pver,nbmodes)   ! modal BC/(OC+BC)
-    integer  , intent(in) :: ifbc1(pcols,pver,nbmodes)
-    real(r8) , intent(in) :: xfaq(pcols,pver,nbmodes)   ! modal SO4(aq)/SO4
-    integer  , intent(in) :: ifaq1(pcols,pver,nbmodes)
+    ! Arguments
+    integer , intent(in)    :: lchnk                      ! chunk identifier
+    integer , intent(in)    :: ncol                       ! number of atmospheric columns
+    real(r8), intent(in)    :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8), intent(in)    :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
+    integer , intent(in)    :: ict1(pcols,pver,nmodes)
+    real(r8), intent(in)    :: xfac(pcols,pver,nbmodes)   ! modal (OC+BC)/(SO4+BC+OC)
+    integer , intent(in)    :: ifac1(pcols,pver,nbmodes)
+    real(r8), intent(in)    :: xfbc(pcols,pver,nbmodes)   ! modal BC/(OC+BC)
+    integer , intent(in)    :: ifbc1(pcols,pver,nbmodes)
+    real(r8), intent(in)    :: xfaq(pcols,pver,nbmodes)   ! modal SO4(aq)/SO4
+    integer , intent(in)    :: ifaq1(pcols,pver,nbmodes)
+    real(r8), intent(inout) :: cknorm(pcols,pver,0:nmodes)
+    real(r8), intent(inout) :: cknlt05(pcols,pver,0:nmodes)
+    real(r8), intent(inout) :: ckngt125(pcols,pver,0:nmodes)
+    real(r8), intent(out)   :: cintbg(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbg05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbg125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintbc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintoc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsc125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa05(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: cintsa125(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: aaeros(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: aaerol(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: vaeros(pcols,pver,0:nbmodes)
+    real(r8), intent(out)   :: vaerol(pcols,pver,0:nbmodes)
 
-    ! local variables
-    real(r8) :: a, b, e, eps
+    ! Local variables
     integer  :: iv, kcomp, k, icol
     integer  :: t_ict1, t_ict2, t_ifa1, t_ifa2
     integer  :: t_ifb1, t_ifb2, t_ifc1, t_ifc2
+    real(r8) :: a, b, e
     real(r8) :: t_faq1, t_faq2, t_xfaq
     real(r8) :: t_fbc1, t_fbc2, t_xfbc
     real(r8) :: t_fac1, t_fac2, t_xfac
@@ -946,12 +1272,35 @@ contains
     real(r8) :: d2mx(4), dxm1(4), invd(4)
     real(r8) :: opt4d(2,2,2,2)
     real(r8) :: opt1, opt2, opt
-    parameter (e=2.718281828_r8, eps=1.0e-60_r8)
+    !-------------------------------------------------------------------------
 
     ! Modes 5 to 10 (SO4(Ait75) and mineral and seasalt-modes + cond./coag./aq.):
-
     do kcomp=5,10
-       call this%zero(kcomp,ncol)
+
+       ! initialize output fields
+       do k=1,pver
+          do icol=1,ncol
+             cintbg(icol,k,kcomp)=0.0_r8
+             cintbg05(icol,k,kcomp)=0.0_r8
+             cintbg125(icol,k,kcomp)=0.0_r8
+             cintbc(icol,k,kcomp)=0.0_r8
+             cintbc05(icol,k,kcomp)=0.0_r8
+             cintbc125(icol,k,kcomp)=0.0_r8
+             cintoc(icol,k,kcomp)=0.0_r8
+             cintoc05(icol,k,kcomp)=0.0_r8
+             cintoc125(icol,k,kcomp)=0.0_r8
+             cintsc(icol,k,kcomp)=0.0_r8
+             cintsc05(icol,k,kcomp)=0.0_r8
+             cintsc125(icol,k,kcomp)=0.0_r8
+             cintsa(icol,k,kcomp)=0.0_r8
+             cintsa05(icol,k,kcomp)=0.0_r8
+             cintsa125(icol,k,kcomp)=0.0_r8
+             aaeros(icol,k,kcomp)=0.0_r8
+             aaerol(icol,k,kcomp)=0.0_r8
+             vaeros(icol,k,kcomp)=0.0_r8
+             vaerol(icol,k,kcomp)=0.0_r8
+          end do
+       end do
 
        do k=1,pver
           do icol=1,ncol
@@ -992,8 +1341,8 @@ contains
                 d2mx(4) = (t_faq2-t_xfaq)
                 dxm1(4) = (t_xfaq-t_faq1)
                 invd(4) = 1.0_r8/(t_faq2-t_faq1)
-                !soa
 
+                !soa
                 do iv=1,19  ! variable number
                    ! end points as basis for multidimentional linear interpolation
                    opt4d(1,1,1,1)=a5to10var(iv,t_ict1,t_ifc1,t_ifb1,t_ifa1,kcomp)
@@ -1019,13 +1368,51 @@ contains
                    ! finally, interpolation in the cat dimension
                    opt = (d2mx(1)*opt1+dxm1(1)*opt2)*invd(1)
 
-                   call this%update(kcomp, k, icol, iv, opt)
-                end do
+                   if(iv==1) then
+                      cintbg(icol,k,kcomp)=opt
+                   elseif(iv==2) then
+                      cintbg05(icol,k,kcomp)=opt
+                   elseif(iv==3) then
+                      cintbg125(icol,k,kcomp)=opt
+                   elseif(iv==4) then
+                      cintbc(icol,k,kcomp)=opt
+                   elseif(iv==5) then
+                      cintbc05(icol,k,kcomp)=opt
+                   elseif(iv==6) then
+                      cintbc125(icol,k,kcomp)=opt
+                   elseif(iv==7) then
+                      cintoc(icol,k,kcomp)=opt
+                   elseif(iv==8) then
+                      cintoc05(icol,k,kcomp)=opt
+                   elseif(iv==9) then
+                      cintoc125(icol,k,kcomp)=opt
+                   elseif(iv==10) then
+                      cintsc(icol,k,kcomp)=opt
+                   elseif(iv==11) then
+                      cintsc05(icol,k,kcomp)=opt
+                   elseif(iv==12) then
+                      cintsc125(icol,k,kcomp)=opt
+                   elseif(iv==13) then
+                      cintsa(icol,k,kcomp)=opt
+                   elseif(iv==14) then
+                      cintsa05(icol,k,kcomp)=opt
+                   elseif(iv==15) then
+                      cintsa125(icol,k,kcomp)=opt
+                   elseif(iv==16) then
+                      aaeros(icol,k,kcomp)=opt
+                   elseif(iv==17) then
+                      aaerol(icol,k,kcomp)=opt
+                   elseif(iv==18) then
+                      vaeros(icol,k,kcomp)=opt
+                   elseif(iv==19) then
+                      vaerol(icol,k,kcomp)=opt
+                   endif
+                end do ! iv=1,19
              endif
 
-             this%cknorm(icol,k,kcomp)  = a5to10var(1,1,1,1,1,kcomp)
-             this%cknlt05(icol,k,kcomp) = a5to10var(2,1,1,1,1,kcomp)
-             this%ckngt125(icol,k,kcomp)= a5to10var(3,1,1,1,1,kcomp)
+             cknorm(icol,k,kcomp)  = a5to10var(1,1,1,1,1,kcomp)
+             cknlt05(icol,k,kcomp) = a5to10var(2,1,1,1,1,kcomp)
+             ckngt125(icol,k,kcomp)= a5to10var(3,1,1,1,1,kcomp)
 
           end do ! icol
        end do ! k
@@ -1033,94 +1420,7 @@ contains
 
   end subroutine intdrypar5to10
 
-  ! ==========================================================
-  subroutine zero(this, kcomp, ncol)
-
-    class(aerodry_prop_type) :: this
-    integer , intent(in)  :: kcomp
-    integer , intent(in)  :: ncol
-
-    integer :: k
-    integer :: icol
-
-    ! initialize all output fields to zero
-    do k=1,pver
-       do icol=1,ncol
-          this%cintbg(icol,k,kcomp)    = 0.0_r8
-          this%cintbg05(icol,k,kcomp)  = 0.0_r8
-          this%cintbg125(icol,k,kcomp) = 0.0_r8
-          this%cintbc(icol,k,kcomp)    = 0.0_r8
-          this%cintbc05(icol,k,kcomp)  = 0.0_r8
-          this%cintbc125(icol,k,kcomp) = 0.0_r8
-          this%cintoc(icol,k,kcomp)    = 0.0_r8
-          this%cintoc05(icol,k,kcomp)  = 0.0_r8
-          this%cintoc125(icol,k,kcomp) = 0.0_r8
-          this%cintsc(icol,k,kcomp)    = 0.0_r8
-          this%cintsc05(icol,k,kcomp)  = 0.0_r8
-          this%cintsc125(icol,k,kcomp) = 0.0_r8
-          this%cintsa(icol,k,kcomp)    = 0.0_r8
-          this%cintsa05(icol,k,kcomp)  = 0.0_r8
-          this%cintsa125(icol,k,kcomp) = 0.0_r8
-          this%aaeros(icol,k,kcomp)    = 0.0_r8
-          this%aaerol(icol,k,kcomp)    = 0.0_r8
-          this%vaeros(icol,k,kcomp)    = 0.0_r8
-          this%vaerol(icol,k,kcomp)    = 0.0_r8
-       end do
-    end do
-  end subroutine zero
-
-  ! ==========================================================
-  subroutine update(this, kcomp, k, icol, iv, opt)
-
-    class(aerodry_prop_type) :: this
-    integer , intent(in)  :: kcomp
-    integer , intent(in)  :: k
-    integer , intent(in)  :: icol
-    integer , intent(in)  :: iv
-    real(r8), intent(in)  :: opt
-
-    if(iv==1) then
-       this%cintbg(icol,k,kcomp)=opt
-    elseif(iv==2) then
-       this%cintbg05(icol,k,kcomp)=opt
-    elseif(iv==3) then
-       this%cintbg125(icol,k,kcomp)=opt
-    elseif(iv==4) then
-       this%cintbc(icol,k,kcomp)=opt
-    elseif(iv==5) then
-       this%cintbc05(icol,k,kcomp)=opt
-    elseif(iv==6) then
-       this%cintbc125(icol,k,kcomp)=opt
-    elseif(iv==7) then
-       this%cintoc(icol,k,kcomp)=opt
-    elseif(iv==8) then
-       this%cintoc05(icol,k,kcomp)=opt
-    elseif(iv==9) then
-       this%cintoc125(icol,k,kcomp)=opt
-    elseif(iv==10) then
-       this%cintsc(icol,k,kcomp)=opt
-    elseif(iv==11) then
-       this%cintsc05(icol,k,kcomp)=opt
-    elseif(iv==12) then
-       this%cintsc125(icol,k,kcomp)=opt
-    elseif(iv==13) then
-       this%cintsa(icol,k,kcomp)=opt
-    elseif(iv==14) then
-       this%cintsa05(icol,k,kcomp)=opt
-    elseif(iv==15) then
-       this%cintsa125(icol,k,kcomp)=opt
-    elseif(iv==16) then
-       this%aaeros(icol,k,kcomp)=opt
-    elseif(iv==17) then
-       this%aaerol(icol,k,kcomp)=opt
-    elseif(iv==18) then
-       this%vaeros(icol,k,kcomp)=opt
-    elseif(iv==19) then
-       this%vaerol(icol,k,kcomp)=opt
-    endif
-
-  end subroutine update
-
+  !===============================================================================
   subroutine checkTableHeader (ifil)
     ! Read the header-text in a look-up table (in file with iu=ifil). 
 

@@ -2,9 +2,13 @@ module oslo_aero_aerocom_opt
 
 #ifdef AEROCOM
 
+  ! Modal total and absorption extiction coefficients (for AeroCom)
+  ! for 440nm, 500nm, 550nm, 670nm and 870nm, and for d<1um (lt1) and d>1um (gt1).
+
   use shr_kind_mod            , only : r8 => shr_kind_r8
   use ppgrid                  , only : pcols, pver
   use cam_logfile             , only : iulog
+  use spmd_utils              , only : masterproc
   !
   use oslo_aero_params        , only : nmodes, nbmodes
   use oslo_aero_sw_tables     , only : cate, cat, fac, faq, fbc, rh, fombg, fbcbg
@@ -15,13 +19,11 @@ module oslo_aero_aerocom_opt
   private
 
   public :: aerocom_init_aeropt
-
-  ! Set by aerocom_init_aeropt Mode0
-  real(r8) :: bex440, bax440
-  real(r8) :: bex500, bax500, bax550
-  real(r8) :: bex670, bax670
-  real(r8) :: bex870, bax870
-  real(r8) :: bex550lt1, bex550gt1, backscx550
+  public :: intaeropt0
+  public :: intaeropt1
+  public :: intaeropt2to3
+  public :: intaeropt4
+  public :: intaeropt5to10
 
   ! Set by init_aeropt Mode1
   real(r8), public :: bep1(38,10,6,16,6)
@@ -35,66 +37,9 @@ module oslo_aero_aerocom_opt
   ! Set by init_aeropt Mode5to10
   real(r8), public :: bep5to10(38,10,6,6,6,6,5:10)
 
-  ! Modal total and absorption extiction coefficients (for AeroCom)
-  ! for 440nm, 500nm, 550nm, 670nm and 870nm, and for d<1um (lt1) and d>1um (gt1).
-  ! March 2009: + backscatter coefficient, backsc550 (km-1 sr-1).
-  type, public :: extinction_coeffs_type
-     real(r8) :: bext440(pcols,pver,0:nbmodes)
-     real(r8) :: babs440(pcols,pver,0:nbmodes)
-     real(r8) :: bext500(pcols,pver,0:nbmodes)
-     real(r8) :: babs500(pcols,pver,0:nbmodes)
-     real(r8) :: bext550(pcols,pver,0:nbmodes)
-     real(r8) :: babs550(pcols,pver,0:nbmodes)
-     real(r8) :: bext670(pcols,pver,0:nbmodes)
-     real(r8) :: babs670(pcols,pver,0:nbmodes)
-     real(r8) :: bext870(pcols,pver,0:nbmodes)
-     real(r8) :: babs870(pcols,pver,0:nbmodes)
-     real(r8) :: bebg440(pcols,pver,0:nbmodes)
-     real(r8) :: bebg500(pcols,pver,0:nbmodes)
-     real(r8) :: bebg550(pcols,pver,0:nbmodes)
-     real(r8) :: babg550(pcols,pver,0:nbmodes)
-     real(r8) :: bebg670(pcols,pver,0:nbmodes)
-     real(r8) :: bebg870(pcols,pver,0:nbmodes)
-     real(r8) :: bebc440(pcols,pver,0:nbmodes)
-     real(r8) :: bebc500(pcols,pver,0:nbmodes)
-     real(r8) :: bebc550(pcols,pver,0:nbmodes)
-     real(r8) :: babc550(pcols,pver,0:nbmodes)
-     real(r8) :: bebc670(pcols,pver,0:nbmodes)
-     real(r8) :: bebc870(pcols,pver,0:nbmodes)
-     real(r8) :: beoc440(pcols,pver,0:nbmodes)
-     real(r8) :: beoc500(pcols,pver,0:nbmodes)
-     real(r8) :: beoc550(pcols,pver,0:nbmodes)
-     real(r8) :: baoc550(pcols,pver,0:nbmodes)
-     real(r8) :: beoc670(pcols,pver,0:nbmodes)
-     real(r8) :: beoc870(pcols,pver,0:nbmodes)
-     real(r8) :: besu440(pcols,pver,0:nbmodes)
-     real(r8) :: besu500(pcols,pver,0:nbmodes)
-     real(r8) :: besu550(pcols,pver,0:nbmodes)
-     real(r8) :: basu550(pcols,pver,0:nbmodes)
-     real(r8) :: besu670(pcols,pver,0:nbmodes)
-     real(r8) :: besu870(pcols,pver,0:nbmodes)
-     real(r8) :: bebg550lt1(pcols,pver,0:nbmodes)
-     real(r8) :: bebg550gt1(pcols,pver,0:nbmodes)
-     real(r8) :: bebc550lt1(pcols,pver,0:nbmodes)
-     real(r8) :: bebc550gt1(pcols,pver,0:nbmodes)
-     real(r8) :: beoc550lt1(pcols,pver,0:nbmodes)
-     real(r8) :: beoc550gt1(pcols,pver,0:nbmodes)
-     real(r8) :: besu550lt1(pcols,pver,0:nbmodes)
-     real(r8) :: besu550gt1(pcols,pver,0:nbmodes)
-     real(r8) :: backsc550(pcols,pver,0:nbmodes)
-
-   contains
-     procedure :: intaeropt0
-     procedure :: intaeropt1
-     procedure :: intaeropt2to3
-     procedure :: intaeropt4
-     procedure :: intaeropt5to10
-     procedure :: zero
-     procedure :: update
-  end type extinction_coeffs_type
-
-  type(extinction_coeffs_type), public :: extinction_coeffs
-  type(extinction_coeffs_type), public :: extinction_coeffsn
+  real(r8) :: bex440, bax440, bex500, bax500, bax550
+  real(r8) :: bex670, bax670, bex870, bax870
+  real(r8) :: bex550lt1, bex550gt1, backscx550
 
 ! ==========================================================
 contains
@@ -105,10 +50,6 @@ contains
     ! Purpose: To read in the AeroCom look-up tables for aerosol optical properties.
     ! The grid for discrete input-values in the look-up tables is defined in opptab.
     ! Tabulating the 'aerocomk'-files to save computing time.
-    ! Updated for new kcomp1.out including condensed SOA - Alf Kirkevåg, May 2013
-    ! Extended for new SOA treatment - Alf Kirkevaag, September 2015.
-    ! Modified for optimized added masses and mass fractions for concentrations from
-    ! from condensation, coagulation or cloud-processing - Alf Kirkevaag, May 2016.
 
     integer  :: ic, ifil, lin, iv
     integer  :: kcomp, irelh, ictot, ifac, ifbc, ifaq
@@ -134,19 +75,19 @@ contains
     character(len=dir_string_length) :: aerotab_table_dir
     !-----------------------------------------------------------
 
-    call oslo_aero_getopts(aerotab_table_dir_out = aerotab_table_dir)
+    call oslo_aero_getopts(aerotab_table_dir_out=aerotab_table_dir)
 
-    open(20,file=trim(aerotab_table_dir)//'/aerocomk0.out' , form='formatted',status='old')
-    open(21,file=trim(aerotab_table_dir)//'/aerocomk1.out' , form='formatted',status='old')
-    open(11,file=trim(aerotab_table_dir)//'/aerocomk2.out' , form='formatted',status='old')
-    open(12,file=trim(aerotab_table_dir)//'/aerocomk3.out' , form='formatted',status='old')
-    open(13,file=trim(aerotab_table_dir)//'/aerocomk4.out' , form='formatted',status='old')
-    open(14,file=trim(aerotab_table_dir)//'/aerocomk5.out' , form='formatted',status='old')
-    open(15,file=trim(aerotab_table_dir)//'/aerocomk6.out' , form='formatted',status='old')
-    open(16,file=trim(aerotab_table_dir)//'/aerocomk7.out' , form='formatted',status='old')
-    open(17,file=trim(aerotab_table_dir)//'/aerocomk8.out' , form='formatted',status='old')
-    open(18,file=trim(aerotab_table_dir)//'/aerocomk9.out' , form='formatted',status='old')
-    open(19,file=trim(aerotab_table_dir)//'/aerocomk10.out', form='formatted',status='old')
+    open(20,file=trim(aerotab_table_dir)//'/aerocomk0.out' , form='formatted', status='old')
+    open(21,file=trim(aerotab_table_dir)//'/aerocomk1.out' , form='formatted', status='old')
+    open(11,file=trim(aerotab_table_dir)//'/aerocomk2.out' , form='formatted', status='old')
+    open(12,file=trim(aerotab_table_dir)//'/aerocomk3.out' , form='formatted', status='old')
+    open(13,file=trim(aerotab_table_dir)//'/aerocomk4.out' , form='formatted', status='old')
+    open(14,file=trim(aerotab_table_dir)//'/aerocomk5.out' , form='formatted', status='old')
+    open(15,file=trim(aerotab_table_dir)//'/aerocomk6.out' , form='formatted', status='old')
+    open(16,file=trim(aerotab_table_dir)//'/aerocomk7.out' , form='formatted', status='old')
+    open(17,file=trim(aerotab_table_dir)//'/aerocomk8.out' , form='formatted', status='old')
+    open(18,file=trim(aerotab_table_dir)//'/aerocomk9.out' , form='formatted', status='old')
+    open(19,file=trim(aerotab_table_dir)//'/aerocomk10.out', form='formatted', status='old')
 
     ! Skipping the header-text in all input files (Later: use it to check AeroTab - CAM5-Oslo consistency!)
     do ifil = 11,21
@@ -162,12 +103,14 @@ contains
          bex440, bax440, bex500, bax500, bax550, bex670, bax670, &
          bex870, bax870, bex550lt1, bex550gt1, backscx550
 
-    if(bex440<=0.0_r8) then
+    if (bex440<=0.0_r8) then
        write(*,*) 'bex440 =', bex440
        write(*,*) 'Error in initialization of bex1'
        stop
     endif
-    write(iulog,*)'aerocom mode 0 ok'
+    if (masterproc) then
+       write(iulog,*)'aerocom mode 0 ok'
+    end if
     !
     !-------------------------------------------
     ! Mode 1 (H2SO4 and SOA + condensate from H2SO4 and SOA)
@@ -265,7 +208,9 @@ contains
           enddo
        enddo
     enddo
-    write(iulog,*)'aerocom mode 1 ok'
+    if (masterproc) then
+       write(iulog,*)'aerocom mode 1 ok'
+    end if
     !
     !-------------------------------------------
     ! Mode 2  (BC/OC + condesate from H2SO4 and SOA)
@@ -369,7 +314,9 @@ contains
           enddo
        enddo
     enddo
-    write(iulog,*)'aerocom mode 2-3 ok'
+    if (masterproc) then
+       write(iulog,*)'aerocom mode 2-3 ok'
+    end if
     !
     !-------------------------------------------
     ! Mode 4 (BC&OC + condesate from H2SO4 and SOA + wetphase (NH4)2SO4)
@@ -475,7 +422,9 @@ contains
           enddo
        enddo
     enddo
-    write(iulog,*)'aerocom mode 4 ok'
+    if (masterproc) then
+       write(iulog,*)'aerocom mode 4 ok'
+    end if
     !
     !-------------------------------------------
     ! Modes 5 to 10 (SO4(Ait75) and mineral and seasalt-modes + cond./coag./aq.)
@@ -583,7 +532,9 @@ contains
           enddo
        enddo
     enddo
-    write(iulog,*)'aerocom mode 5-10 ok'
+    if (masterproc) then
+       write(iulog,*)'aerocom mode 5-10 ok'
+    end if
 
     ! Close files
     do ifil=10,21
@@ -593,72 +544,221 @@ contains
   end subroutine aerocom_init_aeropt
 
   ! ==========================================================
-  subroutine intaeropt0 (this, lchnk, ncol, Nnatk)
+  subroutine intaeropt0 (lchnk, ncol, Nnatk,           &
+       bext440, bext500, bext550, bext670, bext870,    &
+       bebg440, bebg500, bebg550, bebg670, bebg870,    &
+       bebc440, bebc500, bebc550, bebc670, bebc870,    &
+       beoc440, beoc500, beoc550, beoc670, beoc870,    &
+       besu440, besu500, besu550, besu670, besu870,    &
+       babs440, babs500, babs550, babs670, babs870,    &
+       bebg550lt1, bebg550gt1, bebc550lt1, bebc550gt1, &
+       beoc550lt1, beoc550gt1, besu550lt1, besu550gt1, &
+       backsc550, babg550, babc550, baoc550, basu550)
+
+    ! Output arguments: Modal total and absorption extiction coefficients (for AeroCom)
+    ! for 440nm, 500nm, 550nm, 670nm and 870nm, and for d<1um (lt1) and d>1um (gt1).
 
     ! Arguments
-    class(extinction_coeffs_type) :: this
-    integer                , intent(in)    :: lchnk                     ! chunk identifier
-    integer                , intent(in)    :: ncol                      ! number of atmospheric columns
-    real(r8)               , intent(in)    :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    integer  , intent(in)  :: lchnk ! chunk identifier
+    integer  , intent(in)  :: ncol  ! number of atmospheric columns
+    real(r8) , intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8) , intent(out) :: bext440(pcols,pver,0:nbmodes), babs440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext500(pcols,pver,0:nbmodes), babs500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext550(pcols,pver,0:nbmodes), babs550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext670(pcols,pver,0:nbmodes), babs670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext870(pcols,pver,0:nbmodes), babs870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg550(pcols,pver,0:nbmodes), babg550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc550(pcols,pver,0:nbmodes), babc550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc550(pcols,pver,0:nbmodes), baoc550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu550(pcols,pver,0:nbmodes), basu550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg550lt1(pcols,pver,0:nbmodes), bebg550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc550lt1(pcols,pver,0:nbmodes), bebc550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc550lt1(pcols,pver,0:nbmodes), beoc550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu550lt1(pcols,pver,0:nbmodes), besu550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: backsc550(pcols,pver,0:nbmodes)
 
     ! Local variables
-    integer i, iv, ierr, k, kcomp, icol
+    integer  :: i, iv, ierr, k, kcomp, icol
+    !-------------------------------------------------------------------------
 
     kcomp=0
-    call this%zero(kcomp, ncol)
 
-    ! Mode 0 BC(ax)
-    do k = 1,pver
-       do icol = 1,ncol
-          if (Nnatk(icol,k,kcomp).gt.0) then
-             this%bext440(icol,k,kcomp)=bex440
-             this%babs440(icol,k,kcomp)=bax440
-             this%bext500(icol,k,kcomp)=bex500
-             this%babs500(icol,k,kcomp)=bax500
-             this%bext550(icol,k,kcomp)=bex550lt1+bex550gt1
-             this%babs550(icol,k,kcomp)=bax550
-             this%bext670(icol,k,kcomp)=bex670
-             this%babs670(icol,k,kcomp)=bax670
-             this%bext870(icol,k,kcomp)=bex870
-             this%babs870(icol,k,kcomp)=bax870
-             this%bebg440(icol,k,kcomp)=bex440
-             this%bebg500(icol,k,kcomp)=bex500
-             this%bebg550(icol,k,kcomp)=bex550lt1+bex550gt1
-             this%babg550(icol,k,kcomp)=bax550
-             this%bebg670(icol,k,kcomp)=bex670
-             this%bebg870(icol,k,kcomp)=bex870
-             this%bebg550lt1(icol,k,kcomp)=bex550lt1
-             this%bebg550gt1(icol,k,kcomp)=bex550gt1
-             this%backsc550(icol,k,kcomp)=backscx550
+    ! BC(ax) mode:
+
+    ! initialize all output fields
+    do k=1,pver
+       do icol=1,ncol
+          bext440(icol,k,kcomp)=0.0_r8
+          babs440(icol,k,kcomp)=0.0_r8
+          bext500(icol,k,kcomp)=0.0_r8
+          babs500(icol,k,kcomp)=0.0_r8
+          bext550(icol,k,kcomp)=0.0_r8
+          babs550(icol,k,kcomp)=0.0_r8
+          bext670(icol,k,kcomp)=0.0_r8
+          babs670(icol,k,kcomp)=0.0_r8
+          bext870(icol,k,kcomp)=0.0_r8
+          babs870(icol,k,kcomp)=0.0_r8
+          bebg440(icol,k,kcomp)=0.0_r8
+          bebg500(icol,k,kcomp)=0.0_r8
+          bebg550(icol,k,kcomp)=0.0_r8
+          babg550(icol,k,kcomp)=0.0_r8
+          bebg670(icol,k,kcomp)=0.0_r8
+          bebg870(icol,k,kcomp)=0.0_r8
+          bebc440(icol,k,kcomp)=0.0_r8
+          bebc500(icol,k,kcomp)=0.0_r8
+          bebc550(icol,k,kcomp)=0.0_r8
+          babc550(icol,k,kcomp)=0.0_r8
+          bebc670(icol,k,kcomp)=0.0_r8
+          bebc870(icol,k,kcomp)=0.0_r8
+          beoc440(icol,k,kcomp)=0.0_r8
+          beoc500(icol,k,kcomp)=0.0_r8
+          beoc550(icol,k,kcomp)=0.0_r8
+          baoc550(icol,k,kcomp)=0.0_r8
+          beoc670(icol,k,kcomp)=0.0_r8
+          beoc870(icol,k,kcomp)=0.0_r8
+          besu440(icol,k,kcomp)=0.0_r8
+          besu500(icol,k,kcomp)=0.0_r8
+          besu550(icol,k,kcomp)=0.0_r8
+          basu550(icol,k,kcomp)=0.0_r8
+          besu670(icol,k,kcomp)=0.0_r8
+          besu870(icol,k,kcomp)=0.0_r8
+          bebg550lt1(icol,k,kcomp)=0.0_r8
+          bebg550gt1(icol,k,kcomp)=0.0_r8
+          bebc550lt1(icol,k,kcomp)=0.0_r8
+          bebc550gt1(icol,k,kcomp)=0.0_r8
+          beoc550lt1(icol,k,kcomp)=0.0_r8
+          beoc550gt1(icol,k,kcomp)=0.0_r8
+          besu550lt1(icol,k,kcomp)=0.0_r8
+          besu550gt1(icol,k,kcomp)=0.0_r8
+          backsc550(icol,k,kcomp)=0.0_r8
+       end do
+    end do
+
+    do k=1,pver
+       do icol=1,ncol
+          if(Nnatk(icol,k,kcomp).gt.0) then
+             bext440(icol,k,kcomp)=bex440
+             babs440(icol,k,kcomp)=bax440
+             bext500(icol,k,kcomp)=bex500
+             babs500(icol,k,kcomp)=bax500
+             bext550(icol,k,kcomp)=bex550lt1+bex550gt1
+             babs550(icol,k,kcomp)=bax550
+             bext670(icol,k,kcomp)=bex670
+             babs670(icol,k,kcomp)=bax670
+             bext870(icol,k,kcomp)=bex870
+             babs870(icol,k,kcomp)=bax870
+             bebg440(icol,k,kcomp)=bex440
+             bebg500(icol,k,kcomp)=bex500
+             bebg550(icol,k,kcomp)=bex550lt1+bex550gt1
+             babg550(icol,k,kcomp)=bax550
+             bebg670(icol,k,kcomp)=bex670
+             bebg870(icol,k,kcomp)=bex870
+             bebc440(icol,k,kcomp)=0.0_r8
+             bebc500(icol,k,kcomp)=0.0_r8
+             bebc670(icol,k,kcomp)=0.0_r8
+             bebc870(icol,k,kcomp)=0.0_r8
+             beoc440(icol,k,kcomp)=0.0_r8
+             beoc500(icol,k,kcomp)=0.0_r8
+             beoc670(icol,k,kcomp)=0.0_r8
+             beoc870(icol,k,kcomp)=0.0_r8
+             besu440(icol,k,kcomp)=0.0_r8
+             besu500(icol,k,kcomp)=0.0_r8
+             besu670(icol,k,kcomp)=0.0_r8
+             besu870(icol,k,kcomp)=0.0_r8
+             bebg550lt1(icol,k,kcomp)=bex550lt1
+             bebg550gt1(icol,k,kcomp)=bex550gt1
+             bebc550lt1(icol,k,kcomp)=0.0_r8
+             bebc550gt1(icol,k,kcomp)=0.0_r8
+             beoc550lt1(icol,k,kcomp)=0.0_r8
+             beoc550gt1(icol,k,kcomp)=0.0_r8
+             besu550lt1(icol,k,kcomp)=0.0_r8
+             besu550gt1(icol,k,kcomp)=0.0_r8
+             backsc550(icol,k,kcomp)=backscx550
           endif
        end do ! icol
     end do ! k
-
   end subroutine intaeropt0
 
-  ! ==========================================================
-  subroutine intaeropt1 (this, lchnk, ncol, xrh, irh1, mplus10, &
-       Nnatk, xfombg, ifombg1, xct, ict1, xfac, ifac1)
+  !===============================================================================
+  subroutine intaeropt1 (lchnk, ncol, xrh, irh1, mplus10,    &
+       Nnatk, xfombg, ifombg1, xct, ict1, xfac, ifac1, &
+       bext440, bext500, bext550, bext670, bext870,    &
+       bebg440, bebg500, bebg550, bebg670, bebg870,    &
+       bebc440, bebc500, bebc550, bebc670, bebc870,    &
+       beoc440, beoc500, beoc550, beoc670, beoc870,    &
+       besu440, besu500, besu550, besu670, besu870,    &
+       babs440, babs500, babs550, babs670, babs870,    &
+       bebg550lt1, bebg550gt1, bebc550lt1, bebc550gt1, &
+       beoc550lt1, beoc550gt1, besu550lt1, besu550gt1, &
+       backsc550, babg550, babc550, baoc550, basu550)
 
-    ! arguments
-    class(extinction_coeffs_type) :: this
-    integer  , intent(in) :: lchnk                      ! chunk identifier
-    integer  , intent(in) :: ncol                       ! number of atmospheric columns
-    integer  , intent(in) :: mplus10                    ! mode number (0) or number + 10 (1)
-    real(r8) , intent(in) :: xrh(pcols,pver)            ! level relative humidity (fraction)
-    integer  , intent(in) :: irh1(pcols,pver)
-    real(r8) , intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
-    real(r8) , intent(in) :: xfombg(pcols,pver)         ! SOA/(SOA+H2SO4) for the background mode
-    integer  , intent(in) :: ifombg1(pcols,pver)
-    real(r8) , intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
-    integer  , intent(in) :: ict1(pcols,pver,nmodes)
-    real(r8) , intent(in) :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
-    integer  , intent(in) :: ifac1(pcols,pver,nbmodes)
+    ! Modal total and absorption extiction coefficients (for AeroCom)
+    ! for 440nm, 500nm, 550nm, 670nm and 870nm, and for d<1um (lt1) and d>1um (gt1).
 
-    ! local variables
-    real(r8) :: a, b, e, eps
+    ! Arguments
+    integer  , intent(in)  :: lchnk                       ! chunk identifier
+    integer  , intent(in)  :: ncol                        ! number of atmospheric columns
+    integer  , intent(in)  :: mplus10                     ! mode number (0) or number + 10 (1)
+    real(r8) , intent(in)  :: xrh(pcols,pver)            ! level relative humidity (fraction)
+    integer  , intent(in)  :: irh1(pcols,pver)
+    real(r8) , intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8) , intent(in)  :: xfombg(pcols,pver)         ! SOA/(SOA+H2SO4) for the background mode
+    integer  , intent(in)  :: ifombg1(pcols,pver)
+    real(r8) , intent(in)  :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
+    integer  , intent(in)  :: ict1(pcols,pver,nmodes)
+    real(r8) , intent(in)  :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
+    integer  , intent(in)  :: ifac1(pcols,pver,nbmodes)
+    real(r8) , intent(out) :: bext440(pcols,pver,0:nbmodes), babs440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext500(pcols,pver,0:nbmodes), babs500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext550(pcols,pver,0:nbmodes), babs550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext670(pcols,pver,0:nbmodes), babs670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext870(pcols,pver,0:nbmodes), babs870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg550(pcols,pver,0:nbmodes), babg550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc550(pcols,pver,0:nbmodes), babc550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc550(pcols,pver,0:nbmodes), baoc550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu550(pcols,pver,0:nbmodes), basu550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg550lt1(pcols,pver,0:nbmodes), bebg550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc550lt1(pcols,pver,0:nbmodes), bebc550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc550lt1(pcols,pver,0:nbmodes), beoc550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu550lt1(pcols,pver,0:nbmodes), besu550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: backsc550(pcols,pver,0:nbmodes)
+
+    ! Local variables
     integer  :: i, iv, ierr, irelh, ifombg, ictot, ifac, kcomp, k, icol, kc10
     integer  :: t_irh1, t_irh2, t_ifo1, t_ifo2, t_ict1, t_ict2, t_ifc1, t_ifc2
+    real(r8) :: a, b, e
     real(r8) :: t_fac1, t_fac2, t_xfac
     real(r8) :: t_xrh, t_rh1, t_rh2, t_fombg1, t_fombg2, t_xfombg
     real(r8) :: t_xct, t_cat1, t_cat2
@@ -666,28 +766,71 @@ contains
     real(r8) :: opt4d(2,2,2,2)
     real(r8) :: ome1, ome2, ge1, ge2, bex1, bex2, ske1, ske2
     real(r8) :: opt1, opt2, opt(38)
-    parameter (e=2.718281828_r8, eps=1.0e-60_r8)
-    !----------------------------------------------
+    !-------------------------------------------------------------------------
 
-    ! SO4/SOA(Ait) mode:
     kcomp = 1
-    call this%zero(kcomp, ncol)
-
-    if(mplus10 == 0) then
-       kc10 = kcomp
+    if (mplus10==0) then
+       kc10=kcomp
     else
        write(*,*) "mplus10=1 is no loger an option for kcomp=1."
        stop
     endif
 
+    ! initialize all output fields
     do k=1,pver
        do icol=1,ncol
+          bext440(icol,k,kcomp)=0.0_r8
+          babs440(icol,k,kcomp)=0.0_r8
+          bext500(icol,k,kcomp)=0.0_r8
+          babs500(icol,k,kcomp)=0.0_r8
+          bext550(icol,k,kcomp)=0.0_r8
+          babs550(icol,k,kcomp)=0.0_r8
+          bext670(icol,k,kcomp)=0.0_r8
+          babs670(icol,k,kcomp)=0.0_r8
+          bext870(icol,k,kcomp)=0.0_r8
+          babs870(icol,k,kcomp)=0.0_r8
+          bebg440(icol,k,kcomp)=0.0_r8
+          bebg500(icol,k,kcomp)=0.0_r8
+          bebg550(icol,k,kcomp)=0.0_r8
+          babg550(icol,k,kcomp)=0.0_r8
+          bebg670(icol,k,kcomp)=0.0_r8
+          bebg870(icol,k,kcomp)=0.0_r8
+          bebc440(icol,k,kcomp)=0.0_r8
+          bebc500(icol,k,kcomp)=0.0_r8
+          bebc550(icol,k,kcomp)=0.0_r8
+          babc550(icol,k,kcomp)=0.0_r8
+          bebc670(icol,k,kcomp)=0.0_r8
+          bebc870(icol,k,kcomp)=0.0_r8
+          beoc440(icol,k,kcomp)=0.0_r8
+          beoc500(icol,k,kcomp)=0.0_r8
+          beoc550(icol,k,kcomp)=0.0_r8
+          baoc550(icol,k,kcomp)=0.0_r8
+          beoc670(icol,k,kcomp)=0.0_r8
+          beoc870(icol,k,kcomp)=0.0_r8
+          besu440(icol,k,kcomp)=0.0_r8
+          besu500(icol,k,kcomp)=0.0_r8
+          besu550(icol,k,kcomp)=0.0_r8
+          basu550(icol,k,kcomp)=0.0_r8
+          besu670(icol,k,kcomp)=0.0_r8
+          besu870(icol,k,kcomp)=0.0_r8
+          bebg550lt1(icol,k,kcomp)=0.0_r8
+          bebg550gt1(icol,k,kcomp)=0.0_r8
+          bebc550lt1(icol,k,kcomp)=0.0_r8
+          bebc550gt1(icol,k,kcomp)=0.0_r8
+          beoc550lt1(icol,k,kcomp)=0.0_r8
+          beoc550gt1(icol,k,kcomp)=0.0_r8
+          besu550lt1(icol,k,kcomp)=0.0_r8
+          besu550gt1(icol,k,kcomp)=0.0_r8
+          backsc550(icol,k,kcomp)=0.0_r8
+       end do
+    end do
 
+    do k=1,pver
+       do icol=1,ncol
           if(Nnatk(icol,k,kc10).gt.0) then
 
              ! Collect all the vector elements into temporary storage
              ! to avoid cache conflicts and excessive cross-referencing
-
              t_irh1 = irh1(icol,k)
              t_irh2 = t_irh1+1
              t_ifo1 = ifombg1(icol,k)
@@ -727,82 +870,210 @@ contains
 
              do iv=1,38  ! variable number
                 ! end points as basis for multidimentional linear interpolation
-                opt4d(1,1,1,1) = bep1(iv,t_irh1,t_ifo1,t_ict1,t_ifc1)
-                opt4d(1,1,1,2) = bep1(iv,t_irh1,t_ifo1,t_ict1,t_ifc2)
-                opt4d(1,1,2,1) = bep1(iv,t_irh1,t_ifo1,t_ict2,t_ifc1)
-                opt4d(1,1,2,2) = bep1(iv,t_irh1,t_ifo1,t_ict2,t_ifc2)
-                opt4d(1,2,1,1) = bep1(iv,t_irh1,t_ifo2,t_ict1,t_ifc1)
-                opt4d(1,2,1,2) = bep1(iv,t_irh1,t_ifo2,t_ict1,t_ifc2)
-                opt4d(1,2,2,1) = bep1(iv,t_irh1,t_ifo2,t_ict2,t_ifc1)
-                opt4d(1,2,2,2) = bep1(iv,t_irh1,t_ifo2,t_ict2,t_ifc2)
-                opt4d(2,1,1,1) = bep1(iv,t_irh2,t_ifo1,t_ict1,t_ifc1)
-                opt4d(2,1,1,2) = bep1(iv,t_irh2,t_ifo1,t_ict1,t_ifc2)
-                opt4d(2,1,2,1) = bep1(iv,t_irh2,t_ifo1,t_ict2,t_ifc1)
-                opt4d(2,1,2,2) = bep1(iv,t_irh2,t_ifo1,t_ict2,t_ifc2)
-                opt4d(2,2,1,1) = bep1(iv,t_irh2,t_ifo2,t_ict1,t_ifc1)
-                opt4d(2,2,1,2) = bep1(iv,t_irh2,t_ifo2,t_ict1,t_ifc2)
-                opt4d(2,2,2,1) = bep1(iv,t_irh2,t_ifo2,t_ict2,t_ifc1)
-                opt4d(2,2,2,2) = bep1(iv,t_irh2,t_ifo2,t_ict2,t_ifc2)
+                opt4d(1,1,1,1)=bep1(iv,t_irh1,t_ifo1,t_ict1,t_ifc1)
+                opt4d(1,1,1,2)=bep1(iv,t_irh1,t_ifo1,t_ict1,t_ifc2)
+                opt4d(1,1,2,1)=bep1(iv,t_irh1,t_ifo1,t_ict2,t_ifc1)
+                opt4d(1,1,2,2)=bep1(iv,t_irh1,t_ifo1,t_ict2,t_ifc2)
+                opt4d(1,2,1,1)=bep1(iv,t_irh1,t_ifo2,t_ict1,t_ifc1)
+                opt4d(1,2,1,2)=bep1(iv,t_irh1,t_ifo2,t_ict1,t_ifc2)
+                opt4d(1,2,2,1)=bep1(iv,t_irh1,t_ifo2,t_ict2,t_ifc1)
+                opt4d(1,2,2,2)=bep1(iv,t_irh1,t_ifo2,t_ict2,t_ifc2)
+                opt4d(2,1,1,1)=bep1(iv,t_irh2,t_ifo1,t_ict1,t_ifc1)
+                opt4d(2,1,1,2)=bep1(iv,t_irh2,t_ifo1,t_ict1,t_ifc2)
+                opt4d(2,1,2,1)=bep1(iv,t_irh2,t_ifo1,t_ict2,t_ifc1)
+                opt4d(2,1,2,2)=bep1(iv,t_irh2,t_ifo1,t_ict2,t_ifc2)
+                opt4d(2,2,1,1)=bep1(iv,t_irh2,t_ifo2,t_ict1,t_ifc1)
+                opt4d(2,2,1,2)=bep1(iv,t_irh2,t_ifo2,t_ict1,t_ifc2)
+                opt4d(2,2,2,1)=bep1(iv,t_irh2,t_ifo2,t_ict2,t_ifc1)
+                opt4d(2,2,2,2)=bep1(iv,t_irh2,t_ifo2,t_ict2,t_ifc2)
 
                 ! interpolation in the fac, cat and fombg dimensions
                 call lininterpol4dim (d2mx, dxm1, invd, opt4d, opt1, opt2)
 
                 ! finally, interpolation in the rh dimension
-                opt(iv)=((t_rh2-t_xrh)*opt1+(t_xrh-t_rh1)*opt2) / (t_rh2-t_rh1)
+                opt(iv)=((t_rh2-t_xrh)*opt1+(t_xrh-t_rh1)*opt2) /(t_rh2-t_rh1)
              end do ! iv=1,38
 
-             ! update extinction coefficient
-             call this%update(icol, k, kcomp, opt)
-
-          end if
-       end do ! end of icol loop
-    end do  ! end of k loop
-
+             bext440(icol,k,kcomp)=opt(1)
+             bext500(icol,k,kcomp)=opt(2)
+             bext670(icol,k,kcomp)=opt(3)
+             bext870(icol,k,kcomp)=opt(4)
+             bebg440(icol,k,kcomp)=opt(5)
+             bebg500(icol,k,kcomp)=opt(6)
+             bebg670(icol,k,kcomp)=opt(7)
+             bebg870(icol,k,kcomp)=opt(8)
+             bebc440(icol,k,kcomp)=opt(9)
+             bebc500(icol,k,kcomp)=opt(10)
+             bebc670(icol,k,kcomp)=opt(11)
+             bebc870(icol,k,kcomp)=opt(12)
+             beoc440(icol,k,kcomp)=opt(13)
+             beoc500(icol,k,kcomp)=opt(14)
+             beoc670(icol,k,kcomp)=opt(15)
+             beoc870(icol,k,kcomp)=opt(16)
+             besu440(icol,k,kcomp)=opt(17)
+             besu500(icol,k,kcomp)=opt(18)
+             besu670(icol,k,kcomp)=opt(19)
+             besu870(icol,k,kcomp)=opt(20)
+             babs440(icol,k,kcomp)=opt(21)
+             babs500(icol,k,kcomp)=opt(22)
+             babs550(icol,k,kcomp)=opt(23)
+             babs670(icol,k,kcomp)=opt(24)
+             babs870(icol,k,kcomp)=opt(25)
+             bebg550lt1(icol,k,kcomp)=opt(26)
+             bebg550gt1(icol,k,kcomp)=opt(27)
+             bebc550lt1(icol,k,kcomp)=opt(28)
+             bebc550gt1(icol,k,kcomp)=opt(29)
+             beoc550lt1(icol,k,kcomp)=opt(30)
+             beoc550gt1(icol,k,kcomp)=opt(31)
+             besu550lt1(icol,k,kcomp)=opt(32)
+             besu550gt1(icol,k,kcomp)=opt(33)
+             backsc550(icol,k,kcomp)=opt(34)
+             babg550(icol,k,kcomp)=opt(35)
+             babc550(icol,k,kcomp)=opt(36)
+             baoc550(icol,k,kcomp)=opt(37)
+             basu550(icol,k,kcomp)=opt(38)
+             bebg550(icol,k,kcomp)=opt(26)+opt(27)
+             bebc550(icol,k,kcomp)=opt(28)+opt(29)
+             beoc550(icol,k,kcomp)=opt(30)+opt(31)
+             besu550(icol,k,kcomp)=opt(32)+opt(33)
+             bext550(icol,k,kcomp)=bebg550(icol,k,kcomp)+bebc550(icol,k,kcomp) &
+                                  +beoc550(icol,k,kcomp)+besu550(icol,k,kcomp)
+          endif
+       end do ! icol
+    end do ! k
   end subroutine intaeropt1
 
-  ! ==========================================================
-  subroutine intaeropt2to3 (this, lchnk, ncol, xrh, irh1, mplus10, &
-       Nnatk, xct, ict1, xfac, ifac1)
+  !===============================================================================
+  subroutine intaeropt2to3 (&
+       lchnk, ncol, xrh, irh1, mplus10,                &
+       Nnatk, xct, ict1, xfac, ifac1,                  &
+       bext440, bext500, bext550, bext670, bext870,    &
+       bebg440, bebg500, bebg550, bebg670, bebg870,    &
+       bebc440, bebc500, bebc550, bebc670, bebc870,    &
+       beoc440, beoc500, beoc550, beoc670, beoc870,    &
+       besu440, besu500, besu550, besu670, besu870,    &
+       babs440, babs500, babs550, babs670, babs870,    &
+       bebg550lt1, bebg550gt1, bebc550lt1, bebc550gt1, &
+       beoc550lt1, beoc550gt1, besu550lt1, besu550gt1, &
+       backsc550, babg550, babc550, baoc550, basu550)
 
-    !   Extended by Alf Kirkevaag to include SOA in September 2015
+    ! Modal total and absorption extiction coefficients (for AeroCom)
+    ! for 440nm, 500nm, 550nm, 670nm and 870nm, and for d<1um (lt1) and d>1um (gt1).
 
-    ! Arguments
-    class(extinction_coeffs_type) :: this
-    integer  , intent(in) :: lchnk                       ! chunk identifier
-    integer  , intent(in) :: ncol                        ! number of atmospheric columns
-    integer  , intent(in) :: mplus10                     ! mode number (0) or number + 10 (1)
-    real(r8) , intent(in) :: xrh(pcols,pver)            ! level relative humidity (fraction)
-    integer  , intent(in) :: irh1(pcols,pver)
-    real(r8) , intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
-    real(r8) , intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
-    integer  , intent(in) :: ict1(pcols,pver,nmodes)
-    real(r8) , intent(in) :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
-    integer  , intent(in) :: ifac1(pcols,pver,nbmodes)
+    ! arguments
+    integer  , intent(in)  :: lchnk                      ! chunk identifier
+    integer  , intent(in)  :: ncol                       ! number of atmospheric columns
+    integer  , intent(in)  :: mplus10                    ! mode number (0) or number + 10 (1)
+    real(r8) , intent(in)  :: xrh(pcols,pver)            ! level relative humidity (fraction)
+    integer  , intent(in)  :: irh1(pcols,pver)
+    real(r8) , intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8) , intent(in)  :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
+    integer  , intent(in)  :: ict1(pcols,pver,nmodes)
+    real(r8) , intent(in)  :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
+    integer  , intent(in)  :: ifac1(pcols,pver,nbmodes)
+    real(r8) , intent(out) :: bext440(pcols,pver,0:nbmodes), babs440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext500(pcols,pver,0:nbmodes), babs500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext550(pcols,pver,0:nbmodes), babs550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext670(pcols,pver,0:nbmodes), babs670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext870(pcols,pver,0:nbmodes), babs870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg550(pcols,pver,0:nbmodes), babg550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc550(pcols,pver,0:nbmodes), babc550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc550(pcols,pver,0:nbmodes), baoc550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu550(pcols,pver,0:nbmodes), basu550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg550lt1(pcols,pver,0:nbmodes), bebg550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc550lt1(pcols,pver,0:nbmodes), bebc550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc550lt1(pcols,pver,0:nbmodes), beoc550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu550lt1(pcols,pver,0:nbmodes), besu550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: backsc550(pcols,pver,0:nbmodes)
 
     ! Local variables
-    real(r8) :: a, b, e, eps
+    real(r8) :: a, b, e
     integer  :: i, iv, kcomp, k, icol, kc10
     integer  :: t_irh1, t_irh2, t_ict1, t_ict2, t_ifc1, t_ifc2
     real(r8) :: t_fac1, t_fac2, t_xfac, t_xrh, t_xct, t_rh1, t_rh2, t_cat1, t_cat2
     real(r8) :: d2mx(3), dxm1(3), invd(3)
     real(r8) :: opt3d(2,2,2)
     real(r8) :: opt1, opt2, opt(38)
-    parameter (e=2.718281828_r8, eps=1.0e-60_r8)
+    !-------------------------------------------------------------------------
 
     ! SO4(Ait), BC(Ait) and OC(Ait) modes:
+    kcomp = 2
+    if (mplus10==0) then
+       kc10=kcomp
+    else
+       kc10=kcomp+10
+    endif
 
-    do kcomp=2,3
-       call this%zero(kcomp, ncol)
-    end do
-
-    kcomp = 2 ! kcomp=3 is no longer used
+    ! initialize all output fields
     do k=1,pver
        do icol=1,ncol
+          bext440(icol,k,kcomp)=0.0_r8
+          babs440(icol,k,kcomp)=0.0_r8
+          bext500(icol,k,kcomp)=0.0_r8
+          babs500(icol,k,kcomp)=0.0_r8
+          bext550(icol,k,kcomp)=0.0_r8
+          babs550(icol,k,kcomp)=0.0_r8
+          bext670(icol,k,kcomp)=0.0_r8
+          babs670(icol,k,kcomp)=0.0_r8
+          bext870(icol,k,kcomp)=0.0_r8
+          babs870(icol,k,kcomp)=0.0_r8
+          bebg440(icol,k,kcomp)=0.0_r8
+          bebg500(icol,k,kcomp)=0.0_r8
+          bebg550(icol,k,kcomp)=0.0_r8
+          babg550(icol,k,kcomp)=0.0_r8
+          bebg670(icol,k,kcomp)=0.0_r8
+          bebg870(icol,k,kcomp)=0.0_r8
+          bebc440(icol,k,kcomp)=0.0_r8
+          bebc500(icol,k,kcomp)=0.0_r8
+          bebc550(icol,k,kcomp)=0.0_r8
+          babc550(icol,k,kcomp)=0.0_r8
+          bebc670(icol,k,kcomp)=0.0_r8
+          bebc870(icol,k,kcomp)=0.0_r8
+          beoc440(icol,k,kcomp)=0.0_r8
+          beoc500(icol,k,kcomp)=0.0_r8
+          beoc550(icol,k,kcomp)=0.0_r8
+          baoc550(icol,k,kcomp)=0.0_r8
+          beoc670(icol,k,kcomp)=0.0_r8
+          beoc870(icol,k,kcomp)=0.0_r8
+          besu440(icol,k,kcomp)=0.0_r8
+          besu500(icol,k,kcomp)=0.0_r8
+          besu550(icol,k,kcomp)=0.0_r8
+          basu550(icol,k,kcomp)=0.0_r8
+          besu670(icol,k,kcomp)=0.0_r8
+          besu870(icol,k,kcomp)=0.0_r8
+          bebg550lt1(icol,k,kcomp)=0.0_r8
+          bebg550gt1(icol,k,kcomp)=0.0_r8
+          bebc550lt1(icol,k,kcomp)=0.0_r8
+          bebc550gt1(icol,k,kcomp)=0.0_r8
+          beoc550lt1(icol,k,kcomp)=0.0_r8
+          beoc550gt1(icol,k,kcomp)=0.0_r8
+          besu550lt1(icol,k,kcomp)=0.0_r8
+          besu550gt1(icol,k,kcomp)=0.0_r8
+          backsc550(icol,k,kcomp)=0.0_r8
+       end do
+    end do
 
+    do k=1,pver
+       do icol=1,ncol
           if(Nnatk(icol,k,kc10).gt.0) then
-
-             !      Collect all the vector elements into temporary storage
-             !      to avoid cache conflicts and excessive cross-referencing
+             ! Collect all the vector elements into temporary storage
+             ! to avoid cache conflicts and excessive cross-referencing
 
              t_irh1 = irh1(icol,k)
              t_irh2 = t_irh1+1
@@ -820,7 +1091,7 @@ contains
              t_xct  = xct(icol,k,kc10)
              t_xfac = xfac(icol,k,kcomp)
 
-             !     partial lengths along each dimension (1-4) for interpolation
+             ! partial lengths along each dimension (1-4) for interpolation
              d2mx(1) = (t_rh2-t_xrh)
              dxm1(1) = (t_xrh-t_rh1)
              invd(1) = 1.0_r8/(t_rh2-t_rh1)
@@ -832,8 +1103,7 @@ contains
              invd(3) = 1.0_r8/(t_fac2-t_fac1)
 
              do iv=1,38  ! variable number
-
-                !  end points as basis for multidimentional linear interpolation
+                ! end points as basis for multidimentional linear interpolation
                 opt3d(1,1,1)=bep2to3(iv,t_irh1,t_ict1,t_ifc1,kcomp)
                 opt3d(1,1,2)=bep2to3(iv,t_irh1,t_ict1,t_ifc2,kcomp)
                 opt3d(1,2,1)=bep2to3(iv,t_irh1,t_ict2,t_ifc1,kcomp)
@@ -843,49 +1113,130 @@ contains
                 opt3d(2,2,1)=bep2to3(iv,t_irh2,t_ict2,t_ifc1,kcomp)
                 opt3d(2,2,2)=bep2to3(iv,t_irh2,t_ict2,t_ifc2,kcomp)
 
-                !     interpolation in the (fac and) cat dimension
+                ! interpolation in the (fac and) cat dimension
                 call lininterpol3dim (d2mx, dxm1, invd, opt3d, opt1, opt2)
 
-                !     finally, interpolation in the rh dimension
+                ! finally, interpolation in the rh dimension
                 opt(iv)=((t_rh2-t_xrh)*opt1+(t_xrh-t_rh1)*opt2) /(t_rh2-t_rh1)
-
              end do ! iv=1,38
 
-             ! determine extinction coefficient
-             call this%update(icol, k, kcomp, opt)
-
-          end if ! Nnatk > 0
+             bext440(icol,k,kcomp)=opt(1)
+             bext500(icol,k,kcomp)=opt(2)
+             bext670(icol,k,kcomp)=opt(3)
+             bext870(icol,k,kcomp)=opt(4)
+             bebg440(icol,k,kcomp)=opt(5)
+             bebg500(icol,k,kcomp)=opt(6)
+             bebg670(icol,k,kcomp)=opt(7)
+             bebg870(icol,k,kcomp)=opt(8)
+             bebc440(icol,k,kcomp)=opt(9)
+             bebc500(icol,k,kcomp)=opt(10)
+             bebc670(icol,k,kcomp)=opt(11)
+             bebc870(icol,k,kcomp)=opt(12)
+             beoc440(icol,k,kcomp)=opt(13)
+             beoc500(icol,k,kcomp)=opt(14)
+             beoc670(icol,k,kcomp)=opt(15)
+             beoc870(icol,k,kcomp)=opt(16)
+             besu440(icol,k,kcomp)=opt(17)
+             besu500(icol,k,kcomp)=opt(18)
+             besu670(icol,k,kcomp)=opt(19)
+             besu870(icol,k,kcomp)=opt(20)
+             babs440(icol,k,kcomp)=opt(21)
+             babs500(icol,k,kcomp)=opt(22)
+             babs550(icol,k,kcomp)=opt(23)
+             babs670(icol,k,kcomp)=opt(24)
+             babs870(icol,k,kcomp)=opt(25)
+             bebg550lt1(icol,k,kcomp)=opt(26)
+             bebg550gt1(icol,k,kcomp)=opt(27)
+             bebc550lt1(icol,k,kcomp)=opt(28)
+             bebc550gt1(icol,k,kcomp)=opt(29)
+             beoc550lt1(icol,k,kcomp)=opt(30)
+             beoc550gt1(icol,k,kcomp)=opt(31)
+             besu550lt1(icol,k,kcomp)=opt(32)
+             besu550gt1(icol,k,kcomp)=opt(33)
+             backsc550(icol,k,kcomp)=opt(34)
+             babg550(icol,k,kcomp)=opt(35)
+             babc550(icol,k,kcomp)=opt(36)
+             baoc550(icol,k,kcomp)=opt(37)
+             basu550(icol,k,kcomp)=opt(38)
+             bebg550(icol,k,kcomp)=opt(26)+opt(27)
+             bebc550(icol,k,kcomp)=opt(28)+opt(29)
+             beoc550(icol,k,kcomp)=opt(30)+opt(31)
+             besu550(icol,k,kcomp)=opt(32)+opt(33)
+             bext550(icol,k,kcomp)=bebg550(icol,k,kcomp)+bebc550(icol,k,kcomp) &
+                                  +beoc550(icol,k,kcomp)+besu550(icol,k,kcomp)
+          endif   ! Nnatk > 0
        end do ! icol
     end do ! k
-
   end subroutine intaeropt2to3
 
-  ! ==========================================================
-  subroutine intaeropt4 (this, lchnk, ncol, xrh, irh1, mplus10, Nnatk,   &
-       xfbcbg, ifbcbg1, xct, ict1, xfac, ifac1, xfaq, ifaq1)
+  !===============================================================================
+  subroutine intaeropt4 (lchnk, ncol, xrh, irh1, mplus10, Nnatk,   &
+       xfbcbg, ifbcbg1, xct, ict1, xfac, ifac1, xfaq, ifaq1, &
+       bext440, bext500, bext550, bext670, bext870,          &
+       bebg440, bebg500, bebg550, bebg670, bebg870,          &
+       bebc440, bebc500, bebc550, bebc670, bebc870,          &
+       beoc440, beoc500, beoc550, beoc670, beoc870,          &
+       besu440, besu500, besu550, besu670, besu870,          &
+       babs440, babs500, babs550, babs670, babs870,          &
+       bebg550lt1, bebg550gt1, bebc550lt1, bebc550gt1,       &
+       beoc550lt1, beoc550gt1, besu550lt1, besu550gt1,       &
+       backsc550, babg550, babc550, baoc550, basu550)
 
-    class(extinction_coeffs_type) :: this
-    integer  , intent(in) :: lchnk                      ! chunk identifier
-    integer  , intent(in) :: ncol                       ! number of atmospheric columns
-    integer  , intent(in) :: mplus10                    ! mode number (0) or number + 10 (1)
-    real(r8) , intent(in) :: xrh(pcols,pver)            ! level relative humidity (fraction)
-    integer  , intent(in) :: irh1(pcols,pver)
-    real(r8) , intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
-    real(r8) , intent(in) :: xfbcbg(pcols,pver)
-    integer  , intent(in) :: ifbcbg1(pcols,pver)
-    real(r8) , intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
-    integer  , intent(in) :: ict1(pcols,pver,nmodes)
-    real(r8) , intent(in) :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
-    integer  , intent(in) :: ifac1(pcols,pver,nbmodes)
-    real(r8) , intent(in) :: xfaq(pcols,pver,nbmodes)   ! modal SO4(aq)/SO4
-    integer  , intent(in) :: ifaq1(pcols,pver,nbmodes)
+    ! Modal total and absorption extiction coefficients (for AeroCom)
+    ! for 550nm (1) and 865nm (2), and for r<1um (lt1) and r>1um (gt1).
+
+    ! Arguments
+    integer  , intent(in)  :: lchnk                      ! chunk identifier
+    integer  , intent(in)  :: ncol                       ! number of atmospheric columns
+    integer  , intent(in)  :: mplus10                    ! mode number (0) or number + 10 (1)
+    real(r8) , intent(in)  :: xrh(pcols,pver)            ! level relative humidity (fraction)
+    integer  , intent(in)  :: irh1(pcols,pver)
+    real(r8) , intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8) , intent(in)  :: xfbcbg(pcols,pver)
+    integer  , intent(in)  :: ifbcbg1(pcols,pver)
+    real(r8) , intent(in)  :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
+    integer  , intent(in)  :: ict1(pcols,pver,nmodes)
+    real(r8) , intent(in)  :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
+    integer  , intent(in)  :: ifac1(pcols,pver,nbmodes)
+    real(r8) , intent(in)  :: xfaq(pcols,pver,nbmodes)   ! modal SO4(aq)/SO4
+    integer  , intent(in)  :: ifaq1(pcols,pver,nbmodes)
+    real(r8) , intent(out) :: bext440(pcols,pver,0:nbmodes), babs440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext500(pcols,pver,0:nbmodes), babs500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext550(pcols,pver,0:nbmodes), babs550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext670(pcols,pver,0:nbmodes), babs670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext870(pcols,pver,0:nbmodes), babs870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg550(pcols,pver,0:nbmodes), babg550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc550(pcols,pver,0:nbmodes), babc550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc550(pcols,pver,0:nbmodes), baoc550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu550(pcols,pver,0:nbmodes), basu550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg550lt1(pcols,pver,0:nbmodes), bebg550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc550lt1(pcols,pver,0:nbmodes), bebc550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc550lt1(pcols,pver,0:nbmodes), beoc550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu550lt1(pcols,pver,0:nbmodes), besu550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: backsc550(pcols,pver,0:nbmodes)
 
     ! Local variables
-    real(r8) :: a, b, e, eps
+    real(r8) :: a, b, e
     integer  :: i, iv, kcomp, k, icol, kc10
     integer  :: t_irh1, t_irh2, t_ict1, t_ict2, t_ifc1, t_ifc2,  t_ifa1, t_ifa2
-    real(r8) :: t_fbcbg1, t_fbcbg2
     integer  :: t_ifb1, t_ifb2
+    real(r8) :: t_fbcbg1, t_fbcbg2
     real(r8) :: t_faq1, t_faq2, t_xfaq
     real(r8) :: t_fac1, t_fac2, t_xfac
     real(r8) :: t_xrh, t_xct, t_rh1, t_rh2
@@ -894,17 +1245,63 @@ contains
     real(r8) :: d2mx(5), dxm1(5), invd(5)
     real(r8) :: opt5d(2,2,2,2,2)
     real(r8) :: opt1, opt2, opt(38)
-    parameter (e=2.718281828_r8, eps=1.0e-60_r8)
+    !-------------------------------------------------------------------------
 
-    ! BC&OC(Ait) mode:
     kcomp = 4
-    call this%zero(kcomp, ncol)
-
     if(mplus10==0) then
        kc10=kcomp
     else
        kc10=kcomp+10
     endif
+
+    ! initialize all output fields
+    do k=1,pver
+       do icol=1,ncol
+          bext440(icol,k,kcomp)=0.0_r8
+          babs440(icol,k,kcomp)=0.0_r8
+          bext500(icol,k,kcomp)=0.0_r8
+          babs500(icol,k,kcomp)=0.0_r8
+          bext550(icol,k,kcomp)=0.0_r8
+          babs550(icol,k,kcomp)=0.0_r8
+          bext670(icol,k,kcomp)=0.0_r8
+          babs670(icol,k,kcomp)=0.0_r8
+          bext870(icol,k,kcomp)=0.0_r8
+          babs870(icol,k,kcomp)=0.0_r8
+          bebg440(icol,k,kcomp)=0.0_r8
+          bebg500(icol,k,kcomp)=0.0_r8
+          bebg550(icol,k,kcomp)=0.0_r8
+          babg550(icol,k,kcomp)=0.0_r8
+          bebg670(icol,k,kcomp)=0.0_r8
+          bebg870(icol,k,kcomp)=0.0_r8
+          bebc440(icol,k,kcomp)=0.0_r8
+          bebc500(icol,k,kcomp)=0.0_r8
+          bebc550(icol,k,kcomp)=0.0_r8
+          babc550(icol,k,kcomp)=0.0_r8
+          bebc670(icol,k,kcomp)=0.0_r8
+          bebc870(icol,k,kcomp)=0.0_r8
+          beoc440(icol,k,kcomp)=0.0_r8
+          beoc500(icol,k,kcomp)=0.0_r8
+          beoc550(icol,k,kcomp)=0.0_r8
+          baoc550(icol,k,kcomp)=0.0_r8
+          beoc670(icol,k,kcomp)=0.0_r8
+          beoc870(icol,k,kcomp)=0.0_r8
+          besu440(icol,k,kcomp)=0.0_r8
+          besu500(icol,k,kcomp)=0.0_r8
+          besu550(icol,k,kcomp)=0.0_r8
+          basu550(icol,k,kcomp)=0.0_r8
+          besu670(icol,k,kcomp)=0.0_r8
+          besu870(icol,k,kcomp)=0.0_r8
+          bebg550lt1(icol,k,kcomp)=0.0_r8
+          bebg550gt1(icol,k,kcomp)=0.0_r8
+          bebc550lt1(icol,k,kcomp)=0.0_r8
+          bebc550gt1(icol,k,kcomp)=0.0_r8
+          beoc550lt1(icol,k,kcomp)=0.0_r8
+          beoc550gt1(icol,k,kcomp)=0.0_r8
+          besu550lt1(icol,k,kcomp)=0.0_r8
+          besu550gt1(icol,k,kcomp)=0.0_r8
+          backsc550(icol,k,kcomp)=0.0_r8
+       end do
+    end do
 
     do k=1,pver
        do icol=1,ncol
@@ -959,7 +1356,6 @@ contains
 
 
              do iv=1,38  ! variable number
-
                 opt5d(1,1,1,1,1)=bep4(iv,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa1)
                 opt5d(1,1,1,1,2)=bep4(iv,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa2)
                 opt5d(1,1,1,2,1)=bep4(iv,t_irh1,t_ifb1,t_ict1,t_ifc2,t_ifa1)
@@ -997,41 +1393,122 @@ contains
                 call lininterpol5dim (d2mx, dxm1, invd, opt5d, opt1, opt2)
 
                 ! finally, interpolation in the rh dimension
-                opt(iv) = ((t_rh2-t_xrh)*opt1+(t_xrh-t_rh1)*opt2) /(t_rh2-t_rh1)
-
+                opt(iv)=((t_rh2-t_xrh)*opt1+(t_xrh-t_rh1)*opt2)/(t_rh2-t_rh1)
              end do ! iv=1,38
 
-             ! determine extinction coefficient
-             call this%update(icol, k, kcomp, opt)
-
-          end if ! Nnatk > 0
+             bext440(icol,k,kcomp)=opt(1)
+             bext500(icol,k,kcomp)=opt(2)
+             bext670(icol,k,kcomp)=opt(3)
+             bext870(icol,k,kcomp)=opt(4)
+             bebg440(icol,k,kcomp)=opt(5)
+             bebg500(icol,k,kcomp)=opt(6)
+             bebg670(icol,k,kcomp)=opt(7)
+             bebg870(icol,k,kcomp)=opt(8)
+             bebc440(icol,k,kcomp)=opt(9)
+             bebc500(icol,k,kcomp)=opt(10)
+             bebc670(icol,k,kcomp)=opt(11)
+             bebc870(icol,k,kcomp)=opt(12)
+             beoc440(icol,k,kcomp)=opt(13)
+             beoc500(icol,k,kcomp)=opt(14)
+             beoc670(icol,k,kcomp)=opt(15)
+             beoc870(icol,k,kcomp)=opt(16)
+             besu440(icol,k,kcomp)=opt(17)
+             besu500(icol,k,kcomp)=opt(18)
+             besu670(icol,k,kcomp)=opt(19)
+             besu870(icol,k,kcomp)=opt(20)
+             babs440(icol,k,kcomp)=opt(21)
+             babs500(icol,k,kcomp)=opt(22)
+             babs550(icol,k,kcomp)=opt(23)
+             babs670(icol,k,kcomp)=opt(24)
+             babs870(icol,k,kcomp)=opt(25)
+             bebg550lt1(icol,k,kcomp)=opt(26)
+             bebg550gt1(icol,k,kcomp)=opt(27)
+             bebc550lt1(icol,k,kcomp)=opt(28)
+             bebc550gt1(icol,k,kcomp)=opt(29)
+             beoc550lt1(icol,k,kcomp)=opt(30)
+             beoc550gt1(icol,k,kcomp)=opt(31)
+             besu550lt1(icol,k,kcomp)=opt(32)
+             besu550gt1(icol,k,kcomp)=opt(33)
+             backsc550(icol,k,kcomp)=opt(34)
+             babg550(icol,k,kcomp)=opt(35)
+             babc550(icol,k,kcomp)=opt(36)
+             baoc550(icol,k,kcomp)=opt(37)
+             basu550(icol,k,kcomp)=opt(38)
+             bebg550(icol,k,kcomp)=opt(26)+opt(27)
+             bebc550(icol,k,kcomp)=opt(28)+opt(29)
+             beoc550(icol,k,kcomp)=opt(30)+opt(31)
+             besu550(icol,k,kcomp)=opt(32)+opt(33)
+             bext550(icol,k,kcomp)=bebg550(icol,k,kcomp)+bebc550(icol,k,kcomp) &
+                                  +beoc550(icol,k,kcomp)+besu550(icol,k,kcomp)
+          endif
        end do ! icol
     end do ! k
 
   end subroutine intaeropt4
 
-  ! ==========================================================
-  subroutine intaeropt5to10 (this, lchnk, ncol, xrh, irh1, Nnatk,    &
-       xct, ict1, xfac, ifac1, xfbc, ifbc1, xfaq, ifaq1)
+  !===============================================================================
+  subroutine intaeropt5to10 (lchnk, ncol, xrh, irh1, Nnatk,    &
+       xct, ict1, xfac, ifac1, xfbc, ifbc1, xfaq, ifaq1, &
+       bext440, bext500, bext550, bext670, bext870,      &
+       bebg440, bebg500, bebg550, bebg670, bebg870,      &
+       bebc440, bebc500, bebc550, bebc670, bebc870,      &
+       beoc440, beoc500, beoc550, beoc670, beoc870,      &
+       besu440, besu500, besu550, besu670, besu870,      &
+       babs440, babs500, babs550, babs670, babs870,      &
+       bebg550lt1, bebg550gt1, bebc550lt1, bebc550gt1,   &
+       beoc550lt1, beoc550gt1, besu550lt1, besu550gt1,   &
+       backsc550, babg550, babc550, baoc550, basu550)
 
-    ! Arguments
-    class(extinction_coeffs_type) :: this
-    integer  , intent(in) :: lchnk                      ! chunk identifier
-    integer  , intent(in) :: ncol                       ! number of atmospheric columns
-    real(r8) , intent(in) :: xrh(pcols,pver)            ! level relative humidity (fraction)
-    integer  , intent(in) :: irh1(pcols,pver)
-    real(r8) , intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
-    real(r8) , intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
-    integer  , intent(in) :: ict1(pcols,pver,nmodes)
-    real(r8) , intent(in) :: xfac(pcols,pver,nbmodes)   ! modal (OC+BC)/(SO4+BC+OC)
-    integer  , intent(in) :: ifac1(pcols,pver,nbmodes)
-    real(r8) , intent(in) :: xfbc(pcols,pver,nbmodes)   ! modal BC/(OC+BC)
-    integer  , intent(in) :: ifbc1(pcols,pver,nbmodes)
-    real(r8) , intent(in) :: xfaq(pcols,pver,nbmodes)   ! modal SO4(aq)/SO4
-    integer  , intent(in) :: ifaq1(pcols,pver,nbmodes)
+    ! Output arguments: Modal total and absorption extiction coefficients (for AeroCom)
+    ! for 550nm (1) and 865nm (2), and for r<1um (lt1) and r>1um (gt1).
+
+    ! arguments
+    integer  , intent(in)  :: lchnk                       ! chunk identifier
+    integer  , intent(in)  :: ncol                        ! number of atmospheric columns
+    real(r8) , intent(in)  :: xrh(pcols,pver)            ! level relative humidity (fraction)
+    integer  ,  intent(in) :: irh1(pcols,pver)
+    real(r8) , intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8) , intent(in)  :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
+    integer  ,  intent(in) :: ict1(pcols,pver,nmodes)
+    real(r8) , intent(in)  :: xfac(pcols,pver,nbmodes)   ! modal (OC+BC)/(SO4+BC+OC)
+    integer  ,  intent(in) :: ifac1(pcols,pver,nbmodes)
+    real(r8) , intent(in)  :: xfbc(pcols,pver,nbmodes)   ! modal BC/(OC+BC)
+    integer  ,  intent(in) :: ifbc1(pcols,pver,nbmodes)
+    real(r8) , intent(in)  :: xfaq(pcols,pver,nbmodes)   ! modal SO4(aq)/SO4
+    integer  ,  intent(in) :: ifaq1(pcols,pver,nbmodes)
+    real(r8) , intent(out) :: bext440(pcols,pver,0:nbmodes), babs440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext500(pcols,pver,0:nbmodes), babs500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext550(pcols,pver,0:nbmodes), babs550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext670(pcols,pver,0:nbmodes), babs670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bext870(pcols,pver,0:nbmodes), babs870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg550(pcols,pver,0:nbmodes), babg550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc550(pcols,pver,0:nbmodes), babc550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc550(pcols,pver,0:nbmodes), baoc550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu440(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu500(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu550(pcols,pver,0:nbmodes), basu550(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu670(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu870(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebg550lt1(pcols,pver,0:nbmodes), bebg550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: bebc550lt1(pcols,pver,0:nbmodes), bebc550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: beoc550lt1(pcols,pver,0:nbmodes), beoc550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: besu550lt1(pcols,pver,0:nbmodes), besu550gt1(pcols,pver,0:nbmodes)
+    real(r8) , intent(out) :: backsc550(pcols,pver,0:nbmodes)
 
     ! Local variables
-    real(r8) :: a, b, e, eps
+    real(r8) :: a, b, e
     integer  :: i, iv, kcomp, k, icol
     integer  :: t_irh1, t_irh2, t_ict1, t_ict2, t_ifa1, t_ifa2
     integer  :: t_ifb1, t_ifb2, t_ifc1, t_ifc2
@@ -1043,13 +1520,60 @@ contains
     real(r8) :: d2mx(5), dxm1(5), invd(5)
     real(r8) :: opt5d(2,2,2,2,2)
     real(r8) :: opt1, opt2, opt(38)
-    parameter (e=2.718281828_r8, eps=1.0e-60_r8)
+    !-------------------------------------------------------------------------
 
     ! Modes 5 to 10 (SO4(Ait75) and mineral and seasalt-modes + cond./coag./aq.):
 
     do kcomp=5,10
-       ! zero extinction coefficients for this kcomp
-       call this%zero(kcomp, ncol)
+
+       ! initialize all output fields
+       do k=1,pver
+          do icol=1,ncol
+             bext440(icol,k,kcomp)=0.0_r8
+             babs440(icol,k,kcomp)=0.0_r8
+             bext500(icol,k,kcomp)=0.0_r8
+             babs500(icol,k,kcomp)=0.0_r8
+             bext550(icol,k,kcomp)=0.0_r8
+             babs550(icol,k,kcomp)=0.0_r8
+             bext670(icol,k,kcomp)=0.0_r8
+             babs670(icol,k,kcomp)=0.0_r8
+             bext870(icol,k,kcomp)=0.0_r8
+             babs870(icol,k,kcomp)=0.0_r8
+             bebg440(icol,k,kcomp)=0.0_r8
+             bebg500(icol,k,kcomp)=0.0_r8
+             bebg550(icol,k,kcomp)=0.0_r8
+             babg550(icol,k,kcomp)=0.0_r8
+             bebg670(icol,k,kcomp)=0.0_r8
+             bebg870(icol,k,kcomp)=0.0_r8
+             bebc440(icol,k,kcomp)=0.0_r8
+             bebc500(icol,k,kcomp)=0.0_r8
+             bebc550(icol,k,kcomp)=0.0_r8
+             babc550(icol,k,kcomp)=0.0_r8
+             bebc670(icol,k,kcomp)=0.0_r8
+             bebc870(icol,k,kcomp)=0.0_r8
+             beoc440(icol,k,kcomp)=0.0_r8
+             beoc500(icol,k,kcomp)=0.0_r8
+             beoc550(icol,k,kcomp)=0.0_r8
+             baoc550(icol,k,kcomp)=0.0_r8
+             beoc670(icol,k,kcomp)=0.0_r8
+             beoc870(icol,k,kcomp)=0.0_r8
+             besu440(icol,k,kcomp)=0.0_r8
+             besu500(icol,k,kcomp)=0.0_r8
+             besu550(icol,k,kcomp)=0.0_r8
+             basu550(icol,k,kcomp)=0.0_r8
+             besu670(icol,k,kcomp)=0.0_r8
+             besu870(icol,k,kcomp)=0.0_r8
+             bebg550lt1(icol,k,kcomp)=0.0_r8
+             bebg550gt1(icol,k,kcomp)=0.0_r8
+             bebc550lt1(icol,k,kcomp)=0.0_r8
+             bebc550gt1(icol,k,kcomp)=0.0_r8
+             beoc550lt1(icol,k,kcomp)=0.0_r8
+             beoc550gt1(icol,k,kcomp)=0.0_r8
+             besu550lt1(icol,k,kcomp)=0.0_r8
+             besu550gt1(icol,k,kcomp)=0.0_r8
+             backsc550(icol,k,kcomp)=0.0_r8
+          end do
+       end do
 
        do k=1,pver
           do icol=1,ncol
@@ -1086,7 +1610,7 @@ contains
                 t_xfbc = xfbc(icol,k,kcomp)
                 t_xfaq = xfaq(icol,k,kcomp)
 
-                ! partial lengths along each dimension (1-5) for interpolation
+                !     partial lengths along each dimension (1-5) for interpolation
                 d2mx(1) = (t_rh2-t_xrh)
                 dxm1(1) = (t_xrh-t_rh1)
                 invd(1) = 1.0_r8/(t_rh2-t_rh1)
@@ -1105,6 +1629,7 @@ contains
 
 
                 do iv=1,38  ! variable number
+
                    opt5d(1,1,1,1,1)=bep5to10(iv,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa1,kcomp)
                    opt5d(1,1,1,1,2)=bep5to10(iv,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa2,kcomp)
                    opt5d(1,1,1,2,1)=bep5to10(iv,t_irh1,t_ict1,t_ifc1,t_ifb2,t_ifa1,kcomp)
@@ -1141,149 +1666,72 @@ contains
                    ! interpolation in the faq, fbc, fac and cat dimensions
                    call lininterpol5dim (d2mx, dxm1, invd, opt5d, opt1, opt2)
 
-                   ! finally, interpolation in the rh dimension
-                   opt(iv) = ((t_rh2-t_xrh)*opt1+(t_xrh-t_rh1)*opt2) /(t_rh2-t_rh1)
-
+                   opt(iv)=((t_rh2-t_xrh)*opt1+(t_xrh-t_rh1)*opt2)/(t_rh2-t_rh1)
                 end do ! iv=1,38
 
-                ! determine extinction coefficient
-                call this%update(icol, k, kcomp, opt)
-
-             end if ! Nnatk > 0
+                bext440(icol,k,kcomp)=opt(1)
+                bext500(icol,k,kcomp)=opt(2)
+                bext670(icol,k,kcomp)=opt(3)
+                bext870(icol,k,kcomp)=opt(4)
+                bebg440(icol,k,kcomp)=opt(5)
+                bebg500(icol,k,kcomp)=opt(6)
+                bebg670(icol,k,kcomp)=opt(7)
+                bebg870(icol,k,kcomp)=opt(8)
+                bebc440(icol,k,kcomp)=opt(9)
+                bebc500(icol,k,kcomp)=opt(10)
+                bebc670(icol,k,kcomp)=opt(11)
+                bebc870(icol,k,kcomp)=opt(12)
+                beoc440(icol,k,kcomp)=opt(13)
+                beoc500(icol,k,kcomp)=opt(14)
+                beoc670(icol,k,kcomp)=opt(15)
+                beoc870(icol,k,kcomp)=opt(16)
+                besu440(icol,k,kcomp)=opt(17)
+                besu500(icol,k,kcomp)=opt(18)
+                besu670(icol,k,kcomp)=opt(19)
+                besu870(icol,k,kcomp)=opt(20)
+                babs440(icol,k,kcomp)=opt(21)
+                babs500(icol,k,kcomp)=opt(22)
+                babs550(icol,k,kcomp)=opt(23)
+                babs670(icol,k,kcomp)=opt(24)
+                babs870(icol,k,kcomp)=opt(25)
+                bebg550lt1(icol,k,kcomp)=opt(26)
+                bebg550gt1(icol,k,kcomp)=opt(27)
+                bebc550lt1(icol,k,kcomp)=opt(28)
+                bebc550gt1(icol,k,kcomp)=opt(29)
+                beoc550lt1(icol,k,kcomp)=opt(30)
+                beoc550gt1(icol,k,kcomp)=opt(31)
+                besu550lt1(icol,k,kcomp)=opt(32)
+                besu550gt1(icol,k,kcomp)=opt(33)
+                backsc550(icol,k,kcomp)=opt(34)
+                babg550(icol,k,kcomp)=opt(35)
+                babc550(icol,k,kcomp)=opt(36)
+                baoc550(icol,k,kcomp)=opt(37)
+                basu550(icol,k,kcomp)=opt(38)
+                bebg550(icol,k,kcomp)=opt(26)+opt(27)
+                bebc550(icol,k,kcomp)=opt(28)+opt(29)
+                beoc550(icol,k,kcomp)=opt(30)+opt(31)
+                besu550(icol,k,kcomp)=opt(32)+opt(33)
+                bext550(icol,k,kcomp)=bebg550(icol,k,kcomp)+bebc550(icol,k,kcomp) &
+                                     +beoc550(icol,k,kcomp)+besu550(icol,k,kcomp)
+             endif
           end do ! icol
        end do ! k
-    end do ! kcomp
-
+    end do  ! kcomp
   end subroutine intaeropt5to10
 
-  ! ==========================================================
-  subroutine zero(this, kcomp, ncol)
-
-    class(extinction_coeffs_type) :: this
-    integer , intent(in)    :: kcomp
-    integer , intent(in)    :: ncol
-
-    integer :: k
-    integer :: icol
-
-    ! initialize all output fields to zero
-    do k=1,pver
-       do icol=1,ncol
-          this%bext440(icol,k,kcomp) = 0.0_r8
-          this%babs440(icol,k,kcomp) = 0.0_r8
-          this%bext500(icol,k,kcomp) = 0.0_r8
-          this%babs500(icol,k,kcomp) = 0.0_r8
-          this%bext550(icol,k,kcomp) = 0.0_r8
-          this%babs550(icol,k,kcomp) = 0.0_r8
-          this%bext670(icol,k,kcomp) = 0.0_r8
-          this%babs670(icol,k,kcomp) = 0.0_r8
-          this%bext870(icol,k,kcomp) = 0.0_r8
-          this%babs870(icol,k,kcomp) = 0.0_r8
-          this%bebg440(icol,k,kcomp) = 0.0_r8
-          this%bebg500(icol,k,kcomp) = 0.0_r8
-          this%bebg550(icol,k,kcomp) = 0.0_r8
-          this%babg550(icol,k,kcomp) = 0.0_r8
-          this%bebg670(icol,k,kcomp) = 0.0_r8
-          this%bebg870(icol,k,kcomp) = 0.0_r8
-          this%bebc440(icol,k,kcomp) = 0.0_r8
-          this%bebc500(icol,k,kcomp) = 0.0_r8
-          this%bebc550(icol,k,kcomp) = 0.0_r8
-          this%babc550(icol,k,kcomp) = 0.0_r8
-          this%bebc670(icol,k,kcomp) = 0.0_r8
-          this%bebc870(icol,k,kcomp) = 0.0_r8
-          this%beoc440(icol,k,kcomp) = 0.0_r8
-          this%beoc500(icol,k,kcomp) = 0.0_r8
-          this%beoc550(icol,k,kcomp) = 0.0_r8
-          this%baoc550(icol,k,kcomp) = 0.0_r8
-          this%beoc670(icol,k,kcomp) = 0.0_r8
-          this%beoc870(icol,k,kcomp) = 0.0_r8
-          this%besu440(icol,k,kcomp) = 0.0_r8
-          this%besu500(icol,k,kcomp) = 0.0_r8
-          this%besu550(icol,k,kcomp) = 0.0_r8
-          this%basu550(icol,k,kcomp) = 0.0_r8
-          this%besu670(icol,k,kcomp) = 0.0_r8
-          this%besu870(icol,k,kcomp) = 0.0_r8
-          this%bebg550lt1(icol,k,kcomp) = 0.0_r8
-          this%bebg550gt1(icol,k,kcomp) = 0.0_r8
-          this%bebc550lt1(icol,k,kcomp) = 0.0_r8
-          this%bebc550gt1(icol,k,kcomp) = 0.0_r8
-          this%beoc550lt1(icol,k,kcomp) = 0.0_r8
-          this%beoc550gt1(icol,k,kcomp) = 0.0_r8
-          this%besu550lt1(icol,k,kcomp) = 0.0_r8
-          this%besu550gt1(icol,k,kcomp) = 0.0_r8
-          this%backsc550(icol,k,kcomp) = 0.0_r8
-       end do
-    end do
-
-  end subroutine zero
-
-  ! ==========================================================
-  subroutine update(this, icol, k, kcomp, opt)
-
-    class(extinction_coeffs_type) :: this
-    integer  , intent(in) :: icol
-    integer  , intent(in) :: k
-    integer  , intent(in) :: kcomp
-    real(r8) , intent(in) :: opt(:)
-
-    this%bext440(icol,k,kcomp)    = opt(1)
-    this%bext500(icol,k,kcomp)    = opt(2)
-    this%bext670(icol,k,kcomp)    = opt(3)
-    this%bext870(icol,k,kcomp)    = opt(4)
-    this%bebg440(icol,k,kcomp)    = opt(5)
-    this%bebg500(icol,k,kcomp)    = opt(6)
-    this%bebg670(icol,k,kcomp)    = opt(7)
-    this%bebg870(icol,k,kcomp)    = opt(8)
-    this%bebc440(icol,k,kcomp)    = opt(9)
-    this%bebc500(icol,k,kcomp)    = opt(10)
-    this%bebc670(icol,k,kcomp)    = opt(11)
-    this%bebc870(icol,k,kcomp)    = opt(12)
-    this%beoc440(icol,k,kcomp)    = opt(13)
-    this%beoc500(icol,k,kcomp)    = opt(14)
-    this%beoc670(icol,k,kcomp)    = opt(15)
-    this%beoc870(icol,k,kcomp)    = opt(16)
-    this%besu440(icol,k,kcomp)    = opt(17)
-    this%besu500(icol,k,kcomp)    = opt(18)
-    this%besu670(icol,k,kcomp)    = opt(19)
-    this%besu870(icol,k,kcomp)    = opt(20)
-    this%babs440(icol,k,kcomp)    = opt(21)
-    this%babs500(icol,k,kcomp)    = opt(22)
-    this%babs550(icol,k,kcomp)    = opt(23)
-    this%babs670(icol,k,kcomp)    = opt(24)
-    this%babs870(icol,k,kcomp)    = opt(25)
-    this%bebg550lt1(icol,k,kcomp) = opt(26)
-    this%bebg550gt1(icol,k,kcomp) = opt(27)
-    this%bebc550lt1(icol,k,kcomp) = opt(28)
-    this%bebc550gt1(icol,k,kcomp) = opt(29)
-    this%beoc550lt1(icol,k,kcomp) = opt(30)
-    this%beoc550gt1(icol,k,kcomp) = opt(31)
-    this%besu550lt1(icol,k,kcomp) = opt(32)
-    this%besu550gt1(icol,k,kcomp) = opt(33)
-    this%backsc550(icol,k,kcomp)  = opt(34)
-    this%babg550(icol,k,kcomp)    = opt(35)
-    this%babc550(icol,k,kcomp)    = opt(36)
-    this%baoc550(icol,k,kcomp)    = opt(37)
-    this%basu550(icol,k,kcomp)    = opt(38)
-    this%bebg550(icol,k,kcomp)    = opt(26)+opt(27)
-    this%bebc550(icol,k,kcomp)    = opt(28)+opt(29)
-    this%beoc550(icol,k,kcomp)    = opt(30)+opt(31)
-    this%besu550(icol,k,kcomp)    = opt(32)+opt(33)
-    this%bext550(icol,k,kcomp)    = this%bebg550(icol,k,kcomp) + this%bebc550(icol,k,kcomp) &
-                                   +this%beoc550(icol,k,kcomp) + this%besu550(icol,k,kcomp)
-  end subroutine update
-
+  !===============================================================================
   subroutine checkTableHeader (ifil)
-    ! Read the header-text in a look-up table (in file with iu=ifil). 
+    ! Read the header-text in a look-up table (in file with iu=ifil).
 
     integer, intent(in) :: ifil
     character*80 :: headertext
-    character*12 :: text0, text1 
+    character*12 :: text0, text1
 
     text0='X-CHECK LUT'
     text1='none       '
     do while (text1(2:12) .ne. text0(2:12))
        read(ifil,'(A)') headertext
-       text1 = headertext(2:12) 
+       text1 = headertext(2:12)
     enddo
   end subroutine checkTableHeader
 
