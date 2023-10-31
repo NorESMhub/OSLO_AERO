@@ -45,7 +45,10 @@ module radiation
 #ifdef OSLO_AERO
   use prescribed_volcaero,      only: has_prescribed_volcaero, has_prescribed_volcaero_cmip6, solar_bands, terrestrial_bands
   use oslo_aero_optical_params, only: oslo_aero_optical_params_calc
-  use oslo_aero_params,         only: nmodes, nbmodes
+  use oslo_aero_params,         only: nmodes_oslo=>nmodes, nbmodes
+#ifdef AEROCOM
+  use oslo_aero_aerocom,        only: dod440,dod550,dod870,abs550,abs550alt
+#endif
 #endif
 
   implicit none
@@ -143,9 +146,7 @@ module radiation
   integer :: flnt_idx     = 0
   integer :: cldfsnow_idx = 0 
   integer :: cld_idx      = 0 
-#ifdef OSLO_AERO
   integer :: volc_idx     = 0
-#endif
 
   character(len=4) :: diag(0:N_DIAG) =(/'    ','_d1 ','_d2 ','_d3 ','_d4 ','_d5 ','_d6 ','_d7 ','_d8 ','_d9 ','_d10'/)
 
@@ -154,12 +155,6 @@ module radiation
 
   ! PIO descriptors (for restarts)
   type(var_desc_t) :: cospcnt_desc
-
-#ifdef AEROCOM
-  logical :: do_aerocom = .true.
-#else
-  logical :: do_aerocom = .false.
-#endif
 
 !===============================================================================
 contains
@@ -748,12 +743,11 @@ contains
 
 
     ! Local variables
-#ifdef OSLO_AERO
     real(r8)         :: volc_fraction_coarse ! Fraction of volcanic aerosols going to coarse mode
     integer          :: band
     character(len=3) :: c3
     logical          :: idrf
-#endif
+    !
     type(rad_out_t), pointer :: rd  ! allow rd_out to be optional by allocating a local object
     ! if the argument is not present
     logical  :: write_output
@@ -761,11 +755,10 @@ contains
     integer  :: i, k
     integer  :: lchnk, ncol
     logical  :: dosw, dolw
-
-#ifdef OSLO_AERO
-    real(r8), pointer, dimension(:,:) :: rvolcmmr ! Read in stratospheric volcanoes aerosol mmr  
-    real(r8), pointer, dimension(:,:) :: volcopt  ! Read in stratospheric volcano SW optical parameter (CMIP6) 
-#endif
+    !
+    real(r8), pointer :: rvolcmmr(:,:) ! Read in stratospheric volcanoes aerosol mmr  
+    real(r8), pointer :: volcopt(:,:)  ! Read in stratospheric volcano SW optical parameter (CMIP6) 
+    !
     real(r8) :: calday          ! current calendar day
     real(r8) :: delta           ! Solar declination angle  in radians
     real(r8) :: eccf            ! Earth orbit eccentricity factor
@@ -859,30 +852,21 @@ contains
     real(r8) :: aodvis(pcols)              ! AOD vis
     real(r8) :: absvis(pcols)              ! absorptive AOD vis
     real(r8) :: clearodvis(pcols), clearabsvis(pcols), cloudfree(pcols), cloudfreemax(pcols)
-#ifdef AEROCOM
-    real(r8) :: dod440(pcols),dod550(pcols),dod870(pcols),abs550(pcols),abs550alt(pcols)
     real(r8) :: clearod440(pcols),clearod550(pcols),clearod870(pcols),clearabs550(pcols),clearabs550alt(pcols)
-#endif
     real(r8) :: ftem_1d(pcols)                        ! work-array to avoid NAN and pcols/ncol confusion
-    real(r8) :: Nnatk(pcols,pver,0:nmodes)            ! Modal aerosol number concentration
-    real(r8) :: batotlw(pcols,pver,nlwbands)          ! spectral aerosol absportion extinction in LW
-    real(r8) :: rhoda(pcols,pver)                     ! air mass density, unit kg/m^3
-    real(r8) :: pmxrgnrf(pcols,pverp)                 ! temporary copy of pmxrgn
-    integer  :: nmxrgnrf(pcols)                       ! temporary copy of nmxrgn
-    real(r8) :: rhtrunc(pcols,pver)                   ! relative humidity (as fraction)
+    real(r8) :: Nnatk(pcols,pver,0:nmodes_oslo)       ! Modal aerosol number concentration
     real(r8) :: per_tau    (pcols,0:pver,nswbands)    ! aerosol extinction optical depth
     real(r8) :: per_tau_w  (pcols,0:pver,nswbands)    ! aerosol single scattering albedo * tau
     real(r8) :: per_tau_w_g(pcols,0:pver,nswbands)    ! aerosol assymetry parameter * w * tau
     real(r8) :: per_tau_w_f(pcols,0:pver,nswbands)    ! aerosol forward scattered fraction * w * tau
     real(r8) :: per_lw_abs (pcols,pver,nlwbands)      ! aerosol absorption optics depth (LW)
-    integer  :: ns                                    ! spectral loop index
     real(r8) :: volc_ext_sun(pcols,pver,nswbands)     ! volcanic aerosol extinction for solar bands, CMIP6
     real(r8) :: volc_omega_sun(pcols,pver,nswbands)   ! volcanic aerosol SSA for solar bands, CMIP6
     real(r8) :: volc_g_sun(pcols,pver,nswbands)       ! volcanic aerosol g for solar bands, CMIP6
     real(r8) :: volc_ext_earth(pcols,pver,nlwbands)   ! volcanic aerosol extinction for terrestrial bands, CMIP6
     real(r8) :: volc_omega_earth(pcols,pver,nlwbands) ! volcanic aerosol SSA for terrestrial bands, CMIP6
+    integer  :: ns                                    ! spectral loop index
 #endif
-
     real(r8) :: fns(pcols,pverp)     ! net shortwave flux
     real(r8) :: fcns(pcols,pverp)    ! net clear-sky shortwave flux
     real(r8) :: fnl(pcols,pverp)     ! net longwave flux
@@ -905,15 +889,13 @@ contains
 
     lchnk = state%lchnk
     ncol = state%ncol
-
-#ifdef OSLO_AERO
-    per_lw_abs(:,:,:)=0._r8
-    per_tau(:,:,:)=0._r8
-    per_tau_w(:,:,:)=0._r8
-    per_tau_w_g(:,:,:)=0._r8
-    per_tau_w_f(:,:,:)=0._r8
-#endif
-
+    !
+    per_lw_abs(:,:,:)  =0._r8
+    per_tau(:,:,:)     =0._r8
+    per_tau_w(:,:,:)   =0._r8
+    per_tau_w_g(:,:,:) =0._r8
+    per_tau_w_f(:,:,:) =0._r8
+    ! 
     if (present(rd_out)) then
        rd => rd_out
        write_output = .false.
@@ -1206,7 +1188,6 @@ contains
                per_tau, per_tau_w, per_tau_w_g, per_tau_w_f, per_lw_abs, &
                volc_ext_sun, volc_omega_sun, volc_g_sun, volc_ext_earth, volc_omega_earth, & 
                aodvis, absvis)
-
 #endif
           call get_variability(sfac)
 
@@ -1258,13 +1239,13 @@ contains
                 call outfld('FSNS_DRF',fsns(:)  ,pcols,lchnk)
                 call outfld('FSNTCDRF',rd%fsntc(:) ,pcols,lchnk)
                 call outfld('FSNSCDRF',rd%fsnsc(:) ,pcols,lchnk)
-                if (do_aerocom) then
-                   call outfld('FSUTADRF',rd%fsutoa(:),pcols,lchnk)
-                   call outfld('FSDS_DRF',fsds(:)  ,pcols,lchnk)
-                   ftem_1d(1:ncol) = fsds(1:ncol)-fsns(1:ncol)
-                   call outfld('FSUS_DRF',ftem_1d,pcols,lchnk)
-                   call outfld('FSDSCDRF',rd%fsdsc(:) ,pcols,lchnk)
-                end if
+#ifdef AEROCOM
+                call outfld('FSUTADRF',rd%fsutoa(:),pcols,lchnk)
+                call outfld('FSDS_DRF',fsds(:)  ,pcols,lchnk)
+                ftem_1d(1:ncol) = fsds(1:ncol)-fsns(1:ncol)
+                call outfld('FSUS_DRF',ftem_1d,pcols,lchnk)
+                call outfld('FSDSCDRF',rd%fsdsc(:) ,pcols,lchnk)
+#endif
                 idrf = .false.         
 #else
                call aer_rad_props_sw(icall, state, pbuf, nnite, idxnite, &
@@ -1326,6 +1307,7 @@ contains
        !(kind of duplicated from cloud_cover_diags::cldsav)
        cloudfree(1:ncol)    = 1.0_r8
        cloudfreemax(1:ncol) = 1.0_r8
+
        !Find cloud-free fraction (note this duplicated code and may not be consistent with cldtot calculated elsewhere)
        do k = 1, pver
           do i=1,ncol
@@ -1345,21 +1327,20 @@ contains
        call outfld('CAODVIS ',clearodvis,pcols,lchnk)
        call outfld('CABSVIS ',clearabsvis,pcols,lchnk)
        call outfld('CLDFREE ',cloudfree,pcols,lchnk)
+
 #ifdef AEROCOM
-       if (do_aerocom) then
-          do i = 1, ncol
-             clearod440(i)=cloudfree(i)*dod440(i)
-             clearod550(i)=cloudfree(i)*dod550(i)
-             clearod870(i)=cloudfree(i)*dod870(i)
-             clearabs550(i)=cloudfree(i)*abs550(i)
-             clearabs550alt(i)=cloudfree(i)*abs550alt(i)
-          end do
-          call outfld('CDOD440 ',clearod440  ,pcols,lchnk)
-          call outfld('CDOD550 ',clearod550  ,pcols,lchnk)
-          call outfld('CDOD870 ',clearod870  ,pcols,lchnk)
-          call outfld('CABS550 ',clearabs550  ,pcols,lchnk)
-          call outfld('CABS550A',clearabs550alt,pcols,lchnk)
-       end if
+       do i = 1, ncol
+          clearod440(i)     =cloudfree(i)*dod440(i)
+          clearod550(i)     =cloudfree(i)*dod550(i)
+          clearod870(i)     =cloudfree(i)*dod870(i)
+          clearabs550(i)    =cloudfree(i)*abs550(i)
+          clearabs550alt(i) =cloudfree(i)*abs550alt(i)
+       end do
+       call outfld('CDOD440 ',clearod440  ,pcols,lchnk)
+       call outfld('CDOD550 ',clearod550  ,pcols,lchnk)
+       call outfld('CDOD870 ',clearod870  ,pcols,lchnk)
+       call outfld('CABS550 ',clearabs550  ,pcols,lchnk)
+       call outfld('CABS550A',clearabs550alt,pcols,lchnk)
 #endif
 #endif
 
