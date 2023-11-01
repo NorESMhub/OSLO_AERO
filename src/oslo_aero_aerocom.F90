@@ -11,9 +11,8 @@ module oslo_aero_aerocom
   use oslo_aero_aerocom_opt,    only: intaeropt0, intaeropt1, intaeropt2to3, intaeropt4, intaeropt5to10
   use oslo_aero_aerocom_dry,    only: intdrypar0, intdrypar1, intdrypar2to3, intdrypar4, intdrypar5to10
   use oslo_aero_linear_interp , only: lininterpol3dim, lininterpol4dim, lininterpol5dim
-  use oslo_aero_share
-  use oslo_aero_params
-  use oslo_aero_const
+  use oslo_aero_share,          only: rhopart, l_bc_ni, l_om_ni
+  use oslo_aero_params,         only: nmodes, nbmodes, nbands, nlwbands, nbmp1
 
   public  :: aerocom1
   public  :: aerocom2
@@ -261,9 +260,9 @@ contains
 
     do k=1,pver
        do icol=1,ncol
-          ssatot(icol,k,ib)=ssatot(icol,k,ib)/(betot(icol,k,ib)+eps)
-          asymtot(icol,k,ib)=asymtot(icol,k,ib)/(betot(icol,k,ib)*ssatot(icol,k,ib)+eps)
-          asydry_aer(icol,k)=asymtot(icol,k,ib)
+          ssatot(icol,k,ib) = ssatot(icol,k,ib) /(betot(icol,k,ib)+eps)
+          asymtot(icol,k,ib)= asymtot(icol,k,ib)/(betot(icol,k,ib)*ssatot(icol,k,ib)+eps)
+          asydry_aer(icol,k)= asymtot(icol,k,ib)
        end do
     enddo
     call outfld('ASYMMDRY',asydry_aer,pcols,lchnk)
@@ -272,7 +271,7 @@ contains
 
   !===============================================================================
 
-  subroutine aerocom2(lchnk, ncol, Nnatk, pint, deltah_km, faitbc, f_soana, fnbc, rhoda, &
+  subroutine aerocom2(lchnk, ncol, Nnatk, pint, deltah_km, faitbc, f_soana, fnbc, rhoda, v_soana, &
        xct, ict1, xfac, ifac1, xfbc, ifbc1, xfaq, ifaq1, xfbcbg, ifbcbg1, xfbcbgn, ifbcbgn1, &
        xfombg, ifombg1, xrh, irh1)
 
@@ -286,6 +285,7 @@ contains
     real(r8), intent(in) :: f_soana(pcols,pver)
     real(r8), intent(in) :: fnbc(pcols,pver)
     real(r8), intent(in) :: rhoda(pcols,pver)
+    real(r8), intent(in) :: v_soana(pcols,pver) 
     real(r8), intent(in) :: xct(pcols,pver,nmodes)       ! modal internally mixed SO4+BC+OC conc.
     integer , intent(in) :: ict1(pcols,pver,nmodes)
     real(r8), intent(in) :: xfac(pcols,pver,nbmodes)
@@ -599,11 +599,11 @@ contains
     real(r8) :: abs550_bc(pcols)
     real(r8) :: abs550_pom(pcols)
     !
-    real(r8) :: v_soana(pcols,pver), vnbcarr(pcols,pver), vaitbcarr(pcols,pver)
+    real(r8) :: vnbcarr(pcols,pver), vaitbcarr(pcols,pver)
     real(r8) :: deltah, airmassl(pcols,pver), airmass(pcols)
-    integer  :: irf
     real(r8) :: xrhnull(pcols,pver)
     integer  :: irh1null(pcols,pver)
+    integer  :: irf
     !-------------------------------------------------------------------------
 
     ! Initialize fields
@@ -1500,7 +1500,6 @@ contains
           cmin(icol,k)=ck(icol,k,6)+ck(icol,k,7)
           cseas(icol,k)=ck(icol,k,8)+ck(icol,k,9)+ck(icol,k,10)
 
-
           ! just for checking purposes:
           dload_s4(icol)   =dload_s4(icol)   +c_s4(icol,k)*deltah
           dload_s4_a(icol) =dload_s4_a(icol) +c_s4_a(icol,k)*deltah
@@ -2027,23 +2026,23 @@ contains
     enddo
 
     if (irf == 1) then
-       call outfld('ECDRYAER',ec550rh_aer,pcols,lchnk)
-       call outfld('ABSDRYAE',abs550rh_aer,pcols,lchnk)
-       call outfld('OD550DRY',dod550rh,pcols,lchnk)       ! 2D variable
-       call outfld('AB550DRY',abs550rh,pcols,lchnk)       ! 2D variable
-       call outfld('ECDRY440',ec440rh_aer,pcols,lchnk)
-       call outfld('ABSDR440',abs440rh_aer,pcols,lchnk)
-       call outfld('ECDRY870',ec870rh_aer,pcols,lchnk)
-       call outfld('ABSDR870',abs870rh_aer,pcols,lchnk)
-       call outfld('ECDRYLT1',ec550rhlt1_aer,pcols,lchnk)
+       call outfld('ECDRYAER',ec550rh_aer    ,pcols,lchnk)
+       call outfld('ABSDRYAE',abs550rh_aer   ,pcols,lchnk)
+       call outfld('OD550DRY',dod550rh       ,pcols,lchnk)       ! 2D variable
+       call outfld('AB550DRY',abs550rh       ,pcols,lchnk)       ! 2D variable
+       call outfld('ECDRY440',ec440rh_aer    ,pcols,lchnk)
+       call outfld('ABSDR440',abs440rh_aer   ,pcols,lchnk)
+       call outfld('ECDRY870',ec870rh_aer    ,pcols,lchnk)
+       call outfld('ABSDR870',abs870rh_aer   ,pcols,lchnk)
+       call outfld('ECDRYLT1',ec550rhlt1_aer ,pcols,lchnk)
 
        ! Since we do not have enough look-up table info to take abs550rhlt1_aer,
        ! instead take out abs550rh for each constituent:
-       call outfld('ABSDRYBC',abs550rh_bc,pcols,lchnk)
-       call outfld('ABSDRYOC',abs550rh_oc,pcols,lchnk)
-       call outfld('ABSDRYSU',abs550rh_su,pcols,lchnk)
-       call outfld('ABSDRYSS',abs550rh_ss,pcols,lchnk)
-       call outfld('ABSDRYDU',abs550rh_du,pcols,lchnk)
+       call outfld('ABSDRYBC',abs550rh_bc    ,pcols,lchnk)
+       call outfld('ABSDRYOC',abs550rh_oc    ,pcols,lchnk)
+       call outfld('ABSDRYSU',abs550rh_su    ,pcols,lchnk)
+       call outfld('ABSDRYSS',abs550rh_ss    ,pcols,lchnk)
+       call outfld('ABSDRYDU',abs550rh_du    ,pcols,lchnk)
     end if
 
   end subroutine opticsAtConstRh

@@ -50,7 +50,6 @@ module oslo_aero_sw_tables
   ! Interfaces
   public :: initopt
   public :: initopt_lw
-  public :: inputForInterpol
   public :: interpol0
   public :: interpol1
   public :: interpol2to3
@@ -61,6 +60,11 @@ module oslo_aero_sw_tables
   real(r8), public, dimension(6)      :: fombg, fbcbg, fac, fbc, faq
   real(r8), public, dimension(4,16)   :: cate
   real(r8), public, dimension(5:10,6) :: cat
+
+  real(r8), public :: om0(nbands)
+  real(r8), public :: g0(nbands)
+  real(r8), public :: be0(nbands)
+  real(r8), public :: ke0(nbands)
 
   real(r8), public :: om1(nbands,10,6,16,6)
   real(r8), public :: g1 (nbands,10,6,16,6)
@@ -76,11 +80,6 @@ module oslo_aero_sw_tables
   real(r8), public :: g4 (nbands,10,6,16,6,6)
   real(r8), public :: be4(nbands,10,6,16,6,6)
   real(r8), public :: ke4(nbands,10,6,16,6,6)
-
-  real(r8), public :: om0(nbands)
-  real(r8), public :: g0(nbands)
-  real(r8), public :: be0(nbands)
-  real(r8), public :: ke0(nbands)
 
   real(r8), public :: om5to10(nbands,10,6,6,6,6,5:10)
   real(r8), public :: g5to10(nbands,10,6,6,6,6,5:10)
@@ -542,10 +541,12 @@ contains
   subroutine initopt_lw
 
     !---------------------------------------------------------------
-    !   Modified for new aerosol schemes by Alf Kirkevaag in January
-    !   2006. Modified for new wavelength
-    !   bands and look-up tables by Alf Kirkevaag in January 2014,
-    !   and for SOA in August 2015.
+    ! Read in lwkcompN.out tables and set module variables
+    ! om[0,1,2to3,4,5-10], g[0,1,2to3,4,5-10], be[0,1,2to3,4,5-10] and ke[0,1,2to3,4,5-10]
+    !
+    ! Modified for new aerosol schemes by Alf Kirkevaag in 2006. 
+    ! Modified for new wavelength bands and look-up tables by 
+    ! Alf Kirkevaag in 2014 and for SOA in 2015.
     !---------------------------------------------------------------
 
     integer  :: kcomp, iwl, irelh, ictot, ifac, ifbc, ifaq
@@ -560,6 +561,7 @@ contains
     real(r8) :: eps6 = 1.e-6_r8
     real(r8) :: eps7 = 1.e-7_r8
     character(len=dir_string_length) :: aerotab_table_dir
+    !------------------------------------------------------------------------
 
     call oslo_aero_getopts(aerotab_table_dir_out = aerotab_table_dir)
 
@@ -580,10 +582,10 @@ contains
        call checkTableHeader (ifil)
     enddo
 
-    !     Then reading in the look-up table entries for each file (lwkcomp*.out)
+    ! Then reading in the look-up table entries for each file (lwkcomp*.out)
 
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
-    !       Mode 0, BC(ax)
+    ! Mode 0, BC(ax)
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
 
     ifil = 11
@@ -603,7 +605,7 @@ contains
     write(iulog,*)'lw mode 0 ok'
 
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
-    !       Mode 1 (H2SO4 + condesate from H2SO4 and SOA)
+    ! Mode 1 (H2SO4 + condesate from H2SO4 and SOA)
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
 
     ifil = 1
@@ -646,9 +648,9 @@ contains
 
        ka1(iwl,irelh,ifombg,ictot,ifac)=spabs  ! unit m^2/g
 
-       !      write(*,*) 'kcomp, ka =', kcomp, ka1(iwl,irelh,ifombg,ictot,ifac)
-       !      if(ifil==1) write(iulog,*) 'iwl,irelh,ifombg,ictot,ifac,ka =', &
-       !                  iwl,irelh,ictot,ifac,ka1(iwl,irelh,ifombg,ictot,ifac)
+       ! write(*,*) 'kcomp, ka =', kcomp, ka1(iwl,irelh,ifombg,ictot,ifac)
+       ! if(ifil==1) write(iulog,*) 'iwl,irelh,ifombg,ictot,ifac,ka =', &
+       ! iwl,irelh,ictot,ifac,ka1(iwl,irelh,ifombg,ictot,ifac)
 
     end do  ! lin
 
@@ -670,11 +672,11 @@ contains
 
 
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
-    !       Modes 2 to 3 (BC or OC + condensate from H2SO4 and SOA)
+    ! Modes 2 to 3 (BC or OC + condensate from H2SO4 and SOA)
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
 
     linmax = nlwbands*10*16*6
-    !      do ifil = 2,3
+    ! do ifil = 2,3
     do ifil = 2,2
        do lin = 1,linmax
 
@@ -709,7 +711,7 @@ contains
        end do  ! lin
     end do    ! ifil
 
-    !   Prescribed dummy values for kcomp=3
+    ! Prescribed dummy values for kcomp=3
     kcomp=3
     do iwl=1,nlwbands
        do irelh=1,10
@@ -741,7 +743,7 @@ contains
 
 
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
-    !       Mode 4 (BC&OC + condesate from H2SO4 and SOA + wetphase (NH4)2SO4)
+    ! Mode 4 (BC&OC + condesate from H2SO4 and SOA + wetphase (NH4)2SO4)
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
 
     ifil = 4
@@ -794,7 +796,7 @@ contains
 
        ka4(iwl,irelh,ifbcbg,ictot,ifac,ifaq)=spabs  ! unit m^2/g
 
-       !      write(*,*) 'kcomp, ka =', kcomp, ka4(iwl,irelh,ifbcbg,ictot,ifac,ifaq)
+       ! write(*,*) 'kcomp, ka =', kcomp, ka4(iwl,irelh,ifbcbg,ictot,ifac,ifaq)
     end do
 
     do iwl=1,nlwbands
@@ -817,7 +819,7 @@ contains
 
 
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
-    !       Modes 5 to 10 (SO4(Ait75) and mineral and seasalt-modes + cond./coag./aq.)
+    ! Modes 5 to 10 (SO4(Ait75) and mineral and seasalt-modes + cond./coag./aq.)
     !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
 
     linmax = nlwbands*10*6*6*6*6
@@ -870,7 +872,7 @@ contains
 
           ka5to10(iwl,irelh,ictot,ifac,ifbc,ifaq,kcomp)=spabs  ! unit m^2/g
 
-          !      write(*,*) 'kcomp, ka =', kcomp, ka5to10(iwl,irelh,ictot,ifac,ifbc,ifaq,kcomp)
+          ! write(*,*) 'kcomp, ka =', kcomp, ka5to10(iwl,irelh,ictot,ifac,ifbc,ifaq,kcomp)
        end do
     end do
 
@@ -906,175 +908,6 @@ contains
     end do
 
   end subroutine initopt_lw
-
-  !********************************************************************************************
-  subroutine inputForInterpol (ncol, rhum, xrh, irh1, &
-       f_soana, xfombg, ifombg1, faitbc, xfbcbg, ifbcbg1,    &
-       fnbc, xfbcbgn, ifbcbgn1, Nnatk, Cam, xct, ict1,       &
-       focm, fcm, xfac, ifac1, fbcm, xfbc, ifbc1, faqm, xfaq, ifaq1)
-
-    !
-    ! Input arguments
-    integer, intent(in)  :: ncol                       ! number of atmospheric columns
-    real(r8), intent(in) :: rhum(pcols,pver)           ! level relative humidity (fraction)
-    real(r8), intent(in) :: f_soana(pcols,pver)        ! SOA/(SOA+H2SO4) mass fraction for the background in mode 1
-    real(r8), intent(in) :: faitbc(pcols,pver)         ! BC/(BC + OC) mass fraction for the background in mode 4
-    real(r8), intent(in) :: fnbc(pcols,pver)           ! BC/(BC + OC) mass fraction for the background in mode 14
-    real(r8), intent(in) :: focm(pcols,pver,4)         ! fraction of added mass which is either SOA condensate or OC coagulate
-    real(r8), intent(in) :: Cam(pcols,pver,nbmodes)    ! added internally mixed SO4+BC+OC concentration for a normalized mode
-    real(r8), intent(in) :: Nnatk(pcols,pver,0:nmodes) ! aerosol mode number concentration
-    real(r8), intent(in) :: fcm(pcols,pver,nbmodes)    ! fraction of added mass which is either BC or OC/SOA (carbonaceous)
-    real(r8), intent(in) :: fbcm(pcols,pver,nbmodes)   ! fraction of added mass as BC/(BC+OC)
-    real(r8), intent(in) :: faqm(pcols,pver,nbmodes)   ! fraction of added sulfate which is from aqueous phase (ammonium sulfate)
-    !
-    ! Output arguments
-    real(r8), intent(out) :: xrh(pcols,pver)           ! rhum for use in the interpolations
-    integer,  intent(out) :: irh1(pcols,pver)
-    real(r8), intent(out) :: xfombg(pcols,pver)        ! f_soana for use in the interpolations (mode 1)
-    integer,  intent(out) :: ifombg1(pcols,pver)
-    real(r8), intent(out) :: xfbcbg(pcols,pver)        ! faitbc for use in the interpolations (mode 4)
-    integer,  intent(out) :: ifbcbg1(pcols,pver)
-    real(r8), intent(out) :: xfbcbgn(pcols,pver)       ! fnbc for use in the interpolations (mode 14)
-    integer,  intent(out) :: ifbcbgn1(pcols,pver)
-    real(r8), intent(out) :: xct(pcols,pver,nmodes)    ! Cam/Nnatk for use in the interpolations
-    integer,  intent(out) :: ict1(pcols,pver,nmodes)
-    real(r8), intent(out) :: xfac(pcols,pver,nbmodes)  ! focm (1-4) or fcm (5-10) for use in the interpolations
-    integer,  intent(out) :: ifac1(pcols,pver,nbmodes)
-    real(r8), intent(out) :: xfbc(pcols,pver,nbmodes)  ! fbcm for use in the interpolations
-    integer,  intent(out) :: ifbc1(pcols,pver,nbmodes)
-    real(r8), intent(out) :: xfaq(pcols,pver,nbmodes)  ! faqm for use in the interpolations
-    integer,  intent(out) :: ifaq1(pcols,pver,nbmodes)
-    !
-    ! Local variables
-    integer k, icol, i, irelh
-    real(r8) :: eps10 = 1.e-10_r8
-    !------------------------------------------------------------------------
-    !
-    do k=1,pver
-       do icol=1,ncol
-          xrh(icol,k)  = min(max(rhum(icol,k),rh(1)),rh(10))
-       end do
-    end do
-
-    do irelh=1,9
-       do k=1,pver
-          do icol=1,ncol
-             if(xrh(icol,k) >= rh(irelh) .and. xrh(icol,k)<=rh(irelh+1)) then
-                irh1(icol,k)=irelh
-             endif
-          end do
-       end do
-    end do
-
-    do k=1,pver
-       do icol=1,ncol
-          ! find common xfombg, ifombg1 and ifombg2 for use in the interpolation routines
-          xfombg(icol,k) =min(max(f_soana(icol,k),fombg(1)),fombg(6))
-          ifombg1(icol,k)=int(5.0_r8*xfombg(icol,k)-eps10)+1
-       end do
-    enddo
-
-    do k=1,pver
-       do icol=1,ncol
-          ! find common xfbcbg, ifbcbg1 and ifbcbg2 for use in the interpolation routines
-          xfbcbg(icol,k) =min(max(faitbc(icol,k),fbcbg(1)),fbcbg(6))
-          ifbcbg1(icol,k)=min(max(int(4*log10(xfbcbg(icol,k))+6),1),5)
-
-          ! find common xfbcbgn, ifbcbgn1 and ifbcbgn2 for use in the interpolation routines
-          xfbcbgn(icol,k) =min(max(fnbc(icol,k),fbcbg(1)),fbcbg(6))
-          ifbcbgn1(icol,k)=min(max(int(4*log10(xfbcbgn(icol,k))+6),1),5)
-       end do
-    enddo
-
-    do i=1,4
-       do k=1,pver
-          do icol=1,ncol
-             ! find common xfac, ifac1 and ifac2 for use in the interpolation routines
-             xfac(icol,k,i) =min(max(focm(icol,k,i),fac(1)),fac(6))
-             ifac1(icol,k,i)=int(5.0_r8*xfac(icol,k,i)-eps10)+1
-          end do
-       enddo
-    enddo
-    do i=5,nbmodes
-       do k=1,pver
-          do icol=1,ncol
-             ! find common xfac, ifac1 and ifac2 for use in the interpolation routines
-             xfac(icol,k,i) =min(max(fcm(icol,k,i),fac(1)),fac(6))
-             ifac1(icol,k,i)=int(5.0_r8*xfac(icol,k,i)-eps10)+1
-          end do
-       enddo
-    enddo
-
-    do i=1,nbmodes
-       do k=1,pver
-          do icol=1,ncol
-             ! find common xfbc, ifbc1 and ifbc2 for use in the interpolation routines
-             xfbc(icol,k,i) =min(max(fbcm(icol,k,i),fbc(1)),fbc(6))
-             ifbc1(icol,k,i)=min(max(int(4*log10(xfbc(icol,k,i))+6),1),5)
-          end do
-       enddo
-    enddo
-
-    do i=1,nbmodes
-       do k=1,pver
-          do icol=1,ncol
-             ! find common xfaq, ifaq1 and ifaq2 for use in the interpolation routines
-             xfaq(icol,k,i) =min(max(faqm(icol,k,i),faq(1)),faq(6))
-             ifaq1(icol,k,i)=int(5.0_r8*xfaq(icol,k,i)-eps10)+1
-          end do
-       enddo
-    enddo
-
-    ! find common xct, ict1 and ict2 for use in the interpolation routines
-    do i=1,4
-       do k=1,pver
-          do icol=1,ncol
-             xct(icol,k,i)=min(max(Cam(icol,k,i)/(Nnatk(icol,k,i)+eps),cate(i,1)),cate(i,16))
-             if(i.le.2) then
-                ict1(icol,k,i)=min(max(int(3*log10(xct(icol,k,i))+19.666_r8),1),15)
-             elseif(i.eq.3) then ! mode not used
-                xct(icol,k,i)=cate(i,1)
-                ict1(icol,k,i)=1
-             else
-                ict1(icol,k,i)=min(max(int(3*log10(xct(icol,k,i))+13.903_r8),1),15)
-             endif
-          end do
-       end do
-    end do
-
-    do i=5,10
-       do k=1,pver
-          do icol=1,ncol
-             xct(icol,k,i)=min(max(Cam(icol,k,i)/(Nnatk(icol,k,i)+eps),cat(i,1)),cat(i,6))
-             if(i.eq.5) then
-                ict1(icol,k,i)=min(max(int(log10(xct(icol,k,i))+4.824_r8),1),5)
-             elseif(i.eq.6) then
-                ict1(icol,k,i)=min(max(int(log10(xct(icol,k,i))+4.523_r8),1),5)
-             elseif(i.eq.7) then
-                ict1(icol,k,i)=min(max(int(log10(xct(icol,k,i))+4.699_r8),1),5)
-             elseif(i.eq.8) then
-                ict1(icol,k,i)=min(max(int(log10(xct(icol,k,i))+5.921_r8),1),5)
-             elseif(i.eq.9) then
-                ict1(icol,k,i)=min(max(int(log10(xct(icol,k,i))+4.301_r8),1),5)
-             else
-                ict1(icol,k,i)=min(max(int(log10(xct(icol,k,i))+4.699_r8),1),5)
-             endif
-          end do
-       end do
-    end do
-
-    do i=11,nmodes ! for the externally mixed modes 11-14 (now only 12 and 14)
-       do k=1,pver
-          do icol=1,ncol
-             xct(icol,k,i)=cate(i-10,1)
-             ict1(icol,k,i)=1
-          end do
-       end do
-    end do
-
-    return
-
-  end subroutine inputForInterpol
 
   !********************************************************************************************
   subroutine interpol0 (ncol, daylight, Nnatk, omega, gass, bex, ske, lw_on, kabs)
@@ -2555,10 +2388,9 @@ contains
                    endif
 
                 end do ! i
+
              else  ! daylight
 
-
-                !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                 ! aerosol extinction  used for aerosol size estimate needed for LW calculations
                 i=4
                 opt5d(1,1,1,1,1)=be5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa1,kcomp)
@@ -2612,8 +2444,6 @@ contains
                 endif
 
              endif  ! daylight
-
-
 
              do i=4,4            ! i = wavelength index
 

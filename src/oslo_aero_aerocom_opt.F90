@@ -2,7 +2,7 @@ module oslo_aero_aerocom_opt
 
 #ifdef AEROCOM
 
-  ! Modal total and absorption extiction coefficients (for AeroCom)
+  ! Modal total and absorption extinction coefficients (for AeroCom)
   ! for 440nm, 500nm, 550nm, 670nm and 870nm, and for d<1um (lt1) and d>1um (gt1).
 
   use shr_kind_mod            , only : r8 => shr_kind_r8
