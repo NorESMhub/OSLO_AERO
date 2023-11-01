@@ -601,6 +601,9 @@ contains
     !
     real(r8) :: v_soana(pcols,pver), vnbcarr(pcols,pver), vaitbcarr(pcols,pver)
     real(r8) :: deltah, airmassl(pcols,pver), airmass(pcols)
+    integer  :: irf
+    real(r8) :: xrhnull(pcols,pver)
+    integer  :: irh1null(pcols,pver)
     !-------------------------------------------------------------------------
 
     ! Initialize fields
@@ -622,8 +625,9 @@ contains
     cknorm(:,:,:)   = 0.0_r8
 
     ! AeroCom diagnostics requiring table look-ups with ambient RH.
+    irf = 0
     call opticsAtConstRh(                                  &
-         lchnk, ncol, pint, rhoda, Nnatk, xrh, irh1,       &
+         lchnk, ncol, pint, rhoda, Nnatk, xrh, irh1, irf,  &
          xct, ict1, xfaq, ifaq1, xfbcbg, ifbcbg1,          &
          xfbcbgn, ifbcbgn1, xfac, ifac1, xfbc, ifbc1,      &
          xfombg, ifombg1, vnbcarr, vaitbcarr, v_soana,     &
@@ -1563,11 +1567,45 @@ contains
     call outfld('DERLT05 ',derlt05,pcols,lchnk)
     call outfld('DERGT05 ',dergt05,pcols,lchnk)
     call outfld('DER     ',der    ,pcols,lchnk)
+
+    ! Extra AeroCom diagnostics requiring table look-ups with RH = constant 
+    ! Note: using xrhnull etc as proxy for constant RH input values
+    irf = 1
+    do k=1,pver
+       do icol=1,ncol
+          xrhnull(icol,k) = xrhrf(irf)
+          irh1null(icol,k) = irhrf1(irf)
+       end do
+    enddo
+    call opticsAtConstRh(&
+         lchnk, ncol, pint, rhoda, Nnatk, xrhnull, irh1null, irf, &
+         xct, ict1, xfaq, ifaq1, xfbcbg, ifbcbg1,           &
+         xfbcbgn, ifbcbgn1, xfac, ifac1, xfbc, ifbc1,       &
+         xfombg, ifombg1, vnbcarr, vaitbcarr, v_soana,      &
+         bext440, bext500, bext550, bext670, bext870,       &
+         bebg440, bebg500, bebg550, bebg670, bebg870,       &
+         bebc440, bebc500, bebc550, bebc670, bebc870,       &
+         beoc440, beoc500, beoc550, beoc670, beoc870,       &
+         besu440, besu500, besu550, besu670, besu870,       &
+         babs440, babs500, babs550, babs670, babs870,       &
+         bebglt1, bebggt1, bebclt1, bebcgt1,                &
+         beoclt1, beocgt1, bes4lt1, bes4gt1,                &
+         backsc550, babg550, babc550, baoc550, basu550,     & 
+         bext440n, bext500n, bext550n, bext670n, bext870n,  &
+         bebg440n, bebg500n, bebg550n, bebg670n, bebg870n,  &
+         bebc440n, bebc500n, bebc550n, bebc670n, bebc870n,  &
+         beoc440n, beoc500n, beoc550n, beoc670n, beoc870n,  &
+         besu440n, besu500n, besu550n, besu670n, besu870n,  &
+         babs440n, babs500n, babs550n, babs670n, babs870n,  &
+         bebglt1n, bebggt1n, bebclt1n, bebcgt1n,            &
+         beoclt1n, beocgt1n, bes4lt1n, bes4gt1n,            &
+         backsc550n, babg550n, babc550n, baoc550n, basu550n)
+
   end subroutine aerocom2
 
   ! ==========================================================
   subroutine opticsAtConstRh (&
-       lchnk, ncol, pint, rhoda, Nnatk, xrh, irh1,        &
+       lchnk, ncol, pint, rhoda, Nnatk, xrh, irh1, irf,   &
        xct, ict1, xfaq, ifaq1, xfbcbg, ifbcbg1,           &
        xfbcbgn, ifbcbgn1, xfac, ifac1, xfbc, ifbc1,       &
        xfombg, ifombg1, vnbc, vaitbc, v_soana,            &
@@ -1600,6 +1638,7 @@ contains
     real(r8), intent(in) :: rhoda(pcols,pver)          ! Density of dry air (kg/m^3)
     real(r8), intent(in) :: xrh(pcols,pver)            ! level relative humidity (fraction)
     integer,  intent(in) :: irh1(pcols,pver)
+    integer , intent(in) :: irf
     real(r8), intent(in) :: Nnatk(pcols,pver,0:nmodes) ! aerosol mode number concentration
     real(r8), intent(in) :: vnbc(pcols,pver)
     real(r8), intent(in) :: vaitbc(pcols,pver)
@@ -1987,23 +2026,25 @@ contains
        enddo
     enddo
 
-    call outfld('ECDRYAER',ec550rh_aer,pcols,lchnk)
-    call outfld('ABSDRYAE',abs550rh_aer,pcols,lchnk)
-    call outfld('OD550DRY',dod550rh,pcols,lchnk)       ! 2D variable
-    call outfld('AB550DRY',abs550rh,pcols,lchnk)       ! 2D variable
-    call outfld('ECDRY440',ec440rh_aer,pcols,lchnk)
-    call outfld('ABSDR440',abs440rh_aer,pcols,lchnk)
-    call outfld('ECDRY870',ec870rh_aer,pcols,lchnk)
-    call outfld('ABSDR870',abs870rh_aer,pcols,lchnk)
-    call outfld('ECDRYLT1',ec550rhlt1_aer,pcols,lchnk)
+    if (irf == 1) then
+       call outfld('ECDRYAER',ec550rh_aer,pcols,lchnk)
+       call outfld('ABSDRYAE',abs550rh_aer,pcols,lchnk)
+       call outfld('OD550DRY',dod550rh,pcols,lchnk)       ! 2D variable
+       call outfld('AB550DRY',abs550rh,pcols,lchnk)       ! 2D variable
+       call outfld('ECDRY440',ec440rh_aer,pcols,lchnk)
+       call outfld('ABSDR440',abs440rh_aer,pcols,lchnk)
+       call outfld('ECDRY870',ec870rh_aer,pcols,lchnk)
+       call outfld('ABSDR870',abs870rh_aer,pcols,lchnk)
+       call outfld('ECDRYLT1',ec550rhlt1_aer,pcols,lchnk)
 
-    ! Since we do not have enough look-up table info to take abs550rhlt1_aer,
-    ! instead take out abs550rh for each constituent:
-    call outfld('ABSDRYBC',abs550rh_bc,pcols,lchnk)
-    call outfld('ABSDRYOC',abs550rh_oc,pcols,lchnk)
-    call outfld('ABSDRYSU',abs550rh_su,pcols,lchnk)
-    call outfld('ABSDRYSS',abs550rh_ss,pcols,lchnk)
-    call outfld('ABSDRYDU',abs550rh_du,pcols,lchnk)
+       ! Since we do not have enough look-up table info to take abs550rhlt1_aer,
+       ! instead take out abs550rh for each constituent:
+       call outfld('ABSDRYBC',abs550rh_bc,pcols,lchnk)
+       call outfld('ABSDRYOC',abs550rh_oc,pcols,lchnk)
+       call outfld('ABSDRYSU',abs550rh_su,pcols,lchnk)
+       call outfld('ABSDRYSS',abs550rh_ss,pcols,lchnk)
+       call outfld('ABSDRYDU',abs550rh_du,pcols,lchnk)
+    end if
 
   end subroutine opticsAtConstRh
 
