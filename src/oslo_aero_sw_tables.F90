@@ -1,25 +1,7 @@
 module oslo_aero_sw_tables
 
   ! Purpose: To read in SW look-up tables for calculation of aerosol optical properties,
-  ! and to define the grid for discrete input-values in these look-up tables.
-
-  ! Purpose: To interpolate between look-up table entries for SW optical aerosol properties.
-  ! Optimized for speed by Arild Burud and Egil Storen (NoSerC), June-July 2002
-  ! Updated for new kcomp1.out including condensed SOA - Alf Kirkevaag, May 2013.
-  ! Extended for new SOA treatment for  kcomp1-4.out and treating SOA as coagulated OC
-  ! for kcomp5-10 - Alf Kirkevaag, August 2015, and also rewritten to a more generalized
-  ! for for interpolations using common subroutines interpol*dim.
-
-  ! Modified for new wavelength bands and look-up tables - Alf Kirkevaag Dec. 2013.
-  ! Updated for reading input files with extra header info - Alf Kirkevaag, May 2015.
-  ! Extended for new SOA treatment - Alf Kirkevaag, August 2015.
-  ! Added output (ASCII) Jabuary 2016: #ifdef COLTST4INTCONS -> extinction
-  ! koefficients (wrt. all added mass including condensed water vapour) are
-  ! written out for checking against the look-up tables (using xmgrace), e.g.
-  ! as function of RH (to be changed to whatever parameter the user is interested in)
-  ! Modified for optimized added masses and mass fractions for concentrations from
-  ! condensation, coagulation or cloud-processing - Alf Kirkevaag, May 2016.
-  ! Modified cate values for kcomp=2 (as  in AeroTab) - Alf Kirkevaag October 2016.
+  ! and to interpolate between look-up table entries for SW optical aerosol properties.  
 
   ! Internal mixtures of process-tagged mass
   ! cate : total added mass (µg/m3 per particle per cm3) from condensation
@@ -37,6 +19,7 @@ module oslo_aero_sw_tables
   !        The remaining SO4 mass, SO4*(1-faq), is from condensation. 
 
   use shr_kind_mod            , only: r8 => shr_kind_r8
+  use shr_sys_mod             , only: shr_sys_abort
   use ppgrid                  , only: pcols, pver
   use cam_logfile             , only: iulog
   use spmd_utils              , only: masterproc
@@ -48,18 +31,38 @@ module oslo_aero_sw_tables
   private
 
   ! Interfaces
+  public :: init_interp_constants
   public :: initopt
-  public :: initopt_lw
   public :: interpol0
   public :: interpol1
   public :: interpol2to3
   public :: interpol4
   public :: interpol5to10
 
-  real(r8), public, dimension(10)     :: rh
-  real(r8), public, dimension(6)      :: fombg, fbcbg, fac, fbc, faq
-  real(r8), public, dimension(4,16)   :: cate
-  real(r8), public, dimension(5:10,6) :: cat
+  private :: initopt_lw
+
+  ! ----------------------------
+  ! Set by init_interp_constants
+  ! ----------------------------
+
+  real(r8), public :: rh(10)
+  real(r8), public :: fombg(6), fbcbg(6), fac(6), fbc(6), faq(6)
+  real(r8), public :: cate(4,16)
+  real(r8), public :: cat(5:10,6)
+
+  ! relative humidity (RH, as integer for output variable names) for use in AeroCom code
+  integer , public :: RF(6)
+
+  ! AeroCom specific RH input variables for use in opticsAtConstRh.F90
+  integer , public :: irhrf1(6)
+  real(r8), public :: xrhrf(6)
+
+  real(r8), public, parameter :: e=2.718281828_r8
+  real(r8), public, parameter :: eps=1.0e-30_r8  
+
+  ! ----------------------------
+  ! Module variables set by table lookup
+  ! ----------------------------
 
   real(r8), public :: om0(nbands)
   real(r8), public :: g0(nbands)
@@ -86,48 +89,33 @@ module oslo_aero_sw_tables
   real(r8), public :: be5to10(nbands,10,6,6,6,6,5:10)
   real(r8), public :: ke5to10(nbands,10,6,6,6,6,5:10)
 
-  ! relative humidity (RH, as integer for output variable names) for use in AeroCom code
-  integer, public, dimension(6) :: RF = (/0, 40, 55, 65, 75, 85 /)
-
-  ! AeroCom specific RH input variables for use in opticsAtConstRh.F90
-  integer , public :: irhrf1(6)
-  real(r8), public :: xrhrf(6)
-
-  real(r8), public :: e, eps
-  parameter (e=2.718281828_r8, eps=1.0e-30_r8)
-
+  ! Long wave table info
   real(r8), public :: ka0(nlwbands)
   real(r8), public :: ka1(nlwbands,10,6,16,6)
   real(r8), public :: ka2to3(nlwbands,10,16,6,2:3)
   real(r8), public :: ka4(nlwbands,10,6,16,6,6)
   real(r8), public :: ka5to10(nlwbands,10,6,6,6,6,5:10)
 
+!=============================================================================
 contains
+!=============================================================================
 
-  subroutine initopt()
+  subroutine init_interp_constants()
 
     !---------------------------------------------------------------
-    ! Modified for new aerosol schemes by Alf Kirkevaag in January
-    ! 2006. Modified for new wavelength bands and look-up tables
-    ! by Alf Kirkevaag in December 2013, and for SOA in August 2015.
+    ! set module variables
     !---------------------------------------------------------------
 
     ! Local variables
-    integer  :: kcomp, iwl, irelh, ictot, ifac, ifbc, ifaq, i, irf
-    integer  :: ifombg, ifbcbg
-    integer  :: ik, ic, ifil, lin, linmax
-    real(r8) :: catot, relh, frac, fabc, fraq, frombg, frbcbg
-    real(r8) :: ssa, ass, ext, spext
-    real(r8) :: eps2 = 1.e-2_r8
-    real(r8) :: eps3 = 1.e-3_r8
-    real(r8) :: eps4 = 1.e-4_r8
-    real(r8) :: eps6 = 1.e-6_r8
-    character(len=dir_string_length) :: aerotab_table_dir
+    integer :: irf, irelh, kcomp, i
     !-----------------------------------------------------------
 
     ! Defining array bounds for tabulated optical parameters (and r and sigma)
     ! relative humidity (only 0 value used for r and sigma tables):
     rh = (/ 0.0_r8, 0.37_r8, 0.47_r8, 0.65_r8, 0.75_r8, 0.8_r8, 0.85_r8, 0.9_r8, 0.95_r8, 0.995_r8 /)
+
+    ! relative humidity (RH, as integer for output variable names) for use in AeroCom code
+    RF = (/0, 40, 55, 65, 75, 85 /)
 
     ! AeroCom specific RH input variables for use in opticsAtConstRh.F90
     do irf=1,6
@@ -150,13 +138,15 @@ contains
     ! with more weight on low fractions (thus a logaritmic f axis) for BC,
     ! which is less ambundant than sulfate and OC, and the first value
     ! corresponding to a clean background mode:
+    ! and most weight on small concentrations for added mass onto the background:
+
     fbcbg(1)=1.e-10_r8
     fbc(1)=1.e-10_r8
     do i=2,6
        fbcbg(i)=10**((i-1)/4.0_r8-1.25_r8)
        fbc(i)=fbcbg(i)
     end do
-    ! and most weight on small concentrations for added mass onto the background:
+
     do kcomp=1,4
        cate(kcomp,1)=1.e-10_r8
        do i=2,16
@@ -188,12 +178,28 @@ contains
        end do
     end do
 
+  end subroutine init_interp_constants
+
+  !=============================================================================
+
+  subroutine initopt()
+
+    ! Local variables
+    integer  :: kcomp, iwl, irelh, ictot, ifac, ifbc, ifaq, i, irf
+    integer  :: ifombg, ifbcbg
+    integer  :: ik, ic, ifil, lin, linmax
+    real(r8) :: catot, relh, frac, fabc, fraq, frombg, frbcbg
+    real(r8) :: ssa, ass, ext, spext
+    real(r8) :: eps2 = 1.e-2_r8
+    real(r8) :: eps3 = 1.e-3_r8
+    real(r8) :: eps4 = 1.e-4_r8
+    real(r8) :: eps6 = 1.e-6_r8
+    character(len=dir_string_length) :: aerotab_table_dir
+    !-----------------------------------------------------------
+
     call oslo_aero_getopts(aerotab_table_dir_out= aerotab_table_dir)
 
     ! Opening the 'kcomp'-files:
-
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
-
     open(50,file=trim(aerotab_table_dir)//'/kcomp0.out' ,form='formatted',status='old')
     open(40,file=trim(aerotab_table_dir)//'/kcomp1.out' ,form='formatted',status='old')
     open(41,file=trim(aerotab_table_dir)//'/kcomp2.out' ,form='formatted',status='old')
@@ -211,11 +217,9 @@ contains
        call checkTableHeader (ifil)
     enddo
 
-    ! Then reading in the look-up table entries for each file (kcomp*.out)
-
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
     ! Mode 0, BC(ax)
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
 
     ifil = 11
     linmax=nbands
@@ -234,8 +238,7 @@ contains
     do iwl=1,nbands
        if(be0(iwl)<=0.0_r8) then
           write(iulog,*) 'be0 =', iwl, be0(iwl)
-          write(iulog,*) 'Error in initialization of be0'
-          stop
+          call shr_sys_abort('initopt: error in initialization of be0')
        endif
     enddo
 
@@ -243,9 +246,9 @@ contains
        write(iulog,*)'kcompN tables: mode 0 ok'
     end if
 
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
     ! Mode 1 (H2SO4 and SOA + condesate from H2SO4 and SOA)
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
 
     linmax = nbands*10*6*16*6   ! 14*10*6*16*6
     do lin = 1,linmax
@@ -297,8 +300,7 @@ contains
                 do ifac=1,6
                    if(be1(iwl,irelh,ifombg,ictot,ifac)<=0.0_r8) then
                       write(iulog,*) 'be1 =', iwl, irelh, ifombg, ictot, be1(iwl,irelh,ifombg,ictot,ifac)
-                      write(iulog,*) 'Error in initialization of be1'
-                      stop
+                      call shr_sys_abort('initopt: error in initialization of be1')
                    endif
                 enddo
              enddo
@@ -308,9 +310,10 @@ contains
     if (masterproc) then
        write(iulog,*)'kcompN tables: mode 1 ok'
     end if
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+
+    !-------------------------------------------
     ! Modes 2 to 3 (BC/OC + condensate from H2SO4 and SOA)
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
 
     linmax=nbands*10*16*6
     do lin = 1,linmax
@@ -365,8 +368,7 @@ contains
                 do ifac=1,6
                    if(be2to3(iwl,irelh,ictot,ifac,kcomp)<=0.0_r8) then
                       write(iulog,*) 'be2to3 =', iwl, irelh, ictot, ifac, be2to3(iwl,irelh,ictot,ifac,kcomp)
-                      write(iulog,*) 'Error in initialization of be2to3'
-                      stop
+                      call shr_sys_abort('initopt: error in initialization of be2to3')
                    endif
                 enddo
              enddo
@@ -378,9 +380,9 @@ contains
        write(iulog,*)'kcompN tables: modes 2-3 ok'
     end if
 
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
     ! Mode 4 (BC&OC + condensate from H2SO4 and SOA + wet phase (NH4)2SO4)
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
 
     linmax = nbands*10*6*16*6*6
     do lin = 1,linmax
@@ -439,8 +441,7 @@ contains
                       if(be4(iwl,irelh,ifbcbg,ictot,ifac,ifaq)<=0.0_r8) then
                          write(iulog,*) 'be4 =', iwl, irelh, ifbcbg, ictot, ifac, ifaq, &
                               be4(iwl,irelh,ifbcbg,ictot,ifac,ifaq)
-                         write(iulog,*) 'Error in initialization of be4'
-                         stop
+                         call shr_sys_abort('initopt: error in initialization of be4')
                       endif
                    enddo
                 enddo
@@ -453,9 +454,9 @@ contains
        write(iulog,*)'kcompN tables: mode 4 ok'
     end if
 
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
     ! Modes 5 to 10 (SO4(Ait75) and mineral and seasalt-modes + cond./coag./aq.)
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
 
     linmax = nbands*10*6*6*6*6     ! 14*10*6*6*6*6
     do ifil = 5,10
@@ -515,10 +516,10 @@ contains
                 do ifac=1,6
                    do ifaq=1,6
                       if(be5to10(iwl,irelh,ictot,ifac,ifbc,ifaq,kcomp)<=0.0_r8) then
-                         write(iulog,*) 'be5to10 =', iwl, irelh, ictot, ifac, ifbc, ifaq, be5to10(iwl,irelh,ictot,ifac,ifbc,ifaq,kcomp)
-                         write(iulog,*) 'Error in initialization of be5to10'
+                         write(iulog,*) 'be5to10 =', &
+                              iwl, irelh, ictot, ifac, ifbc, ifaq, be5to10(iwl,irelh,ictot,ifac,ifbc,ifaq,kcomp)
                          write(iulog,*) 'kcomp, abs((fabc-fbc)/fbc) =', kcomp, abs((fabc-fbc(ic))/fbc(ic))
-                         stop
+                         call shr_sys_abort('initopt: error in initialization of be5to10')
                       endif
                    enddo
                 enddo
@@ -535,9 +536,12 @@ contains
        close (ifil)
     end do
 
+    call initopt_lw()  ! initialize lw table info used in this module
+
   end subroutine initopt
 
-  !********************************************************************************************
+  !=============================================================================
+
   subroutine initopt_lw
 
     !---------------------------------------------------------------
@@ -549,6 +553,7 @@ contains
     ! Alf Kirkevaag in 2014 and for SOA in 2015.
     !---------------------------------------------------------------
 
+    ! Local variables
     integer  :: kcomp, iwl, irelh, ictot, ifac, ifbc, ifaq
     integer  :: ifombg, ifbcbg
     integer  :: ic, ifil, lin, linmax
@@ -582,11 +587,9 @@ contains
        call checkTableHeader (ifil)
     enddo
 
-    ! Then reading in the look-up table entries for each file (lwkcomp*.out)
-
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
     ! Mode 0, BC(ax)
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
 
     ifil = 11
     linmax=nlwbands
@@ -598,15 +601,16 @@ contains
     do iwl=1,nlwbands
        if(ka0(iwl)<=0.0_r8) then
           write(iulog,*) 'ka0 =', iwl, ka0(iwl)
-          write(iulog,*) 'Error in initialization of ka0'
-          stop
+          call shr_sys_abort('initopt_lw: error in initialization of ka0')
        endif
     enddo
-    write(iulog,*)'lw mode 0 ok'
+    if (masterproc) then
+       write(iulog,*)'lwkcompN tables: lw mode 0 ok'
+    end if
 
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
     ! Mode 1 (H2SO4 + condesate from H2SO4 and SOA)
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
 
     ifil = 1
     linmax=nlwbands*10*6*16*6
@@ -617,34 +621,27 @@ contains
        do ic=1,10
           if(abs(relh-rh(ic))<eps4) then
              irelh=ic
-             goto 121
+             exit
           endif
        end do
-121    continue
-
        do ic=1,6
           if(abs(frombg-fombg(ic))<eps4) then
              ifombg=ic
-             goto 122
+             exit
           endif
        end do
-122    continue
-
        do ic=1,16
           if(abs((catot-cate(kcomp,ic))/cate(kcomp,ic))<eps2) then
              ictot=ic
-             goto 131
+             exit
           endif
        end do
-131    continue
-
        do ic=1,6
           if(abs(frac-fac(ic))<eps4) then
              ifac=ic
-             goto 141
+             exit
           endif
        end do
-141    continue
 
        ka1(iwl,irelh,ifombg,ictot,ifac)=spabs  ! unit m^2/g
 
@@ -660,51 +657,43 @@ contains
              do ifac=1,6
                 if(ka1(iwl,irelh,ifombg,ictot,ifac)<=0.0_r8) then
                    write(iulog,*) 'ka1 =', iwl, irelh, ifombg, ictot, ifac, ka1(iwl,irelh,ifombg,ictot,ifac)
-                   write(iulog,*) 'Error in initialization of ka1'
-                   stop
+                   call shr_sys_abort('initopt_lw: error in initialization of ka1')
                 endif
              enddo
           enddo
        enddo
     enddo
+    if (masterproc) then
+       write(iulog,*)'lwkcompN tables: lw mode 1 ok'
+    end if
 
-    write(iulog,*)'lw new mode 1 ok'
-
-
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
     ! Modes 2 to 3 (BC or OC + condensate from H2SO4 and SOA)
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
 
     linmax = nlwbands*10*16*6
-    ! do ifil = 2,3
     do ifil = 2,2
        do lin = 1,linmax
-
           read(39+ifil,994) kcomp, iwl, relh, catot, frac, spabs
 
        	  do ic=1,10
              if(abs(relh-rh(ic))<eps4) then
                 irelh=ic
-                goto 61
+                exit
              endif
 	  end do
-61        continue
-
  	  do ic=1,16
              if(abs((catot-cate(kcomp,ic))/cate(kcomp,ic))<eps2) then
                 ictot=ic
-                goto 71
+                exit
              endif
 	  end do
-71        continue
-
  	  do ic=1,6
              if(abs(frac-fac(ic))<eps4) then
                 ifac=ic
-                goto 72
+                exit
              endif
 	  end do
-72        continue
 
           ka2to3(iwl,irelh,ictot,ifac,kcomp)=spabs  ! unit m^2/g
 
@@ -729,22 +718,22 @@ contains
              do ictot=1,16
                 do ifac=1,6
                    if(ka2to3(iwl,irelh,ictot,ifac,kcomp)<=0.0_r8) then
-                      write(iulog,*) 'ka2to3 =', iwl, irelh, ictot, ifac, ka2to3(iwl,irelh,ictot,ifac,kcomp)
-                      write(iulog,*) 'Error in initialization of ka2to3'
-                      stop
+                      write(iulog,*) 'ka2to3 =', &
+                           iwl, irelh, ictot, ifac, ka2to3(iwl,irelh,ictot,ifac,kcomp)
+                      call shr_sys_abort('initopt_lw: error in initialization of ka2to3')
                    endif
                 enddo
              enddo
           enddo
        enddo
     enddo
+    if (masterproc) then
+       write(iulog,*)'lwkcompN tables: lw mode 2-3 ok'
+    end if
 
-    write(iulog,*)'lw mode 2-3 ok'
-
-
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
     ! Mode 4 (BC&OC + condesate from H2SO4 and SOA + wetphase (NH4)2SO4)
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
 
     ifil = 4
     linmax = nlwbands*10*6*16*6*6
@@ -755,48 +744,35 @@ contains
        do ic=1,10
           if(abs(relh-rh(ic))<eps4) then
              irelh=ic
-             goto 81
+             exit
           endif
        end do
-81     continue
-
        do ic=1,6
-          !	   if(abs(frbcbg-fbcbg(ic))<eps4) then
-          !	   if(abs(frbcbg-fbcbg(ic))<eps3) then
           if(abs((frbcbg-fbcbg(ic))/fbcbg(ic))<eps2) then
              ifbcbg=ic
-             goto 92
+             exit
           endif
        end do
-92     continue
-
        do ic=1,16
           if(abs((catot-cate(kcomp,ic))/cate(kcomp,ic))<eps2) then
              ictot=ic
-             goto 91
+             exit
           endif
        end do
-91     continue
-
        do ic=1,6
           if(abs(frac-fac(ic))<eps4) then
              ifac=ic
-             goto 101
+             exit
           endif
        end do
-101    continue
-
        do ic=1,6
           if(abs(fraq-faq(ic))<eps4) then
              ifaq=ic
-             goto 111
+             exit
           endif
        end do
-111    continue
 
        ka4(iwl,irelh,ifbcbg,ictot,ifac,ifaq)=spabs  ! unit m^2/g
-
-       ! write(*,*) 'kcomp, ka =', kcomp, ka4(iwl,irelh,ifbcbg,ictot,ifac,ifaq)
     end do
 
     do iwl=1,nlwbands
@@ -805,77 +781,62 @@ contains
              do ifac=1,6
                 do ifaq=1,6
                    if(ka4(iwl,irelh,ifbcbg,ictot,ifac,ifaq)<=0.0_r8) then
-                      write(iulog,*) 'ka4 =', iwl, irelh, ifbcbg, ictot, ifac, ifaq, ka4(iwl,irelh,ifbcbg,ictot,ifac,ifaq)
-                      write(iulog,*) 'Error in initialization of ka4'
-                      stop
+                      write(iulog,*) 'ka4 =', &
+                           iwl, irelh, ifbcbg, ictot, ifac, ifaq, ka4(iwl,irelh,ifbcbg,ictot,ifac,ifaq)
+                      call shr_sys_abort('initopt_lw: error in initialization of ka4')
                    endif
                 enddo
              enddo
           enddo
        enddo
     enddo
+    if (masterproc) then
+       write(iulog,*)'lwkcompN tables: lw mode 4 ok'
+    end if
 
-    write(iulog,*)'lw mode 4 ok'
-
-
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
     ! Modes 5 to 10 (SO4(Ait75) and mineral and seasalt-modes + cond./coag./aq.)
-    !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
+    !-------------------------------------------
 
     linmax = nlwbands*10*6*6*6*6
     do ifil = 5,10
        do lin = 1,linmax
-
           read(39+ifil,993) kcomp, iwl, relh, catot, frac, fabc, fraq, spabs
 
        	  do ic=1,10
              if(abs(relh-rh(ic))<eps4) then
                 irelh=ic
-                goto 11
+                exit
              endif
 	  end do
-11        continue
-
  	  do ic=1,6
-       !	   if(abs(catot-cat(kcomp,ic))<eps6) then
              if(abs((catot-cat(kcomp,ic))/cat(kcomp,ic))<eps2) then
                 ictot=ic
-                goto 21
+                exit
              endif
 	  end do
-21        continue
-
  	  do ic=1,6
              if(abs(frac-fac(ic))<eps4) then
                 ifac=ic
-                goto 31
+                exit
              endif
 	  end do
-31        continue
-
  	  do ic=1,6
-       !	   if(abs(fabc-fbc(ic))<eps4) then
              if(abs((fabc-fbc(ic))/fbc(ic))<eps2) then
                 ifbc=ic
-                goto 41
+                exit
              endif
 	  end do
-41        continue
-
 	  do ic=1,6
              if(abs(fraq-faq(ic))<eps4) then
                 ifaq=ic
-                goto 51
+                exit
              endif
 	  end do
-51        continue
 
           ka5to10(iwl,irelh,ictot,ifac,ifbc,ifaq,kcomp)=spabs  ! unit m^2/g
-
-          ! write(*,*) 'kcomp, ka =', kcomp, ka5to10(iwl,irelh,ictot,ifac,ifbc,ifaq,kcomp)
        end do
     end do
-
 
     do kcomp=5,10
        do iwl=1,nlwbands
@@ -884,9 +845,9 @@ contains
                 do ifac=1,6
                    do ifaq=1,6
                       if(ka5to10(iwl,irelh,ictot,ifac,ifbc,ifaq,kcomp)<=0.0_r8) then
-                         write(iulog,*) 'ka5to10 =', iwl, irelh, ictot, ifac, ifbc, ifaq, ka5to10(iwl,irelh,ictot,ifac,ifbc,ifaq,kcomp)
-                         write(iulog,*) 'Error in initialization of ka5to10'
-                         stop
+                         write(iulog,*) 'ka5to10 =', &
+                              iwl, irelh, ictot, ifac, ifbc, ifaq, ka5to10(iwl,irelh,ictot,ifac,ifbc,ifaq,kcomp)
+                         call shr_sys_abort('initopt_lw: error in initialization of ka5to10')
                       endif
                    enddo
                 enddo
@@ -894,8 +855,9 @@ contains
           enddo
        enddo
     enddo
-
-    write(iulog,*)'lw mode 5-10 ok'
+    if (masterproc) then
+       write(iulog,*)'lwkcompN tables: lw mode 5-10 ok'
+    end if
 
 993 format(2I3,f8.3,3(x,e10.3),f7.2,x,e12.5)      ! 5-10
 994 format(2I3,f8.3,2(x,e10.3),x,e12.5)           ! 2-3
@@ -909,7 +871,8 @@ contains
 
   end subroutine initopt_lw
 
-  !********************************************************************************************
+  !=============================================================================
+
   subroutine interpol0 (ncol, daylight, Nnatk, omega, gass, bex, ske, lw_on, kabs)
     !
     ! Arguments
@@ -981,7 +944,8 @@ contains
 
   end subroutine interpol0
 
-  !********************************************************************************************
+  !=============================================================================
+
   subroutine interpol1 (ncol, daylight, xrh, irh1, mplus10, Nnatk, xfombg, ifombg1, &
        xct, ict1, xfac, ifac1, omega, gass, bex, ske, lw_on, kabs)
 
@@ -1097,7 +1061,6 @@ contains
 
                 do i=1,nbands            ! i = wavelength index
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! single scattering albedo:
 
                    ! end points as basis for multidimentional linear interpolation
@@ -1126,7 +1089,6 @@ contains
                    omega(icol,k,kc10,i)=((t_rh2-t_xrh)*ome1+(t_xrh-t_rh1)*ome2) /(t_rh2-t_rh1)
                    !alt       omega(icol,k,kc10,i)=(d2mx(1)*ome1+dxm1(1)*ome2)*invd(1)
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! asymmetry factor
 
                    ! end points as basis for multidimentional linear interpolation
@@ -1155,7 +1117,6 @@ contains
                    gass(icol,k,kc10,i)=((t_rh2-t_xrh)*ge1+(t_xrh-t_rh1)*ge2) /(t_rh2-t_rh1)
                    !alt      gass(icol,k,kc10,i)=(d2mx(1)*ge1+dxm1(1)*ge2)*invd(1)
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! aerosol extinction
 
                    ! end points as basis for multidimentional linear interpolation
@@ -1186,27 +1147,17 @@ contains
                    ! write(*,*) 'Before bex'
                    if(t_xrh <= 0.37_r8) then
                       bex(icol,k,kc10,i)=((t_rh2-t_xrh)*bex1+(t_xrh-t_rh1)*bex2) /(t_rh2-t_rh1)
-                      !alt        bex(icol,k,kc10,i)=(d2mx(1)*bex1+dxm1(1)*bex2)*invd(1)
                    else
                       a=(log(bex2)-log(bex1))/(t_rh2-t_rh1)
                       b=(t_rh2*log(bex1)-t_rh1*log(bex2))/(t_rh2-t_rh1)
                       bex(icol,k,kc10,i)=e**(a*t_xrh+b)
-                      !alt        a=(log(bex2)-log(bex1))*invd(1)
-                      !alt        b=(t_rh2*log(bex1)-t_rh1*log(bex2))*invd(1)
-                      !alt        bex(icol,k,kc10,i)=e**(a*t_xrh+b)
                    endif
 
                 end do ! i
 
-                ! if(bex(icol,k,kc10,8)<1.e-20_r8) then
-                ! write(*,995) 'bex(8)=', kc10, t_xrh, t_xct, t_xfac, t_xfombg, bex(icol,k,kc10,8)
-                ! endif
              else  ! daylight
 
-
-                !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                 ! aerosol extinction used for size information in LW
-
                 i=4
 
                 ! end points as basis for multidimentional linear interpolation
@@ -1247,7 +1198,6 @@ contains
 
              do i=4,4            ! i = wavelength index
 
-                !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                 ! aerosol specific extinction
 
                 ! end points as basis for multidimentional linear interpolation
@@ -1296,7 +1246,6 @@ contains
                 ! LW optical parameters
                 do i=1,nlwbands            ! i = wavelength index
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! aerosol specific absorption in LW
 
                    ! end points as basis for multidimentional linear interpolation
@@ -1339,36 +1288,31 @@ contains
 
           end do ! icol
        end do ! k
-
        ! write(*,*) 'kcomp, omega(1,26,kcomp,4)=', kcomp, omega(1,26,kcomp,4)
        ! write(*,*) 'kcomp, gass(1,26,kcomp,4)=', kcomp, gass(1,26,kcomp,4)
        ! write(*,*) 'kcomp, bex(1,26,kcomp,4)=', kcomp, bex(1,26,kcomp,4)
        ! write(*,*) 'kcomp, ske(1,26,kcomp,4)=', kcomp, ske(1,26,kcomp,4)
-
     end do  ! kcomp
 
-    return
   end subroutine interpol1
 
+  !=============================================================================
 
-  !********************************************************************************************
   subroutine interpol2to3 (ncol, daylight, xrh, irh1, mplus10, Nnatk, &
        xct, ict1, xfac, ifac1, omega, gass, bex, ske, lw_on, kabs)
 
-    ! Input arguments
-    integer, intent(in) :: ncol                        ! number of atmospheric columns
-    integer, intent(in) :: mplus10                     ! mode number (0) or number + 10 (1)
-    logical, intent(in) :: daylight(pcols)             ! only daylight calculations if .true.
-    logical, intent(in) :: lw_on                       ! LW calculations are performed if true
-    real(r8), intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
-    real(r8), intent(in) :: xrh(pcols,pver)            ! level relative humidity (fraction)
-    integer,  intent(in) :: irh1(pcols,pver)
-    real(r8), intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
-    integer,  intent(in) :: ict1(pcols,pver,nmodes)
-    real(r8), intent(in) :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
-    integer,  intent(in) :: ifac1(pcols,pver,nbmodes)
-
-    ! Output arguments
+    ! Arguments
+    integer,  intent(in)  :: ncol                       ! number of atmospheric columns
+    integer,  intent(in)  :: mplus10                    ! mode number (0) or number + 10 (1)
+    logical,  intent(in)  :: daylight(pcols)            ! only daylight calculations if .true.
+    logical,  intent(in)  :: lw_on                      ! LW calculations are performed if true
+    real(r8), intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8), intent(in)  :: xrh(pcols,pver)            ! level relative humidity (fraction)
+    integer,  intent(in)  :: irh1(pcols,pver)
+    real(r8), intent(in)  :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
+    integer,  intent(in)  :: ict1(pcols,pver,nmodes)
+    real(r8), intent(in)  :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
+    integer,  intent(in)  :: ifac1(pcols,pver,nbmodes)
     real(r8), intent(out) :: omega(pcols,pver,0:nmodes,nbands) ! spectral modal single scattering albedo
     real(r8), intent(out) :: gass(pcols,pver,0:nmodes,nbands)  ! spectral modal asymmetry factor
     real(r8), intent(out) :: bex(pcols,pver,0:nmodes,nbands)   ! spectral modal extinction coefficient
@@ -1376,18 +1320,16 @@ contains
     real(r8), intent(out) :: kabs(pcols,pver,0:nmodes,nlwbands)! LW spectral modal specific absorption coefficient
     !
     ! Local variables
-    integer i, kcomp, k, icol, kc10
-    real(r8) a, b
-    integer t_irh1, t_irh2, t_ict1, t_ict2, t_ifc1, t_ifc2
-    real(r8) t_fac1, t_fac2, t_xfac, t_xrh, t_xct, t_rh1, t_rh2,t_cat1, t_cat2
-    real(r8) d2mx(3), dxm1(3), invd(3)
-    real(r8) opt3d(2,2,2)
-    real(r8) ome1, ome2, ge1, ge2, bex1, bex2, ske1, ske2
-    real(r8) kabs1, kabs2
+    integer  :: i, kcomp, k, icol, kc10
+    real(r8) :: a, b
+    integer  :: t_irh1, t_irh2, t_ict1, t_ict2, t_ifc1, t_ifc2
+    real(r8) :: t_fac1, t_fac2, t_xfac, t_xrh, t_xct, t_rh1, t_rh2,t_cat1, t_cat2
+    real(r8) :: d2mx(3), dxm1(3), invd(3)
+    real(r8) :: opt3d(2,2,2)
+    real(r8) :: ome1, ome2, ge1, ge2, bex1, bex2, ske1, ske2
+    real(r8) :: kabs1, kabs2
     !---------------------------------------
 
-    ! write(*,*) 'Before kcomp-loop'
-    ! do kcomp=2,3
     do kcomp=2,2
 
        if(mplus10==0) then
@@ -1420,7 +1362,6 @@ contains
 
              ! Collect all the vector elements into temporary storage
              ! to avoid cache conflicts and excessive cross-referencing
-
              t_irh1 = irh1(icol,k)
              t_irh2 = t_irh1+1
              t_ict1 = ict1(icol,k,kc10)
@@ -1428,21 +1369,12 @@ contains
              t_ifc1 = ifac1(icol,k,kcomp)
              t_ifc2 = t_ifc1+1
 
-             ! write(*,*) 't_irh1,t_irh2=',t_irh1,t_irh2
-             ! write(*,*) 't_ict1,t_ict2=',t_ict1,t_ict2
-             ! write(*,*) 't_ifc1,t_ifc2=',t_ifc1,t_ifc2
-             ! write(*,*) 't_ifa1,t_ifa2=',t_ifa1,t_ifa2
-
              t_rh1  = rh(t_irh1)
              t_rh2  = rh(t_irh2)
              t_cat1 = cate(kcomp,t_ict1)
              t_cat2 = cate(kcomp,t_ict2)
              t_fac1 = fac(t_ifc1)
              t_fac2 = fac(t_ifc2)
-
-             ! write(*,*) 't_rh1,t_rh2,t_cat1,t_cat2=',t_rh1,t_rh2,t_cat1,t_cat2
-             ! write(*,*) 't_fac1,t_fac2=',t_fac1,t_fac2
-
              t_xrh  = xrh(icol,k)
              t_xct  = xct(icol,k,kc10)
              t_xfac = xfac(icol,k,kcomp)
@@ -1458,13 +1390,11 @@ contains
              dxm1(3) = (t_xfac-t_fac1)
              invd(3) = 1.0_r8/(t_fac2-t_fac1)
 
-
              ! SW optical parameters
              if(daylight(icol)) then
 
                 do i=1,nbands            ! i = wavelength index
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! single scattering albedo:
 
                    ! end points as basis for multidimentional linear interpolation
@@ -1481,14 +1411,9 @@ contains
                    call lininterpol3dim (d2mx, dxm1, invd, opt3d, ome1, ome2)
 
                    ! finally, interpolation in the rh dimension
-                   ! write(*,*) 'Before omega'
-                   omega(icol,k,kc10,i)=((t_rh2-t_xrh)*ome1+(t_xrh-t_rh1)*ome2) &
-                        /(t_rh2-t_rh1)
-                   ! write(*,*) omega(icol,k,kc10,i)
+                   omega(icol,k,kc10,i)=((t_rh2-t_xrh)*ome1+(t_xrh-t_rh1)*ome2)/(t_rh2-t_rh1)
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! asymmetry factor
-
                    ! end points as basis for multidimentional linear interpolation
                    opt3d(1,1,1)=g2to3(i,t_irh1,t_ict1,t_ifc1,kcomp)
                    opt3d(1,1,2)=g2to3(i,t_irh1,t_ict1,t_ifc2,kcomp)
@@ -1503,14 +1428,9 @@ contains
                    call lininterpol3dim (d2mx, dxm1, invd, opt3d, ge1, ge2)
 
                    ! finally, interpolation in the rh dimension
-                   ! write(*,*) 'Before gass'
-                   gass(icol,k,kc10,i)=((t_rh2-t_xrh)*ge1+(t_xrh-t_rh1)*ge2) &
-                        /(t_rh2-t_rh1)
-                   ! write(*,*) gass(icol,k,kc10,i)
+                   gass(icol,k,kc10,i)=((t_rh2-t_xrh)*ge1+(t_xrh-t_rh1)*ge2)/(t_rh2-t_rh1)
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! aerosol extinction
-
                    ! end points as basis for multidimentional linear interpolation
                    opt3d(1,1,1)=be2to3(i,t_irh1,t_ict1,t_ifc1,kcomp)
                    opt3d(1,1,2)=be2to3(i,t_irh1,t_ict1,t_ifc2,kcomp)
@@ -1528,10 +1448,8 @@ contains
                    bex2=max(bex2,1.e-30)
 
                    ! finally, interpolation in the rh dimension
-                   ! write(*,*) 'Before bex'
                    if(t_xrh <= 0.37) then
-                      bex(icol,k,kc10,i)=((t_rh2-t_xrh)*bex1+(t_xrh-t_rh1)*bex2) &
-                           /(t_rh2-t_rh1)
+                      bex(icol,k,kc10,i)=((t_rh2-t_xrh)*bex1+(t_xrh-t_rh1)*bex2)/(t_rh2-t_rh1)
                    else
                       a=(log(bex2)-log(bex1))/(t_rh2-t_rh1)
                       b=(t_rh2*log(bex1)-t_rh1*log(bex2))/(t_rh2-t_rh1)
@@ -1541,13 +1459,9 @@ contains
                 end do ! i
              else  ! daylight
 
-
-
-                !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                 ! aerosol extinction used for LW size information
-
-                i=4
                 ! end points as basis for multidimentional linear interpolation
+                i=4
                 opt3d(1,1,1)=be2to3(i,t_irh1,t_ict1,t_ifc1,kcomp)
                 opt3d(1,1,2)=be2to3(i,t_irh1,t_ict1,t_ifc2,kcomp)
                 opt3d(1,2,1)=be2to3(i,t_irh1,t_ict2,t_ifc1,kcomp)
@@ -1564,10 +1478,8 @@ contains
                 bex2=max(bex2,1.e-30)
 
                 ! finally, interpolation in the rh dimension
-                ! write(*,*) 'Before bex'
                 if(t_xrh <= 0.37) then
-                   bex(icol,k,kc10,i)=((t_rh2-t_xrh)*bex1+(t_xrh-t_rh1)*bex2) &
-                        /(t_rh2-t_rh1)
+                   bex(icol,k,kc10,i)=((t_rh2-t_xrh)*bex1+(t_xrh-t_rh1)*bex2)/(t_rh2-t_rh1)
                 else
                    a=(log(bex2)-log(bex1))/(t_rh2-t_rh1)
                    b=(t_rh2*log(bex1)-t_rh1*log(bex2))/(t_rh2-t_rh1)
@@ -1576,13 +1488,9 @@ contains
 
              endif  ! daylight
 
-
-
              do i=4,4            ! i = wavelength index
 
-                !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                 ! aerosol specific extinction
-
                 ! end points as basis for multidimentional linear interpolation
                 opt3d(1,1,1)=ke2to3(i,t_irh1,t_ict1,t_ifc1,kcomp)
                 opt3d(1,1,2)=ke2to3(i,t_irh1,t_ict1,t_ifc2,kcomp)
@@ -1600,10 +1508,8 @@ contains
                 ske2=max(ske2,1.e-30)
 
                 ! finally, interpolation in the rh dimension
-                ! write(*,*) 'Before ske'
                 if(t_xrh <= 0.37) then
-                   ske(icol,k,kc10,i)=((t_rh2-t_xrh)*ske1+(t_xrh-t_rh1)*ske2) &
-                        /(t_rh2-t_rh1)
+                   ske(icol,k,kc10,i)=((t_rh2-t_xrh)*ske1+(t_xrh-t_rh1)*ske2)/(t_rh2-t_rh1)
                 else
                    a=(log(ske2)-log(ske1))/(t_rh2-t_rh1)
                    b=(t_rh2*log(ske1)-t_rh1*log(ske2))/(t_rh2-t_rh1)
@@ -1612,16 +1518,12 @@ contains
 
              end do ! i
 
-
-
+             ! LW optical parameters
              if (lw_on) then
 
-                ! LW optical parameters
                 do i=1,nlwbands            ! i = wavelength index
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! aerosol specific absorption in LW
-
                    ! end points as basis for multidimentional linear interpolation
                    opt3d(1,1,1)=ka2to3(i,t_irh1,t_ict1,t_ifc1,kcomp)
                    opt3d(1,1,2)=ka2to3(i,t_irh1,t_ict1,t_ifc2,kcomp)
@@ -1638,10 +1540,8 @@ contains
                    kabs1=max(kabs1,1.e-30_r8)
                    kabs2=max(kabs2,1.e-30_r8)
 
-                   ! write(*,*) 'Before kabs'
                    if(t_xrh <= 0.37_r8) then
-                      kabs(icol,k,kc10,i)=((t_rh2-t_xrh)*kabs1+(t_xrh-t_rh1)*kabs2) &
-                           /(t_rh2-t_rh1)
+                      kabs(icol,k,kc10,i)=((t_rh2-t_xrh)*kabs1+(t_xrh-t_rh1)*kabs2)/(t_rh2-t_rh1)
                    else
                       a=(log(kabs2)-log(kabs1))/(t_rh2-t_rh1)
                       b=(t_rh2*log(kabs1)-t_rh1*log(kabs2))/(t_rh2-t_rh1)
@@ -1649,46 +1549,39 @@ contains
                    endif
 
                 end do ! i
-
              endif ! lw_on
-
           end do ! icol
        end do ! k
-
        ! write(*,*) 'kcomp, omega(1,26,kcomp,4)=', kcomp, omega(1,26,kcomp,4)
        ! write(*,*) 'kcomp, gass(1,26,kcomp,4)=', kcomp, gass(1,26,kcomp,4)
        ! write(*,*) 'kcomp, bex(1,26,kcomp,4)=', kcomp, bex(1,26,kcomp,4)
        ! write(*,*) 'kcomp, ske(1,26,kcomp,4)=', kcomp, ske(1,26,kcomp,4)
-
     end do  ! kcomp
 
-    return
   end subroutine interpol2to3
 
-  !********************************************************************************************
+  !=============================================================================
 
   subroutine interpol4 (ncol, daylight, xrh, irh1, mplus10, Nnatk, xfbcbg, ifbcbg1, &
        xct, ict1, xfac, ifac1, xfaq, ifaq1, &
        omega, gass, bex, ske, lw_on, kabs)
 
-    ! Input arguments
-    integer, intent(in) :: ncol                        ! number of atmospheric columns
-    integer, intent(in) :: mplus10                     ! mode number (0) or number + 10 (1)
-    logical, intent(in) :: daylight(pcols)             ! only daylight calculations if .true.
-    logical, intent(in) :: lw_on                       ! LW calculations are performed if true
-    real(r8), intent(in) :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
-    real(r8), intent(in) :: xrh(pcols,pver)            ! level relative humidity (fraction)
-    integer,  intent(in) :: irh1(pcols,pver)
-    real(r8), intent(in) :: xfbcbg(pcols,pver)         ! mass fraction BC/(BC+OC) for the background mode
-    integer,  intent(in) :: ifbcbg1(pcols,pver)
-    real(r8), intent(in) :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
-    integer,  intent(in) :: ict1(pcols,pver,nmodes)
-    real(r8), intent(in) :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
-    integer,  intent(in) :: ifac1(pcols,pver,nbmodes)
-    real(r8), intent(in) :: xfaq(pcols,pver,nbmodes)   ! modal SO4(aq)/SO4
-    integer,  intent(in) :: ifaq1(pcols,pver,nbmodes)
-
-    ! Output arguments
+    ! Arguments
+    integer, intent(in)   :: ncol                       ! number of atmospheric columns
+    integer, intent(in)   :: mplus10                    ! mode number (0) or number + 10 (1)
+    logical, intent(in)   :: daylight(pcols)            ! only daylight calculations if .true.
+    logical, intent(in)   :: lw_on                      ! LW calculations are performed if true
+    real(r8), intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
+    real(r8), intent(in)  :: xrh(pcols,pver)            ! level relative humidity (fraction)
+    integer,  intent(in)  :: irh1(pcols,pver)
+    real(r8), intent(in)  :: xfbcbg(pcols,pver)         ! mass fraction BC/(BC+OC) for the background mode
+    integer,  intent(in)  :: ifbcbg1(pcols,pver)
+    real(r8), intent(in)  :: xct(pcols,pver,nmodes)     ! modal internally mixed SO4+BC+OC conc.
+    integer,  intent(in)  :: ict1(pcols,pver,nmodes)
+    real(r8), intent(in)  :: xfac(pcols,pver,nbmodes)   ! condensed SOA/(SOA+H2SO4) (1-4) or added carbonaceous fraction (5-10)
+    integer,  intent(in)  :: ifac1(pcols,pver,nbmodes)
+    real(r8), intent(in)  :: xfaq(pcols,pver,nbmodes)   ! modal SO4(aq)/SO4
+    integer,  intent(in)  :: ifaq1(pcols,pver,nbmodes)
     real(r8), intent(out) :: omega(pcols,pver,0:nmodes,nbands) ! spectral modal single scattering albedo
     real(r8), intent(out) :: gass(pcols,pver,0:nmodes,nbands)  ! spectral modal asymmetry factor
     real(r8), intent(out) :: bex(pcols,pver,0:nmodes,nbands)   ! spectral modal extinction coefficient
@@ -1707,7 +1600,6 @@ contains
     real(r8) :: kabs1, kabs2
     !---------------------------------------
 
-    ! write(*,*) 'Before kcomp-loop'
     do kcomp=4,4
 
        if(mplus10==0) then
@@ -1789,11 +1681,9 @@ contains
              ! SW optical parameters
              if(daylight(icol)) then
 
-                do i=1,nbands            ! i = wavelength index
+                do i=1,nbands ! wavelength index
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! single scattering albedo:
-
                    opt5d(1,1,1,1,1)=om4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa1)
                    opt5d(1,1,1,1,2)=om4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa2)
                    opt5d(1,1,1,2,1)=om4(i,t_irh1,t_ifb1,t_ict1,t_ifc2,t_ifa1)
@@ -1831,13 +1721,9 @@ contains
                    call lininterpol5dim (d2mx, dxm1, invd, opt5d, ome1, ome2)
 
                    ! finally, interpolation in the rh dimension
-                   ! write(*,*) 'Before omega'
                    omega(icol,k,kc10,i)=((t_rh2-t_xrh)*ome1+(t_xrh-t_rh1)*ome2) /(t_rh2-t_rh1)
-                   ! write(*,*) omega(icol,k,kc10,i)
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! asymmetry factor
-
                    opt5d(1,1,1,1,1)=g4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa1)
                    opt5d(1,1,1,1,2)=g4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa2)
                    opt5d(1,1,1,2,1)=g4(i,t_irh1,t_ifb1,t_ict1,t_ifc2,t_ifa1)
@@ -1875,13 +1761,9 @@ contains
                    call lininterpol5dim (d2mx, dxm1, invd, opt5d, ge1, ge2)
 
                    ! finally, interpolation in the rh dimension
-                   ! write(*,*) 'Before gass'
-                   gass(icol,k,kc10,i)=((t_rh2-t_xrh)*ge1+(t_xrh-t_rh1)*ge2) &
-                        /(t_rh2-t_rh1)
+                   gass(icol,k,kc10,i)=((t_rh2-t_xrh)*ge1+(t_xrh-t_rh1)*ge2)/(t_rh2-t_rh1)
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! aerosol extinction
-
                    opt5d(1,1,1,1,1)=be4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa1)
                    opt5d(1,1,1,1,2)=be4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa2)
                    opt5d(1,1,1,2,1)=be4(i,t_irh1,t_ifb1,t_ict1,t_ifc2,t_ifa1)
@@ -1933,12 +1815,11 @@ contains
                    endif
 
                 end do ! i
+
              else  ! daylight
 
-                !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                 ! aerosol extinction called for use in size estimate for use in LW
                 i=4
-
                 opt5d(1,1,1,1,1)=be4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa1)
                 opt5d(1,1,1,1,2)=be4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa2)
                 opt5d(1,1,1,2,1)=be4(i,t_irh1,t_ifb1,t_ict1,t_ifc2,t_ifa1)
@@ -1981,8 +1862,7 @@ contains
                 ! finally, interpolation in the rh dimension
                 ! write(*,*) 'Before bex'
                 if(t_xrh <= 0.37_r8) then
-                   bex(icol,k,kc10,i)=((t_rh2-t_xrh)*bex1+(t_xrh-t_rh1)*bex2) &
-                        /(t_rh2-t_rh1)
+                   bex(icol,k,kc10,i)=((t_rh2-t_xrh)*bex1+(t_xrh-t_rh1)*bex2)/(t_rh2-t_rh1)
                 else
                    a=(log(bex2)-log(bex1))/(t_rh2-t_rh1)
                    b=(t_rh2*log(bex1)-t_rh1*log(bex2))/(t_rh2-t_rh1)
@@ -1993,9 +1873,7 @@ contains
 
              do i=4,4            ! i = wavelength index
 
-                !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                 ! aerosol specific extinction
-
                 opt5d(1,1,1,1,1)=ke4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa1)
                 opt5d(1,1,1,1,2)=ke4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa2)
                 opt5d(1,1,1,2,1)=ke4(i,t_irh1,t_ifb1,t_ict1,t_ifc2,t_ifa1)
@@ -2038,27 +1916,19 @@ contains
                 ! finally, interpolation in the rh dimension
                 ! write(*,*) 'Before ske'
                 if(t_xrh <= 0.37_r8) then
-                   ske(icol,k,kc10,i)=((t_rh2-t_xrh)*ske1+(t_xrh-t_rh1)*ske2) &
-                        /(t_rh2-t_rh1)
+                   ske(icol,k,kc10,i)=((t_rh2-t_xrh)*ske1+(t_xrh-t_rh1)*ske2)/(t_rh2-t_rh1)
                 else
                    a=(log(ske2)-log(ske1))/(t_rh2-t_rh1)
                    b=(t_rh2*log(ske1)-t_rh1*log(ske2))/(t_rh2-t_rh1)
                    ske(icol,k,kc10,i)=e**(a*t_xrh+b)
                 endif
-
              end do ! i
 
-
-
+             ! LW optical parameters
              if (lw_on) then
-
-                ! LW optical parameters
-
                 do i=1,nlwbands            ! i = wavelength index
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! aerosol specific absorption
-
                    opt5d(1,1,1,1,1)=ka4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa1)
                    opt5d(1,1,1,1,2)=ka4(i,t_irh1,t_ifb1,t_ict1,t_ifc1,t_ifa2)
                    opt5d(1,1,1,2,1)=ka4(i,t_irh1,t_ifb1,t_ict1,t_ifc2,t_ifa1)
@@ -2098,10 +1968,8 @@ contains
                    kabs1=max(kabs1,1.e-30_r8)
                    kabs2=max(kabs2,1.e-30_r8)
 
-                   ! write(*,*) 'Before kabs'
                    if(t_xrh <= 0.37_r8) then
-                      kabs(icol,k,kc10,i)=((t_rh2-t_xrh)*kabs1+(t_xrh-t_rh1)*kabs2) &
-                           /(t_rh2-t_rh1)
+                      kabs(icol,k,kc10,i)=((t_rh2-t_xrh)*kabs1+(t_xrh-t_rh1)*kabs2)/(t_rh2-t_rh1)
                    else
                       a=(log(kabs2)-log(kabs1))/(t_rh2-t_rh1)
                       b=(t_rh2*log(kabs1)-t_rh1*log(kabs2))/(t_rh2-t_rh1)
@@ -2109,22 +1977,19 @@ contains
                    endif
 
                 end do ! i
-
              endif ! lw_on
-
           end do ! icol
        end do ! k
-
        ! write(*,*) 'kcomp, omega(1,26,kc10,4)=', kcomp, omega(1,26,kc10,4)
        ! write(*,*) 'kcomp, gass(1,26,kc10,4)=', kcomp, gass(1,26,kc10,4)
        ! write(*,*) 'kcomp, bex(1,26,kc10,4)=', kcomp, bex(1,26,kc10,4)
        ! write(*,*) 'kcomp, ske(1,26,kc10,4)=', kcomp, ske(1,26,kc10,4)
-
     end do  ! kcomp
 
   end subroutine interpol4
 
-  !********************************************************************************************
+  !=============================================================================
+
   subroutine interpol5to10 (ncol, daylight, xrh, irh1, Nnatk, xct, ict1, &
        xfac, ifac1, xfbc, ifbc1, xfaq, ifaq1, &
        omega, gass, bex, ske, lw_on, kabs)
@@ -2165,10 +2030,7 @@ contains
     real(r8) :: kabs1, kabs2
     !---------------------------------------
 
-    ! write(*,*) 'Before kcomp-loop'
     do kcomp=5,10
-
-       ! write(*,*) 'Before init-loop', kcomp
        do i=1,nbands
           do icol=1,ncol
              do k=1,pver
@@ -2239,15 +2101,11 @@ contains
              dxm1(5) = (t_xfaq-t_faq1)
              invd(5) = 1.0_r8/(t_faq2-t_faq1)
 
-
              ! SW optical parameters
              if(daylight(icol)) then
-
                 do i=1,nbands            ! i = wavelength index
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! single scattering albedo:
-
                    opt5d(1,1,1,1,1)=om5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa1,kcomp)
                    opt5d(1,1,1,1,2)=om5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa2,kcomp)
                    opt5d(1,1,1,2,1)=om5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb2,t_ifa1,kcomp)
@@ -2285,14 +2143,9 @@ contains
                    call lininterpol5dim (d2mx, dxm1, invd, opt5d, ome1, ome2)
 
                    ! finally, interpolation in the rh dimension
-                   ! write(*,*) 'Before omega'
-                   omega(icol,k,kcomp,i)=((t_rh2-t_xrh)*ome1+(t_xrh-t_rh1)*ome2) &
-                        /(t_rh2-t_rh1)
-                   ! write(*,*) omega(icol,k,kcomp,i)
+                   omega(icol,k,kcomp,i)=((t_rh2-t_xrh)*ome1+(t_xrh-t_rh1)*ome2)/(t_rh2-t_rh1)
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! asymmetry factor
-
                    opt5d(1,1,1,1,1)=g5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa1,kcomp)
                    opt5d(1,1,1,1,2)=g5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa2,kcomp)
                    opt5d(1,1,1,2,1)=g5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb2,t_ifa1,kcomp)
@@ -2330,13 +2183,9 @@ contains
                    call lininterpol5dim (d2mx, dxm1, invd, opt5d, ge1, ge2)
 
                    ! finally, interpolation in the rh dimension
-                   ! write(*,*) 'Before gass'
-                   gass(icol,k,kcomp,i)=((t_rh2-t_xrh)*ge1+(t_xrh-t_rh1)*ge2) &
-                        /(t_rh2-t_rh1)
+                   gass(icol,k,kcomp,i)=((t_rh2-t_xrh)*ge1+(t_xrh-t_rh1)*ge2)/(t_rh2-t_rh1)
 
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! aerosol extinction
-
                    opt5d(1,1,1,1,1)=be5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa1,kcomp)
                    opt5d(1,1,1,1,2)=be5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa2,kcomp)
                    opt5d(1,1,1,2,1)=be5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb2,t_ifa1,kcomp)
@@ -2377,10 +2226,8 @@ contains
                    bex2=max(bex2,1.e-30_r8)
 
                    ! finally, interpolation in the rh dimension
-                   ! write(*,*) 'Before bex'
                    if(t_xrh <= 0.37_r8) then
-                      bex(icol,k,kcomp,i)=((t_rh2-t_xrh)*bex1+(t_xrh-t_rh1)*bex2) &
-                           /(t_rh2-t_rh1)
+                      bex(icol,k,kcomp,i)=((t_rh2-t_xrh)*bex1 + (t_xrh-t_rh1)*bex2)/(t_rh2-t_rh1)
                    else
                       a=(log(bex2)-log(bex1))/(t_rh2-t_rh1)
                       b=(t_rh2*log(bex1)-t_rh1*log(bex2))/(t_rh2-t_rh1)
@@ -2447,9 +2294,7 @@ contains
 
              do i=4,4            ! i = wavelength index
 
-                !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                 ! aerosol specific extinction
-
                 opt5d(1,1,1,1,1)=ke5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa1,kcomp)
                 opt5d(1,1,1,1,2)=ke5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa2,kcomp)
                 opt5d(1,1,1,2,1)=ke5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb2,t_ifa1,kcomp)
@@ -2499,20 +2344,12 @@ contains
                    b=(t_rh2*log(ske1)-t_rh1*log(ske2))/(t_rh2-t_rh1)
                    ske(icol,k,kcomp,i)=e**(a*t_xrh+b)
                 endif
-
              end do ! i
 
-
-
+             ! LW optical parameters
              if (lw_on) then
-
-                ! LW optical parameters
-
                 do i=1,nlwbands            ! i = wavelength index
-
-                   !ccccccccc1ccccccccc2ccccccccc3ccccccccc4ccccccccc5ccccccccc6ccccccccc7cc
                    ! aerosol specific absorption
-
                    opt5d(1,1,1,1,1)=ka5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa1,kcomp)
                    opt5d(1,1,1,1,2)=ka5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb1,t_ifa2,kcomp)
                    opt5d(1,1,1,2,1)=ka5to10(i,t_irh1,t_ict1,t_ifc1,t_ifb2,t_ifa1,kcomp)
@@ -2572,7 +2409,8 @@ contains
 
   end subroutine interpol5to10
 
-  !********************************************************************************************
+  !=============================================================================
+
   subroutine checkTableHeader (ifil)
     ! Read the header-text in a look-up table (in file with iu=ifil).
 

@@ -40,7 +40,6 @@ module aero_model
   use oslo_aero_seasalt,     only: oslo_aero_seasalt_init, oslo_aero_seasalt_emis, seasalt_active
   use oslo_aero_dust,        only: oslo_aero_dust_init, oslo_aero_dust_emis, dust_active
   use oslo_aero_ocean,       only: oslo_aero_ocean_init, oslo_aero_dms_emis
-  use oslo_aero_sw_tables,   only: initopt, initopt_lw
   use oslo_aero_share,       only: chemistryIndex, physicsIndex, getCloudTracerIndexDirect, getCloudTracerName
   use oslo_aero_share,       only: qqcw_get_field, numberOfProcessModeTracers
   use oslo_aero_share,       only: lifeCycleNumberMedianRadius
@@ -50,12 +49,11 @@ module aero_model
   use oslo_aero_params,      only: originalSigma, originalNumberMedianRadius
   use oslo_aero_params,      only: nmodes_oslo=>nmodes, nbmodes
   use oslo_aero_const,       only: numberToSurface
-#ifdef AEROCOM
-  use oslo_aero_aerocom_opt, only: aerocom_init_aeropt
-  use oslo_aero_aerocom_dry, only: aerocom_init_dryp
-#endif
   use oslo_aero_control,     only: oslo_aero_ctl_readnl
   use oslo_aero_microp,      only: oslo_aero_microp_readnl
+  use oslo_aero_sw_tables,      only: initopt, init_interp_constants
+  use oslo_aero_aerodry_tables, only: initdry
+  use oslo_aero_aerocom_tables, only: initaeropt
 
   implicit none
   private
@@ -146,18 +144,16 @@ contains
     call phys_getopts(history_aerosol_out=history_aerosol, convproc_do_aer_out=convproc_do_aer)
 
     call aero_model_constants
-    call initopt
-    call initopt_lw
+    call init_interp_constants() ! table initialization constants
+    call initopt()               ! table initialization
+    call initdry()               ! table initialization
+    call initaeropt()            ! table initialization
     call initializeCondensation()
     call oslo_aero_ocean_init()
     call oslo_aero_depos_init(pbuf2d)
     call oslo_aero_dust_init()
     call oslo_aero_seasalt_init()
     call oslo_aero_wetdep_init()
-#ifdef AEROCOM
-    call aerocom_init_aeropt()
-    call aerocom_init_dryp()
-#endif
 
     dummy = 'RAM1'
     call addfld (dummy,horiz_only, 'A','frac','RAM1')

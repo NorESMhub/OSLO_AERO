@@ -1,14 +1,13 @@
-module oslo_aero_aerocom_opt
-
-#ifdef AEROCOM
+module oslo_aero_aerocom_tables
 
   ! Modal total and absorption extinction coefficients (for AeroCom)
   ! for 440nm, 500nm, 550nm, 670nm and 870nm, and for d<1um (lt1) and d>1um (gt1).
 
   use shr_kind_mod            , only : r8 => shr_kind_r8
+  use shr_sys_mod             , only : shr_sys_abort
+  use spmd_utils              , only : masterproc
   use ppgrid                  , only : pcols, pver
   use cam_logfile             , only : iulog
-  use spmd_utils              , only : masterproc
   !
   use oslo_aero_params        , only : nmodes, nbmodes
   use oslo_aero_sw_tables     , only : cate, cat, fac, faq, fbc, rh, fombg, fbcbg
@@ -18,24 +17,17 @@ module oslo_aero_aerocom_opt
   implicit none
   private
 
-  public :: aerocom_init_aeropt
+  public :: initaeropt
   public :: intaeropt0
   public :: intaeropt1
   public :: intaeropt2to3
   public :: intaeropt4
   public :: intaeropt5to10
 
-  ! Set by init_aeropt Mode1
-  real(r8), public :: bep1(38,10,6,16,6)
-
-  ! Set by init_aeropt Mode2to3
-  real(r8), public :: bep2to3(38,10,16,6,2:3)
-
-  ! Set by init_aeropt Mode4
-  real(r8), public :: bep4(38,10,6,16,6,6)
-
-  ! Set by init_aeropt Mode5to10
-  real(r8), public :: bep5to10(38,10,6,6,6,6,5:10)
+  real(r8), allocatable :: bep1(:,:,:,:,:)         ! Mode1:     (38,10,6,16,6)
+  real(r8), allocatable :: bep2to3(:,:,:,:,:)      ! Mode2to3:  (38,10,16,6,2:3)
+  real(r8), allocatable :: bep4(:,:,:,:,:,:)       ! Mode4:     (38,10,6,16,6,6)
+  real(r8), allocatable :: bep5to10(:,:,:,:,:,:,:) ! Mode5to10: (38,10,6,6,6,6,5:10)
 
   real(r8) :: bex440, bax440, bex500, bax500, bax550
   real(r8) :: bex670, bax670, bex870, bax870
@@ -45,7 +37,7 @@ module oslo_aero_aerocom_opt
 contains
 ! ==========================================================
 
-  subroutine aerocom_init_aeropt()
+  subroutine initaeropt()
 
     ! Purpose: To read in the AeroCom look-up tables for aerosol optical properties.
     ! The grid for discrete input-values in the look-up tables is defined in opptab.
@@ -72,8 +64,26 @@ contains
     real(r8) :: eps4 = 1.e-4_r8
     real(r8) :: eps6 = 1.e-6_r8
     real(r8) :: eps7 = 1.e-7_r8
+    integer  :: astat
     character(len=dir_string_length) :: aerotab_table_dir
     !-----------------------------------------------------------
+
+    !-------------------------------------------
+    ! Allocate module memory
+    !-------------------------------------------
+
+    allocate(bep1(38,10,6,16,6), stat=astat)            ! mode1
+    if( astat/= 0 ) call shr_sys_abort('initaer: error in allocating bep1')
+    allocate(bep2to3(38,10,16,6,2:3), stat=astat)       ! mode2to3
+    if( astat/= 0 ) call shr_sys_abort('initaer: error in allocating bep2to3var')
+    allocate(bep4(38,10,6,16,6,6), stat=astat)          ! mode4
+    if( astat/= 0 ) call shr_sys_abort('initaer: error in allocating bep4')
+    allocate(bep5to10(38,10,6,6,6,6,5:10), stat=astat)  ! mode5
+    if( astat/= 0 ) call shr_sys_abort('initaer: error in allocating bep5to10var')
+
+    !-------------------------------------------
+    ! Read tables
+    !-------------------------------------------
 
     call oslo_aero_getopts(aerotab_table_dir_out=aerotab_table_dir)
 
@@ -541,7 +551,7 @@ contains
        close (ifil)
     end do
 
-  end subroutine aerocom_init_aeropt
+  end subroutine initaeropt
 
   ! ==========================================================
   subroutine intaeropt0 (lchnk, ncol, Nnatk,           &
@@ -1735,6 +1745,4 @@ contains
     enddo
   end subroutine checkTableHeader
 
-#endif
-
-end module oslo_aero_aerocom_opt
+end module oslo_aero_aerocom_tables
