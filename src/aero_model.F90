@@ -48,10 +48,10 @@ module aero_model
   use oslo_aero_sox_cldaero, only: sox_cldaero_init
   use oslo_aero_params,      only: originalSigma, originalNumberMedianRadius
   use oslo_aero_params,      only: nmodes_oslo=>nmodes, nbmodes
-  use oslo_aero_const,       only: numberToSurface
+  use oslo_aero_const,       only: numberToSurface, init_interp_constants
   use oslo_aero_control,     only: oslo_aero_ctl_readnl
   use oslo_aero_microp,      only: oslo_aero_microp_readnl
-  use oslo_aero_sw_tables,      only: initopt, init_interp_constants
+  use oslo_aero_sw_tables,      only: initopt
   use oslo_aero_aerodry_tables, only: initdry
   use oslo_aero_aerocom_tables, only: initaeropt
 
