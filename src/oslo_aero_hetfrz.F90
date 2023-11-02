@@ -450,7 +450,7 @@ contains
     tot_na500                  = 0._r8
 
     !Get estimate of number of aerosols inside clouds
-    call calculateNumberConcentration(ncol, aer_cb, rho, CloudnumberConcentration)
+    call calculateNumberConcentration(ncol, aer_cb(:,:,:,lchnk), rho, CloudnumberConcentration)
     call calculateNumberMedianRadius(numberConcentration, volumeConcentration, lnSigma, numberMedianRadius, ncol)
     !End estimate of number inside clouds
 

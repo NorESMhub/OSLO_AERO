@@ -377,13 +377,13 @@ contains
     ! 40 nm is assumed to have an efficient coagulation with other particles.
 
     !  input arguments
-    integer, intent(in)     :: ncol                        ! number of horizontal grid cells (columns)
-    real(r8), intent(inout) :: q(pcols,pver,gas_pcnst)     ! TMR [kg/kg] including moisture
-    real(r8), intent(in) :: pmid(pcols,pver)               ! [Pa] midpoint pressure
-    real(r8), intent(in) :: pdel(pcols,pver)
-    real(r8), intent(in) :: temperature(pcols,pver)        ! [K] temperature
-    real(r8), intent(in) :: delt_inverse                   ! [1/s] inverse time step
-    integer, intent(in)  :: lchnk                          ! [] chnk id needed for output
+    integer, intent(in)     :: ncol             ! number of horizontal grid cells (columns)
+    real(r8), intent(inout) :: q(:,:,:)         ! TMR [kg/kg]  including moisture
+    real(r8), intent(in)    :: pmid(:,:)        ! [Pa] midpoint pressure
+    real(r8), intent(in)    :: pdel(:,:)
+    real(r8), intent(in)    :: temperature(:,:) ! [K] temperature
+    real(r8), intent(in)    :: delt_inverse     ! [1/s] inverse time step
+    integer, intent(in)     :: lchnk            ! [] chnk id needed for output
 
     ! local
     integer           :: k                   ! level counter
@@ -559,8 +559,8 @@ contains
     real(r8) , intent(in)    :: pmid(pcols,pver)        ! [Pa] midpoint pressure
     real(r8) , intent(in)    :: pdel(pcols,pver)
     real(r8) , intent(in)    :: temperature(pcols,pver) ! [K] temperature
-    real(r8) , intent(in)    :: cldnum(ncol,pver)       ! Droplet concentration #/kg
-    real(r8) , intent(in)    :: cldfrc(ncol,pver)       ! Cloud volume fraction
+    real(r8) , intent(in)    :: cldnum(:,:)             ! Droplet concentration #/kg
+    real(r8) , intent(in)    :: cldfrc(:,:)             ! Cloud volume fraction
     real(r8) , intent(in)    :: delt_inverse            ! [1/s] inverse time step
     integer  , intent(in)    :: lchnk                   ! [] chnk id needed for output
     integer  , intent(in)    :: im
