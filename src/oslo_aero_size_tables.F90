@@ -1,6 +1,4 @@
-module oslo_aero_aerocom_dry
-
-#ifdef AEROCOM
+module oslo_aero_size_tables
 
   ! modal mass concentrations (cint), area (aaero) and volume (vaero)
   ! (for AeroCom determination of particle effective radii) of each constituent.
@@ -8,9 +6,10 @@ module oslo_aero_aerocom_dry
   ! aaeros and vaeros are integrated over r<0.5um, and aaerol and vaerol over r>0.5um.
 
   use shr_kind_mod            , only: r8 => shr_kind_r8
+  use shr_sys_mod             , only: shr_sys_abort
+  use spmd_utils              , only: masterproc
   use ppgrid                  , only: pcols, pver
   use cam_logfile             , only: iulog
-  use spmd_utils              , only: masterproc
   use cam_abortutils          , only: endrun
   !
   use oslo_aero_params        , only: nmodes, nbmodes, nbmp1
@@ -21,49 +20,40 @@ module oslo_aero_aerocom_dry
   implicit none
   private
 
-  public :: aerocom_init_dryp
+  public :: initdry
   public :: intdrypar0
   public :: intdrypar1
   public :: intdrypar2to3
   public :: intdrypar4
   public :: intdrypar5to10
 
-  ! Set by Mode0
-  real(r8) :: a0cintbg, a0cintbg05, a0cintbg125
-  real(r8) :: a0aaeros, a0aaerol, a0vaeros, a0vaerol
+  real(r8) :: a0cintbg, a0cintbg05, a0cintbg125      ! Set by Mode0
+  real(r8) :: a0aaeros, a0aaerol, a0vaeros, a0vaerol ! Set by Mode0
 
-  ! Set by Mode1
-  real(r8) :: a1var(19,6,16,6)
-
-  ! Set by Mode2to3
-  real(r8) :: a2to3var(19,16,6,2:3)
-
-  ! Set by Mode4
-  real(r8) :: a4var(19,6,16,6,6)
-
-  ! Set by Mode5to10
-  real(r8) :: a5to10var(19,6,6,6,6,5:10)
+  real(r8), allocatable :: a1var(:,:,:,:)         ! Mode1:      (19,6,16,6)
+  real(r8), allocatable :: a2to3var(:,:,:,:)      ! Mode2to3:   (19,16,6,2:3)
+  real(r8), allocatable :: a4var(:,:,:,:,:)       ! Mode 4:     (19,6,16,6,6)
+  real(r8), allocatable :: a5to10var(:,:,:,:,:,:) ! Mode 5to10: (19,6,6,6,6,5:10)
 
 ! ==========================================================
 contains
 ! ==========================================================
 
-  subroutine aerocom_init_dryp()
+  subroutine initdry()
 
-    !Purpose: To read in the AeroCom look-up tables for calculation of dry
-    !     aerosol size and mass distribution properties. The grid for discrete
-    !     input-values in the look-up tables is defined in opptab.
+    ! Purpose: To read in the AeroCom look-up tables for calculation of dry
+    ! aerosol size and mass distribution properties. The grid for discrete
+    ! input-values in the look-up tables is defined in opptab.
 
-    !     Tabulating the 'aerodryk'-files to save computing time. Routine
-    !     originally made by  Alf Kirkevaag, and modified for new aerosol
-    !     schemes in January 2006.
-    !     Updated for new kcomp1.out including condensed SOA - Alf Kirkevåg,
-    !     May 2013, and extended for new SOA treatment October 2015.
-    !     Modified for optimized added masses and mass fractions for
-    !     concentrations from condensation, coagulation or cloud-processing
-    !     - Alf Kirkevaag, May 2016.
-    !     Modified for optimized added masses and mass fractions for concentrations from
-    !     condensation, coagulation or cloud-processing - Alf Kirkevaag, May 2016.
+    ! Tabulating the 'aerodryk'-files to save computing time. Routine
+    ! originally made by  Alf Kirkevaag, and modified for new aerosol
+    ! schemes in January 2006.
+    ! Updated for new kcomp1.out including condensed SOA - Alf Kirkevåg,
+    ! May 2013, and extended for new SOA treatment October 2015.
+    ! Modified for optimized added masses and mass fractions for
+    ! concentrations from condensation, coagulation or cloud-processing
+    ! Modified for optimized added masses and mass fractions for concentrations from
+    ! condensation, coagulation or cloud-processing - Alf Kirkevaag, May 2016.
 
     ! local variables
     integer  :: iv, kcomp, ifombg, ifbcbg, ictot, ifac, ifbc, ifaq
@@ -76,7 +66,26 @@ contains
     real(r8) :: eps4 = 1.e-4_r8
     real(r8) :: eps6 = 1.e-6_r8
     real(r8) :: eps7 = 1.e-7_r8
+    integer  :: astat
     character(len=dir_string_length) :: aerotab_table_dir
+    !-----------------------------------------------------------
+
+    !-------------------------------------------
+    ! Allocate module memory
+    !-------------------------------------------
+
+    allocate(a1var(19,6,16,6), stat=astat)           ! mode1
+    if( astat/= 0 ) call shr_sys_abort('initdry: error in allocating a1var')
+    allocate(a2to3var(19,16,6,2:3), stat=astat)      ! mode2to3
+    if( astat/= 0 ) call shr_sys_abort('initdry: error in allocating a2to3var')
+    allocate(a4var(19,6,16,6,6), stat=astat)         ! mode4
+    if( astat/= 0 ) call shr_sys_abort('initdry: error in allocating a4var')
+    allocate(a5to10var(19,6,6,6,6,5:10), stat=astat) ! mode5
+    if( astat/= 0 ) call shr_sys_abort('initdry: error in allocating a5to10var')
+
+    !-------------------------------------------
+    ! Read tables
+    !-------------------------------------------
 
     call oslo_aero_getopts(aerotab_table_dir_out = aerotab_table_dir)
 
@@ -440,7 +449,7 @@ contains
        close (ifil)
     end do
 
-  end subroutine aerocom_init_dryp
+  end subroutine initdry
 
   !===============================================================================
   subroutine intdrypar0 (                                           &
@@ -1436,6 +1445,4 @@ contains
     enddo
   end subroutine checkTableHeader
 
-#endif
-
-end module oslo_aero_aerocom_dry
+end module oslo_aero_size_tables
