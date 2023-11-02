@@ -51,8 +51,8 @@ module aero_model
   use oslo_aero_const,       only: numberToSurface
   use oslo_aero_control,     only: oslo_aero_ctl_readnl
   use oslo_aero_microp,      only: oslo_aero_microp_readnl
-  use oslo_aero_sw_tables,   only: initopt, initopt_lw
-  use oslo_aero_size_tables, only: initdry
+  use oslo_aero_sw_tables,      only: initopt, init_interp_constants
+  use oslo_aero_aerodry_tables, only: initdry
   use oslo_aero_aerocom_tables, only: initaeropt
 
   implicit none
@@ -144,10 +144,10 @@ contains
     call phys_getopts(history_aerosol_out=history_aerosol, convproc_do_aer_out=convproc_do_aer)
 
     call aero_model_constants
-    call initopt()    ! table initialization
-    call initopt_lw() ! table initialization => TODO: move this call to initopt
-    call initdry()    ! table initialization
-    call initaeropt()    ! table initialization
+    call init_interp_constants() ! table initialization constants
+    call initopt()               ! table initialization
+    call initdry()               ! table initialization
+    call initaeropt()            ! table initialization
     call initializeCondensation()
     call oslo_aero_ocean_init()
     call oslo_aero_depos_init(pbuf2d)

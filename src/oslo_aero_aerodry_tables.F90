@@ -1,4 +1,4 @@
-module oslo_aero_size_tables
+module oslo_aero_aerodry_tables
 
   ! modal mass concentrations (cint), area (aaero) and volume (vaero)
   ! (for AeroCom determination of particle effective radii) of each constituent.
@@ -1445,4 +1445,4 @@ contains
     enddo
   end subroutine checkTableHeader
 
-end module oslo_aero_size_tables
+end module oslo_aero_aerodry_tables
