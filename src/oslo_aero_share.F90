@@ -10,7 +10,16 @@ module oslo_aero_share
   use mo_tracname,    only: solsym
   use cam_abortutils, only: endrun
   !
-  use oslo_aero_params
+  use oslo_aero_params, only: nbmodes, nmodes 
+  use oslo_aero_params, only: aerosol_type_sulfate
+  use oslo_aero_params, only: aerosol_type_bc
+  use oslo_aero_params, only: aerosol_type_om
+  use oslo_aero_params, only: aerosol_type_dust
+  use oslo_aero_params, only: aerosol_type_salt
+  use oslo_aero_params, only: aerosol_type_osmotic_coefficient
+  use oslo_aero_params, only: aerosol_type_density
+  use oslo_aero_params, only: aerosol_type_soluble_mass_fraction
+  use oslo_aero_params, only: aerosol_type_number_of_ions
 
   implicit none
   private          ! Make default type private to the module
