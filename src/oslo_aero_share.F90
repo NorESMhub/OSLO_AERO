@@ -6,9 +6,12 @@ module oslo_aero_share
   !---------------------------------------------------------------------------------
 
   use shr_kind_mod,   only: r8 => shr_kind_r8
+  use ppgrid,         only: pcols, pver
   use constituents,   only: pcnst, cnst_name, cnst_get_ind
   use mo_tracname,    only: solsym
   use cam_abortutils, only: endrun
+  use physics_buffer, only: physics_buffer_desc, pbuf_get_field
+  use physconst,      only: pi
   !
   use oslo_aero_params, only: nbmodes, nmodes 
   use oslo_aero_params, only: aerosol_type_sulfate
@@ -20,23 +23,16 @@ module oslo_aero_share
   use oslo_aero_params, only: aerosol_type_density
   use oslo_aero_params, only: aerosol_type_soluble_mass_fraction
   use oslo_aero_params, only: aerosol_type_number_of_ions
+  use oslo_aero_params, only: originalNumberMedianRadius
+  use oslo_aero_const,  only: volumeToNumber, rbinMidPoint, rbinEdge, nBinsTab
 
   implicit none
   private          ! Make default type private to the module
 
-  integer,  public, parameter          :: max_tracers_per_mode = 7
-  real(r8), public, dimension (pcnst)  :: rhopart
-  real(r8), public, dimension (pcnst)  :: sgpart
-  real(r8), public, dimension (pcnst)  :: osmoticCoefficient
-  real(r8), public, dimension (pcnst)  :: numberOfIons
-  real(r8), public, dimension (pcnst)  :: solubleMassFraction
-  integer,  public, dimension (pcnst)  :: aerosolType
-  real(r8), public, dimension(nbmodes) :: numberFractionAvailableAqChem
-  real(r8), public, dimension (pcnst)  :: invrhopart
-  real(r8), public, parameter :: smallConcentration = 1.e-100_r8 !duplicate, sync with smallNumber in Const
-  !
+  !---------------------------
   ! Public interfaces
-  !
+  !---------------------------
+
   public :: aero_register           ! register consituents
   public :: is_process_mode         ! Check is an aerosol specie is a process mode
   public :: isAerosol               ! Check is specie is aerosol (i.e. gases get .FALSE. here)
@@ -55,6 +51,27 @@ module oslo_aero_share
   public :: getNumberOfAerosolTracers
   public :: fillInverseAerosolTracerList
   public :: qqcw_get_field
+  !
+  public :: calculateNumberConcentration
+  public :: calculateNumberMedianRadius
+  public :: calculateEquivalentDensityOfFractalMode
+  public :: calculatedNdLogR
+  public :: calculateLognormalCDF
+
+  !---------------------------
+  ! Public parameters
+  !---------------------------
+
+  integer,  public, parameter          :: max_tracers_per_mode = 7
+  real(r8), public, dimension (pcnst)  :: rhopart
+  real(r8), public, dimension (pcnst)  :: sgpart
+  real(r8), public, dimension (pcnst)  :: osmoticCoefficient
+  real(r8), public, dimension (pcnst)  :: numberOfIons
+  real(r8), public, dimension (pcnst)  :: solubleMassFraction
+  integer,  public, dimension (pcnst)  :: aerosolType
+  real(r8), public, dimension(nbmodes) :: numberFractionAvailableAqChem
+  real(r8), public, dimension (pcnst)  :: invrhopart
+  real(r8), public, parameter :: smallConcentration = 1.e-100_r8 !duplicate, sync with smallNumber in Const
 
   integer, parameter, public :: MODE_IDX_BC_EXT_AC             = 0  !Externally mixed BC accumulation mode
   integer, parameter, public :: MODE_IDX_SO4SOA_AIT            = 1  !SO4 and SOA in aitken mode, Created from 11 by growth (condensation) of SO4
@@ -78,7 +95,11 @@ module oslo_aero_share
   integer, parameter, public :: numberOfProcessModeTracers    = 6
   integer, public, dimension(numberOfProcessModeTracers) :: tracerInProcessMode
   integer, public, dimension(pcnst)                      :: processModeMap
-
+  !
+  !---------------------------
+  ! Public constants
+  !---------------------------
+  !
   !These tables describe how the tracers behave chemically
   integer, dimension(numberOfExternallyMixedModes), public :: externallyMixedMode = &
        (/MODE_IDX_BC_EXT_AC,  &
@@ -160,11 +181,16 @@ module oslo_aero_share
 
   integer, private :: qqcw(pcnst)=-1 ! Remaps modal_aero indices into pbuf
 
+!===============================================================================
 contains
+!===============================================================================
 
-  !===============================================================================
   function is_process_mode(l_index_in, isChemistry) result(answer)
-    !For a tracer in an aerosol mode, check if this is!actually a real tracer or a process mode
+
+    !-----------------------------------------------------------------------
+    ! For a tracer in an aerosol mode, check if this isactually a real
+    ! tracer or a process mode
+    !-----------------------------------------------------------------------
 
     integer, intent(in)  :: l_index_in
     logical, intent(in)  :: isChemistry  !true if called from chemistry
@@ -187,10 +213,10 @@ contains
        l_index_phys .eq. l_soa_a1 ) then
        answer = .true.
     endif
-
   end function is_process_mode
 
   !===============================================================================
+
   subroutine aero_register
 
     !-----------------------------------------------------------------------
@@ -705,7 +731,6 @@ contains
 
   !===============================================================================
   function qqcw_get_field(pbuf, index)
-    use physics_buffer, only : physics_buffer_desc, pbuf_get_field
 
     type(physics_buffer_desc), pointer :: pbuf(:)
     integer, intent(in) :: index
@@ -719,5 +744,150 @@ contains
        endif
     end if
   end function qqcw_get_field
+
+  !===============================================================================
+  subroutine calculateNumberConcentration(ncol, q, rho_air, numberConcentration)
+
+    ! arguments
+    integer  , intent(in)  :: ncol                                     !number of columns used
+    real(r8) , intent(in)  :: q(pcols,pver,pcnst)                      ![kg/kg] mass mixing ratios
+    real(r8) , intent(in)  :: rho_air(pcols,pver)                      ![kg/m3] air density
+    real(r8) , intent(out) :: numberConcentration(pcols,pver,0:nmodes) ![#/m3] number concentration
+
+    ! local variables
+    integer :: m, l, mm, k
+
+    numberConcentration(:,:,:) = 0.0_r8
+    do m = 0, nmodes
+       do l=1,getNumberOfBackgroundTracersInMode(m)
+          mm = getTracerIndex(m,l,.false.)
+          do k=1,pver
+             numberConcentration(:ncol,k,m) = numberConcentration(:ncol,k,m) & 
+                  + ( q(:ncol,k,mm) / getDryDensity(m,l))  !Volume of this tracer
+          end do
+       end do
+    end do
+
+    ! until now, the variable "numberConcentration" actually contained "volume mixing ratio"
+    ! the next couple of lines fixes this!
+    do m= 0, nmodes
+       do k=1,pver
+          numberConcentration(:ncol,k,m) = numberConcentration(:ncol,k,m) * rho_air(:ncol,k) * volumeToNumber(m)
+       end do
+    end do
+
+  end subroutine calculateNumberConcentration
+
+  !===================================================
+  subroutine calculateNumberMedianRadius(numberConcentration, volumeConcentration, lnSigma, &
+       numberMedianRadius, ncol)
+
+    !Note the "nmodes" here
+    real(r8) , intent(in)  :: numberConcentration(pcols,pver,0:nmodes)   ![#/m3] number concentration
+    real(r8) , intent(in)  :: volumeConcentration(pcols,pver,nmodes)     ![kg/kg] mass mixing ratios
+    real(r8) , intent(in)  :: lnSigma(pcols,pver,nmodes)                 ![kg/m3] air density
+    integer  , intent(in)  :: ncol                                       !number of columns used
+    real(r8) , intent(out) :: numberMedianRadius(pcols,pver,nmodes)      ![m] 
+
+    real(r8), parameter :: aThird = 1.0_r8/3.0_r8
+    integer :: n,k
+
+    do n=1,nmodes
+       do k=1,pver
+          where(volumeConcentration(:ncol,k,n) .gt. 1.e-20_r8)
+             numberMedianRadius(:ncol, k, n) = 0.5_r8 &                  !diameter ==> radius 
+                  * (volumeConcentration(:ncol,k,n)       &              !conversion formula
+                  * 6.0_r8/pi/numberConcentration(:ncol,k,n) &            
+                  *DEXP(-4.5_r8*lnsigma(:ncol,k,n)*lnsigma(:ncol,k,n)))**aThird
+          elsewhere
+             numberMedianRadius(:ncol,k,n) = originalNumberMedianRadius(n)
+          end where
+       end do
+    end do
+
+  end subroutine calculateNumberMedianRadius
+
+  !===================================================
+  function calculateEquivalentDensityOfFractalMode( &
+       emissionDensity, emissionRadius, fractalDimension, modeNumberMedianRadius, modeStandardDeviation) &
+    result (equivalentDensityOfFractal)
+
+    ! Purpose: output equivalent density of a fractal mode 
+
+    ! arguments
+    real(r8), intent(in) :: emissionDensity        ![kg/m3] density at point of emission
+    real(r8), intent(in) :: emissionRadius         ![kg/m3] radius at point of emission
+    real(r8), intent(in) :: fractalDimension       ![kg/m3] fractal dimension of mode
+    real(r8), intent(in) :: modeNumberMedianRadius ![m] number median radius of mode
+    real(r8), intent(in) :: modeStandardDeviation  ![m] standard deviation of mode
+    real(r8)             :: equivalentDensityOfFractal ! Output
+
+    ! local variables
+    real(r8) :: sumVolume 
+    real(r8) :: sumMass 
+    real(r8) :: dN, dNdLogR, dLogR
+    real(r8) :: densityBin
+    integer  :: i
+
+    sumVolume = 0.0_r8
+    sumMass   = 0.0_r8
+    do i=1, nbinsTab
+       dLogR = log(rBinEdge(i+1)/rBinEdge(i))
+       dNdLogR = calculatedNdLogR(rBinMidPoint(i), modeNumberMedianRadius, modeStandardDeviation)
+
+       !Equivalent density (decreases with size since larger particles are long "hair like" threads..)
+       if(rBinMidPoint(i) < emissionRadius)then
+          densityBin = emissionDensity
+       else
+          densityBin = emissionDensity*(emissionRadius/rBinMidPoint(i))**(3.0 - fractalDimension)
+       endif
+
+       !number concentration in this bin
+       dN = dNdLogR * dLogR
+
+       !sum up volume and mass (factor of 4*pi/3 omitted since in both numerator and nominator)
+       sumVolume = sumVolume + dN * (rBinMidPoint(i)**3)
+       sumMass   = sumMass + dN * densityBin * (rBinMidPoint(i)**3)
+
+    end do
+
+    !Equivalent density is mass by volume
+    equivalentDensityOfFractal = sumMass / sumVolume
+
+  end function calculateEquivalentDensityOfFractalMode
+
+  !===================================================
+  function calculatedNdLogR(actualRadius, numberMedianRadius, sigma) result (dNdLogR)
+
+    real(r8), intent(in)   :: actualRadius
+    real(r8), intent(in)   :: numberMedianRadius
+    real(r8), intent(in)   :: sigma
+
+    real(r8) :: logSigma
+    real(r8) :: dNdLogR
+
+    logSigma = log(sigma)
+
+    !This is the formula for the lognormal distribution
+    dNdLogR = 1.0_r8/(sqrt(2.0_r8*pi)*log(sigma)) &
+         * DEXP(-0.5_r8*(log(actualRadius/numberMedianRadius))**2/(logSigma**2))
+
+  end function calculatedNdLogR
+
+  !===================================================
+  function calculateLognormalCDF(actualRadius, numberMedianRadius, sigma) result(CDF)
+
+    !http://en.wikipedia.org/wiki/Log-normal_distribution#Cumulative_distribution_function
+    real(r8), intent(in) :: actualRadius
+    real(r8), intent(in) :: numberMedianRadius
+    real(r8), intent(in) :: sigma
+    real(r8)             :: CDF ! output
+
+    real(r8) :: argument
+
+    argument = -1.0_r8*(log(actualRadius/numberMedianRadius) / log(sigma) / sqrt(2.0_r8))
+    CDF = 0.5_r8 * erfc(argument)
+
+  end function calculateLognormalCDF
 
 end module oslo_aero_share

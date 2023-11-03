@@ -7,8 +7,7 @@ module oslo_aero_conc
   use physconst    ,         only: density_water =>rhoh2o, molecularWeightWater=>mwh2o, pi
   use constituents ,         only: pcnst, cnst_name
   !
-  use oslo_aero_logn_tables, only: intlog1to3_sub, intlog4_sub, intlog5to10_sub, initlogn
-  use oslo_aero_utils,       only: calculateNumberConcentration
+  use oslo_aero_logn_tables, only: intlog1to3_sub, intlog4_sub, intlog5to10_sub
   use oslo_aero_coag,        only: normalizedCoagulationSink
   use oslo_aero_condtend,    only: normalizedCondensationSink, COND_VAP_H2SO4, COND_VAP_ORG_SV
   use oslo_aero_const,       only: smallNumber, volumeToNumber,smallNumber
@@ -35,8 +34,6 @@ module oslo_aero_conc
   real(r8), parameter :: solubleMassFractionCoatingLimit=0.50_r8
   real(r8), parameter :: aThird       = 1.0_r8/3.0_r8
   real(r8), parameter :: ln10         = log(10.0_r8)
-
-  logical :: init_logn_tables = .false.
 
 contains
 
@@ -506,12 +503,6 @@ contains
     real(r8) :: f_ocm(pcols,pver,4)     ! [-] fraction of added mass which is either SOA condensate or OC coagulate
     real(r8) :: cxs(pcols,pver,nbmodes) ![ug/m3] NOTE NON-SI UNITS non-allocated mass
     real(r8) :: radius_tmp(pcols,pver)  ![m] radius in look up tables
-
-    ! Initialize logn tables for interpolation
-    if (.not. init_logn_tables) then
-       call initlogn()
-       init_logn_tables = .true.
-    end if
 
     ! total mass not allocated to any mode
     ! this is non-zero if the look-up table can not cope with all the add-on mass

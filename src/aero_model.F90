@@ -5,55 +5,62 @@ module aero_model
   ! Note: SPCAM not supported here
   !===============================================================================
 
-  use shr_kind_mod,          only: r8 => shr_kind_r8
-  use spmd_utils,            only: mpicom, mstrid=>masterprocid, masterproc
-  use spmd_utils,            only: mpi_logical, mpi_real8, mpi_character, mpi_integer,  mpi_success
-  use namelist_utils,        only: find_group_name
-  use constituents,          only: pcnst, cnst_name, cnst_get_ind
-  use ppgrid,                only: pcols, pver, pverp
-  use phys_control,          only: phys_getopts, cam_physpkg_is
-  use cam_abortutils,        only: endrun
-  use cam_logfile,           only: iulog
-  use perf_mod,              only: t_startf, t_stopf
-  use camsrfexch,            only: cam_in_t, cam_out_t
-  use aerodep_flx,           only: aerodep_flx_prescribed
-  use physics_types,         only: physics_state, physics_ptend, physics_ptend_init
-  use physics_buffer,        only: physics_buffer_desc, pbuf_get_field, pbuf_get_index, pbuf_set_field
-  use physconst,             only: gravit, rair, rhoh2o, pi
-  use spmd_utils,            only: masterproc
-  use time_manager,          only: get_nstep
-  use cam_history,           only: outfld, fieldname_len, addfld, add_default, horiz_only
-  use chem_mods,             only: gas_pcnst, adv_mass
-  use mo_tracname,           only: solsym
-  use mo_setsox,             only: setsox
-  use mo_mass_xforms,        only: vmr2mmr, mmr2vmr, mmr2vmri
-  use mo_chem_utls,          only: get_rxt_ndx, get_spc_ndx
-  use ref_pres,              only: top_lev => clim_modal_aero_top_lev
-  use wv_saturation,         only: qsat_water
+  use shr_kind_mod,             only: r8 => shr_kind_r8
+  use spmd_utils,               only: mpicom, mstrid=>masterprocid, masterproc
+  use spmd_utils,               only: mpi_logical, mpi_real8, mpi_character, mpi_integer,  mpi_success
+  use namelist_utils,           only: find_group_name
+  use constituents,             only: pcnst, cnst_name, cnst_get_ind
+  use ppgrid,                   only: pcols, pver, pverp
+  use phys_control,             only: phys_getopts, cam_physpkg_is
+  use cam_abortutils,           only: endrun
+  use cam_logfile,              only: iulog
+  use perf_mod,                 only: t_startf, t_stopf
+  use camsrfexch,               only: cam_in_t, cam_out_t
+  use aerodep_flx,              only: aerodep_flx_prescribed
+  use physics_types,            only: physics_state, physics_ptend, physics_ptend_init
+  use physics_buffer,           only: physics_buffer_desc, pbuf_get_field, pbuf_get_index, pbuf_set_field
+  use physconst,                only: gravit, rair, rhoh2o, pi
+  use spmd_utils,               only: masterproc
+  use time_manager,             only: get_nstep
+  use cam_history,              only: outfld, fieldname_len, addfld, add_default, horiz_only
+  use chem_mods,                only: gas_pcnst, adv_mass
+  use mo_tracname,              only: solsym
+  use mo_setsox,                only: setsox
+  use mo_mass_xforms,           only: vmr2mmr, mmr2vmr, mmr2vmri
+  use mo_chem_utls,             only: get_rxt_ndx, get_spc_ndx
+  use ref_pres,                 only: top_lev => clim_modal_aero_top_lev
+  use wv_saturation,            only: qsat_water
   !
-  use oslo_aero_depos,       only: oslo_aero_depos_init
-  use oslo_aero_depos,       only: oslo_aero_depos_dry, oslo_aero_depos_wet, oslo_aero_wetdep_init
-  use oslo_aero_utils,       only: calculateNumberConcentration
-  use oslo_aero_coag,        only: initializeCoagulation, coagtend, clcoag
-  use oslo_aero_condtend,    only: N_COND_VAP, COND_VAP_ORG_SV, COND_VAP_ORG_LV, COND_VAP_H2SO4
-  use oslo_aero_condtend,    only: initializeCondensation, condtend
-  use oslo_aero_seasalt,     only: oslo_aero_seasalt_init, oslo_aero_seasalt_emis, seasalt_active
-  use oslo_aero_dust,        only: oslo_aero_dust_init, oslo_aero_dust_emis, dust_active
-  use oslo_aero_ocean,       only: oslo_aero_ocean_init, oslo_aero_dms_emis
-  use oslo_aero_share,       only: chemistryIndex, physicsIndex, getCloudTracerIndexDirect, getCloudTracerName
-  use oslo_aero_share,       only: qqcw_get_field, numberOfProcessModeTracers
-  use oslo_aero_share,       only: lifeCycleNumberMedianRadius
-  use oslo_aero_share,       only: getCloudTracerName
-  use oslo_aero_share,       only: aero_register
-  use oslo_aero_sox_cldaero, only: sox_cldaero_init
-  use oslo_aero_params,      only: originalSigma, originalNumberMedianRadius
-  use oslo_aero_params,      only: nmodes_oslo=>nmodes, nbmodes
-  use oslo_aero_const,       only: numberToSurface, init_interp_constants
-  use oslo_aero_control,     only: oslo_aero_ctl_readnl
-  use oslo_aero_microp,      only: oslo_aero_microp_readnl
+  use oslo_aero_params,         only: nmodes_oslo=>nmodes, nbmodes
+  use oslo_aero_params,         only: originalSigma, originalNumberMedianRadius
+  use oslo_aero_const,          only: init_interp_constants
+  use oslo_aero_const,          only: rTabMin, rTabMax, nk, normnk, rBinEdge, rBinMidpoint
+  use oslo_aero_const,          only: volumeToNumber, numberToSurface, nBinsTab, rMinAquousChemistry
+  use oslo_aero_share,          only: calculateLognormalCDF, calculatedNdLogR, calculateNumberConcentration
+  use oslo_aero_share,          only: calculateEquivalentDensityOfFractalMode
+  use oslo_aero_share,          only: numberFractionAvailableAqChem, isTracerInMode
+  use oslo_aero_share,          only: chemistryIndex, physicsIndex
+  use oslo_aero_share,          only: qqcw_get_field, numberOfProcessModeTracers
+  use oslo_aero_share,          only: lifeCycleNumberMedianRadius, rhopart, lifeCycleSigma
+  use oslo_aero_share,          only: l_so4_a2, l_bc_n, l_bc_ax
+  use oslo_aero_share,          only: MODE_IDX_BC_NUC, MODE_IDX_BC_EXT_AC
+  use oslo_aero_control,        only: oslo_aero_ctl_readnl
+  use oslo_aero_depos,          only: oslo_aero_depos_init
+  use oslo_aero_depos,          only: oslo_aero_depos_dry, oslo_aero_depos_wet, oslo_aero_wetdep_init
+  use oslo_aero_coag,           only: initializeCoagulation, coagtend, clcoag
+  use oslo_aero_condtend,       only: N_COND_VAP, COND_VAP_ORG_SV, COND_VAP_ORG_LV, COND_VAP_H2SO4
+  use oslo_aero_condtend,       only: initializeCondensation, condtend
+  use oslo_aero_seasalt,        only: oslo_aero_seasalt_init, oslo_aero_seasalt_emis, seasalt_active
+  use oslo_aero_dust,           only: oslo_aero_dust_init, oslo_aero_dust_emis, dust_active
+  use oslo_aero_ocean,          only: oslo_aero_ocean_init, oslo_aero_dms_emis
+  use oslo_aero_share,          only: getNumberofTracersInMode, getCloudTracerIndexDirect, getCloudTracerName
+  use oslo_aero_share,          only: getCloudTracerName, getTracerIndex, aero_register
+  use oslo_aero_sox_cldaero,    only: sox_cldaero_init
+  use oslo_aero_microp,         only: oslo_aero_microp_readnl
   use oslo_aero_sw_tables,      only: initopt
   use oslo_aero_aerodry_tables, only: initdry
   use oslo_aero_aerocom_tables, only: initaeropt
+  use oslo_aero_logn_tables,    only: initlogn
 
   implicit none
   private
@@ -147,7 +154,10 @@ contains
     call init_interp_constants() ! table initialization constants
     call initopt()               ! table initialization
     call initdry()               ! table initialization
+    call initlogn()              ! table initialization
+#ifdef AEROCOM
     call initaeropt()            ! table initialization
+#endif
     call initializeCondensation()
     call oslo_aero_ocean_init()
     call oslo_aero_depos_init(pbuf2d)
@@ -663,11 +673,6 @@ contains
     ! A number of constants used in the emission and size-calculation in CAM-Oslo Jan 2011.
     ! Updated by Alf Kirkev May 2013
     ! Updated by Alf Grini February 2014
-
-    use oslo_aero_const, only: rTabMin, rTabMax, nk, normnk, rBinEdge, rBinMidpoint
-    use oslo_aero_const, only: volumeToNumber, numberToSurface, nBinsTab, rMinAquousChemistry
-    use oslo_aero_utils
-    use oslo_aero_share
 
     ! local variables
     integer  :: kcomp,i

@@ -14,7 +14,7 @@ module oslo_aero_optical_params
   use oslo_aero_params,    only: nmodes, nbmodes, nbands, nlwbands
   use oslo_aero_const,     only: eps, rh, fombg, fbcbg, fac, fbc, faq, cate, cat
   use oslo_aero_share,     only: rhopart, l_soa_na, l_so4_na
-  use oslo_aero_utils,     only: calculateNumberConcentration
+  use oslo_aero_share,     only: calculateNumberConcentration
   use oslo_aero_conc,      only: calculateBulkProperties, partitionMass
   use oslo_aero_sw_tables, only: interpol0, interpol1, interpol2to3, interpol4, interpol5to10
   use oslo_aero_aerocom,   only: aerocom1, aerocom2
