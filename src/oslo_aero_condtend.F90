@@ -21,9 +21,9 @@ module oslo_aero_condtend
   !
   use oslo_aero_coag,     only: normalizedCoagulationSink, receiverMode,numberOfCoagulationReceivers
   use oslo_aero_coag,     only: numberOfAddCoagReceivers,addReceiverMode,normCoagSinkAdd
-  use oslo_aero_share   ! only: MODE_IDX_SO4SOA_AIT, rhopart, l_so4_a1, l_soa_lv, l_so4_na, l_soa_na
-  use oslo_aero_params  ! only: originalNumberMedianRadius
-  use oslo_aero_const   ! only: volumeToNumber
+  use oslo_aero_share ! only: MODE_IDX_SO4SOA_AIT, rhopart, l_so4_a1, l_soa_lv, l_so4_na, l_soa_na
+  use oslo_aero_share ! only: originalNumberMedianRadius
+  use oslo_aero_share ! only: volumeToNumber
 
   implicit none
   private

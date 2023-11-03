@@ -31,7 +31,7 @@ module oslo_aero_microp
   use oslo_aero_hetfrz,       only: hetfrz_classnuc_oslo_calc, hetfrz_classnuc_oslo_save_cbaero
   use oslo_aero_nucleate_ice, only: nucleate_ice_oslo_register, nucleate_ice_oslo_init, nucleate_ice_oslo_readnl
   use oslo_aero_nucleate_ice, only: nucleate_ice_oslo_calc, use_preexisting_ice
-  use oslo_aero_params,       only: nmodes_oslo => nmodes
+  use oslo_aero_share,       only: nmodes_oslo => nmodes
   use oslo_aero_share,        only: MODE_IDX_DST_A2, MODE_IDX_DST_A3, MODE_IDX_SO4_AC, MODE_IDX_OMBC_INTMIX_COAT_AIT
   use oslo_aero_share,        only: lifeCycleNumberMedianRadius, l_dst_a2, l_dst_a3, l_bc_ai
   use oslo_aero_share,        only: getNumberOfTracersInMode, getTracerIndex, getCloudTracerIndex

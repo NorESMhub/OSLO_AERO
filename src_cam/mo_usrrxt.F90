@@ -4,7 +4,7 @@ module mo_usrrxt
   use cam_logfile,      only : iulog
   use ppgrid,           only : pver, pcols
 #ifdef OSLO_AERO
-   use oslo_aero_params, only: nmodes_oslo=> nmodes
+   use oslo_aero_share, only: nmodes_oslo=> nmodes
 #endif
 
   implicit none

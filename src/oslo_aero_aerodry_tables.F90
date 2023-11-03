@@ -12,8 +12,8 @@ module oslo_aero_aerodry_tables
   use cam_logfile             , only: iulog
   use cam_abortutils          , only: endrun
   !
-  use oslo_aero_params        , only: nmodes, nbmodes, nbmp1
-  use oslo_aero_const         , only: cate, cat, fac, faq, fbc, fombg, fbcbg
+  use oslo_aero_share         , only: nmodes, nbmodes, nbmp1
+  use oslo_aero_share         , only: cate, cat, fac, faq, fbc, fombg, fbcbg
   use oslo_aero_linear_interp , only: lininterpol3dim, lininterpol4dim, lininterpol5dim  
   use oslo_aero_control       , only: oslo_aero_getopts, dir_string_length
 

@@ -11,8 +11,8 @@ module oslo_aero_optical_params
   use physics_types,       only: physics_state
   use wv_saturation,       only: qsat_water
   !
-  use oslo_aero_params,    only: nmodes, nbmodes, nbands, nlwbands
-  use oslo_aero_const,     only: eps, rh, fombg, fbcbg, fac, fbc, faq, cate, cat
+  use oslo_aero_share,     only: eps, rh, fombg, fbcbg, fac, fbc, faq, cate, cat
+  use oslo_aero_share,     only: nmodes, nbmodes, nbands, nlwbands
   use oslo_aero_share,     only: rhopart, l_soa_na, l_so4_na
   use oslo_aero_share,     only: calculateNumberConcentration
   use oslo_aero_conc,      only: calculateBulkProperties, partitionMass

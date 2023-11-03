@@ -45,7 +45,7 @@ module radiation
 #ifdef OSLO_AERO
   use prescribed_volcaero,      only: has_prescribed_volcaero, has_prescribed_volcaero_cmip6, solar_bands, terrestrial_bands
   use oslo_aero_optical_params, only: oslo_aero_optical_params_calc
-  use oslo_aero_params,         only: nmodes_oslo=>nmodes, nbmodes
+  use oslo_aero_share,          only: nmodes_oslo=>nmodes, nbmodes
 #ifdef AEROCOM
   use oslo_aero_aerocom,        only: dod440,dod550,dod870,abs550,abs550alt
 #endif
@@ -726,7 +726,6 @@ contains
 #ifdef OSLO_AERO
     use physics_buffer,    only: pbuf_get_index
     use oslo_aero_control, only: oslo_aero_getopts
-    use oslo_aero_params
     use oslo_aero_share
 #endif
 

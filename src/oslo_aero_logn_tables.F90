@@ -6,10 +6,9 @@ module oslo_aero_logn_tables
   use spmd_utils,              only: masterproc
   !
   use oslo_aero_control,       only: oslo_aero_getopts,dir_string_length
-  use oslo_aero_const,         only: cate, fac, faq, fbc, cat
+  use oslo_aero_share,         only: cate, fac, faq, fbc, cat
   use oslo_aero_linear_interp, only: lininterpol3dim, lininterpol4dim
-  use oslo_aero_params,        only: nmodes, nbmodes
-  use oslo_aero_share
+  use oslo_aero_share,         only: nmodes, nbmodes
 
   implicit none
   private

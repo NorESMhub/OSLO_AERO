@@ -13,21 +13,8 @@ module oslo_aero_share
   use physics_buffer, only: physics_buffer_desc, pbuf_get_field
   use physconst,      only: pi
   !
-  use oslo_aero_params, only: nbmodes, nmodes 
-  use oslo_aero_params, only: aerosol_type_sulfate
-  use oslo_aero_params, only: aerosol_type_bc
-  use oslo_aero_params, only: aerosol_type_om
-  use oslo_aero_params, only: aerosol_type_dust
-  use oslo_aero_params, only: aerosol_type_salt
-  use oslo_aero_params, only: aerosol_type_osmotic_coefficient
-  use oslo_aero_params, only: aerosol_type_density
-  use oslo_aero_params, only: aerosol_type_soluble_mass_fraction
-  use oslo_aero_params, only: aerosol_type_number_of_ions
-  use oslo_aero_params, only: originalNumberMedianRadius
-  use oslo_aero_const,  only: volumeToNumber, rbinMidPoint, rbinEdge, nBinsTab
-
   implicit none
-  private          ! Make default type private to the module
+  public          ! Make default type private to the module
 
   !---------------------------
   ! Public interfaces
@@ -57,126 +44,242 @@ module oslo_aero_share
   public :: calculateEquivalentDensityOfFractalMode
   public :: calculatedNdLogR
   public :: calculateLognormalCDF
+  !
+  public :: init_interp_constants
 
   !---------------------------
   ! Public parameters
   !---------------------------
 
-  integer,  public, parameter          :: max_tracers_per_mode = 7
-  real(r8), public, dimension (pcnst)  :: rhopart
-  real(r8), public, dimension (pcnst)  :: sgpart
-  real(r8), public, dimension (pcnst)  :: osmoticCoefficient
-  real(r8), public, dimension (pcnst)  :: numberOfIons
-  real(r8), public, dimension (pcnst)  :: solubleMassFraction
-  integer,  public, dimension (pcnst)  :: aerosolType
-  real(r8), public, dimension(nbmodes) :: numberFractionAvailableAqChem
-  real(r8), public, dimension (pcnst)  :: invrhopart
-  real(r8), public, parameter :: smallConcentration = 1.e-100_r8 !duplicate, sync with smallNumber in Const
+  ! Define lognormal size parameters for each size mode (dry, at point of emission/production)
+  integer, parameter :: nmodes   = 14
+  integer, parameter :: nbmodes  = 10
+  integer, parameter :: nbands   = 14 ! number of aerosol spectral bands in SW
+  integer, parameter :: nlwbands = 16 ! number of aerosol spectral bands in LW
+  integer, parameter :: nbmp1    = 11 ! number of first non-background mode
+  integer, parameter :: max_tracers_per_mode = 7
 
-  integer, parameter, public :: MODE_IDX_BC_EXT_AC             = 0  !Externally mixed BC accumulation mode
-  integer, parameter, public :: MODE_IDX_SO4SOA_AIT            = 1  !SO4 and SOA in aitken mode, Created from 11 by growth (condensation) of SO4
-  integer, parameter, public :: MODE_IDX_BC_AIT                = 2  !Created from 12 by growth (condensation)  SO4
-  integer, parameter, public :: MODE_IDX_NOT_USED              = 3  !Not used
-  integer, parameter, public :: MODE_IDX_OMBC_INTMIX_COAT_AIT  = 4  !Created from 14 by growth (condensation) of SO4 and from cloud processing/wet-phas
-  integer, parameter, public :: MODE_IDX_SO4_AC                = 5  !Accumulation mode SO4 (mode will have other comps added)
-  integer, parameter, public :: MODE_IDX_DST_A2                = 6  !Accumulation mode dust (mode will have other comps added)
-  integer, parameter, public :: MODE_IDX_DST_A3                = 7  !Coarse mode dust (mode will have other comps added)
-  integer, parameter, public :: MODE_IDX_SS_A1                 = 8  !Fine mode sea-salt (mode will have other comps added)
-  integer, parameter, public :: MODE_IDX_SS_A2                 = 9  !Accumulation mode sea-salt (mode will have other comps added)
-  integer, parameter, public :: MODE_IDX_SS_A3                 = 10 !Coarse mode sea-salt (mode will have other comps added)
-  integer, parameter, public :: MODE_IDX_SO4SOA_NUC            = 11 !SO4 and SOA nucleation mode
-  integer, parameter, public :: MODE_IDX_BC_NUC                = 12 !BC nucleation mode
-  integer, parameter, public :: MODE_IDX_LUMPED_ORGANICS       = 13 !not used in lifecycle, but some extra mass goes here when max. allowed LUT conc. are too small
-  integer, parameter, public :: MODE_IDX_OMBC_INTMIX_AIT       = 14 !mix quickly formed in fire-plumes
+  integer, parameter :: numberOfExternallyMixedModes = 4    !Modes 0;11-14 (13 is not used in lifecycle)
+  integer, parameter :: numberOfInternallyMIxedMOdes = 9    !Modes 1-10 (3 is not used in lifecycle)
+  integer, parameter :: numberOfProcessModeTracers = 6
 
-  integer, parameter, public :: numberOfExternallyMixedModes = 4    !Modes 0;11-14 (13 is not used in lifecycle)
-  integer, parameter, public :: numberOfInternallyMIxedMOdes = 9    !Modes 1-10 (3 is not used in lifecycle)
+  integer,  parameter :: nBinsTab = 44                    ![nbr] number of tabulated bins
 
-  integer, parameter, public :: numberOfProcessModeTracers    = 6
-  integer, public, dimension(numberOfProcessModeTracers) :: tracerInProcessMode
-  integer, public, dimension(pcnst)                      :: processModeMap
-  !
-  !---------------------------
-  ! Public constants
-  !---------------------------
-  !
-  !These tables describe how the tracers behave chemically
-  integer, dimension(numberOfExternallyMixedModes), public :: externallyMixedMode = &
-       (/MODE_IDX_BC_EXT_AC,  &
-         MODE_IDX_SO4SOA_NUC, &
-         MODE_IDX_BC_NUC,     &
-         MODE_IDX_OMBC_INTMIX_AIT /)
+  real(r8), parameter :: rTabMin = 1.e-9_r8               ![m] smallest lookup table size
+  real(r8), parameter :: rTabMax = 20.e-6_r8              ![m] largest lookup table size
+  real(r8), parameter :: rMinAquousChemistry = 0.05e-6_r8 !Smallest particle which can receive aquous chemistry mass
+  real(r8), parameter :: sq2pi = 1._r8/sqrt(2.0_r8*pi)
+  real(r8), parameter :: smallConcentration = 1.e-100_r8  !duplicate, sync with smallNumber in Const
+  real(r8), parameter :: smallNumber = 1.e-100_r8
 
-  integer, dimension(numberOfInternallyMixedMOdes), public :: internallyMixedMode = &
-       (/MODE_IDX_SO4SOA_AIT,           &
-         MODE_IDX_BC_AIT,               &
-         MODE_IDX_OMBC_INTMIX_COAT_AIT, &
-         MODE_IDX_SO4_AC,               &
-         MODE_IDX_DST_A2,               &
-         MODE_IDX_DST_A3,               &
-         MODE_IDX_SS_A1,                &
-         MODE_IDX_SS_A2,                &
-         MODE_IDX_SS_A3 /)
+  integer, parameter :: n_tracers_in_mode(0:nmodes) = (/ 1, 4, 3, 0, 5, 7, 7, 7, 7, 7, 7, 0, 1, 0, 2 /)
+  integer, parameter :: n_background_tracers_in_mode(0:nmodes) = (/ 1,2,1,0,2,1,1,1,1,1,1,0,1,0,2 /)
 
-  ! species indices for individual camuio species
-  integer,public :: l_so4_na, l_so4_a1, l_so4_a2, l_so4_ac
-  integer,public :: l_bc_n, l_bc_ax, l_bc_ni, l_bc_a, l_bc_ai,l_bc_ac
-  integer,public :: l_om_ni, l_om_ai, l_om_ac
-  integer,public :: l_so4_pr
-  integer,public :: l_dst_a2, l_dst_a3
-  integer,public :: l_ss_a1, l_ss_a2, l_ss_a3, l_h2so4
-  integer,public :: l_soa_na, l_soa_a1, l_soa_lv, l_soa_sv
+  ! Define aerosol types and their properties..
+  integer, parameter :: N_AEROSOL_TYPES      = 5
+  integer, parameter :: AEROSOL_TYPE_SULFATE = 1
+  integer, parameter :: AEROSOL_TYPE_BC      = 2
+  integer, parameter :: AEROSOL_TYPE_OM      = 3
+  integer, parameter :: AEROSOL_TYPE_DUST    = 4
+  integer, parameter :: AEROSOL_TYPE_SALT    = 5
 
-  integer :: n_aerosol_tracers !number of aerosol tracers
-  integer :: imozart
+  ! Define aerosol modes
+  integer, parameter :: MODE_IDX_BC_EXT_AC             = 0  !Externally mixed BC accumulation mode
+  integer, parameter :: MODE_IDX_SO4SOA_AIT            = 1  !SO4 and SOA in aitken mode, Created from 11 by growth (condensation) of SO4
+  integer, parameter :: MODE_IDX_BC_AIT                = 2  !Created from 12 by growth (condensation)  SO4
+  integer, parameter :: MODE_IDX_NOT_USED              = 3  !Not used
+  integer, parameter :: MODE_IDX_OMBC_INTMIX_COAT_AIT  = 4  !Created from 14 by growth (condensation) of SO4 and from cloud processing/wet-phas
+  integer, parameter :: MODE_IDX_SO4_AC                = 5  !Accumulation mode SO4 (mode will have other comps added)
+  integer, parameter :: MODE_IDX_DST_A2                = 6  !Accumulation mode dust (mode will have other comps added)
+  integer, parameter :: MODE_IDX_DST_A3                = 7  !Coarse mode dust (mode will have other comps added)
+  integer, parameter :: MODE_IDX_SS_A1                 = 8  !Fine mode sea-salt (mode will have other comps added)
+  integer, parameter :: MODE_IDX_SS_A2                 = 9  !Accumulation mode sea-salt (mode will have other comps added)
+  integer, parameter :: MODE_IDX_SS_A3                 = 10 !Coarse mode sea-salt (mode will have other comps added)
+  integer, parameter :: MODE_IDX_SO4SOA_NUC            = 11 !SO4 and SOA nucleation mode
+  integer, parameter :: MODE_IDX_BC_NUC                = 12 !BC nucleation mode
+  integer, parameter :: MODE_IDX_LUMPED_ORGANICS       = 13 !not used in lifecycle, but some extra mass goes here when max. allowed LUT conc. are too small
+  integer, parameter :: MODE_IDX_OMBC_INTMIX_AIT       = 14 !mix quickly formed in fire-plumes
 
-  !Number of transported tracers in each mode
-  integer, parameter, dimension(0:nmodes) :: n_tracers_in_mode = (/ 1, 4, 3, 0, 5, 7, 7, 7, 7, 7, 7, 0, 1, 0, 2 /)
-  integer, parameter, dimension(0:nmodes) :: n_background_tracers_in_mode = (/ 1,2,1,0,2,1,1,1,1,1,1,0,1,0,2 /)
-  integer, dimension(0:nmodes, max_tracers_per_mode) :: tracer_in_mode
+  ! Number median radius of background emissions THESE DO NOT ASSUME IMPLICIT GROWTH!!
+  real(r8), parameter :: originalNumberMedianRadius(0:nmodes) =        &
+       1.e-6_r8* (/ 0.0626_r8,                                         & !0
+       0.0118_r8, 0.024_r8, 0.04_r8,  0.04_r8, 0.075_r8,  & !1-5
+       0.22_r8,   0.63_r8,   0.0475_r8, 0.30_r8, 0.75_r8, & !6-10    ! SS: Salter et al. (2015)
+       0.0118_r8, 0.024_r8, 0.04_r8,  0.04_r8    /)         !11-14
+
+  ! sigma of background aerosols )
+  real(r8), parameter :: originalSigma(0:nmodes) =  &
+       (/1.6_r8,                                    & !0
+       1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8, 1.59_r8,   & !1-5
+       1.59_r8, 2.0_r8, 2.1_r8, 1.72_r8, 1.60_r8, & !6-10   ! SS: Salter et al. (2015)
+       1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8  /)           !11-14
 
   !Radius used for the modes in the lifeCycle MAY ASSUME SOME GROWTH ALREADY HAPPENED
-  real(r8), parameter, public, dimension(0:nmodes) :: lifeCycleNumberMedianRadius = &
-       1.e-6_r8*(/ 0.0626_r8, 0.025_r8, 0.025_r8, 0.04_r8,   0.06_r8,   0.075_r8, &
-       0.22_r8,   0.63_r8,   0.0475_r8,  0.30_r8,   0.75_r8,  &    ! Salter et al. (2015)
-       0.0118_r8, 0.024_r8, 0.04_r8,   0.04_r8    /)
+  real(r8), parameter :: lifeCycleNumberMedianRadius(0:nmodes) = &
+       1.e-6_r8*(/ 0.0626_r8, 0.025_r8, 0.025_r8 , 0.04_r8,   0.06_r8,   0.075_r8, &
+                   0.22_r8,   0.63_r8,  0.0475_r8, 0.30_r8,   0.75_r8,  &    ! Salter et al. (2015)
+                   0.0118_r8, 0.024_r8, 0.04_r8  , 0.04_r8    /)
 
   !Sigma based on original lifecycle code (taken from "sigmak" used previously in lifecycle code)
-  real(r8), parameter, public, dimension(0:nmodes) :: lifeCycleSigma =  (/1.6_r8, 1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8 &   !0-4
+  real(r8), parameter :: lifeCycleSigma(0:nmodes) =  (/1.6_r8, 1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8 &   !0-4
        ,1.59_r8, 1.59_r8, 2.0_r8               &   !5,6,7 (SO4+dust)
        ,2.1_r8, 1.72_r8, 1.6_r8                &   !8-10  (SS)     ! Salter et al. (2015)
        ,1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8         &   !11-14
        /)
 
   !Below cloud scavenging coefficients for modes which have an actual size
-  real(r8), parameter, public, dimension(0:nmodes) :: belowCloudScavengingCoefficient=                    &
+  real(r8), parameter :: belowCloudScavengingCoefficient(0:nmodes) =     &
        (/ 0.01_r8  ,  0.02_r8 , 0.02_r8  ,  0.0_r8 ,   0.02_r8,   0.01_r8, & !(0-5)
-       0.02_r8  ,  0.2_r8  , 0.02_r8  ,  0.02_r8,   0.5_r8,             & !6-10 (DUST+SS)
-       0.04_r8  ,  0.08_r8 , 0.0_r8   ,  0.02_r8    /)                    ! SO4_n, bc_n, N/A og bc/oc
+          0.02_r8  ,  0.2_r8  , 0.02_r8  ,  0.02_r8,   0.5_r8,             & !6-10 (DUST+SS)
+          0.04_r8  ,  0.08_r8 , 0.0_r8   ,  0.02_r8    /)                    ! SO4_n, bc_n, N/A og bc/oc
 
-  !Treatment of process-modes!
-  !The tracers indices can not be set here since they are not known on compile time
-  !tracerInProcessMode = (/l_so4_a1, l_so4_a2, l_so4_ac, l_om_ac, l_bc_ac, l_soa_a1 /)
+  ! Treatment of process-modes!
+  ! The tracers indices can not be set here since they are not known on compile time
+  ! tracerInProcessMode = (/l_so4_a1, l_so4_a2, l_so4_ac, l_om_ac, l_bc_ac, l_soa_a1 /)
 
   !The process modes need an "efficient size" (Why does A1 have a different size than the others??)
-  real(r8), parameter, public, dimension(numberOfProcessModeTracers) :: processModeNumberMedianRadius = &
+  real(r8), parameter :: processModeNumberMedianRadius(numberOfProcessModeTracers) = &
        (/ 0.04e-6_r8, 0.1e-6_r8, 0.1e-6_r8, 0.1e-6_r8, 0.1e-6_r8, 0.04e-6_r8 /)
 
   !The process modes need an "efficient sigma"
-  real(r8), parameter, public, dimension(numberOfProcessModeTracers) :: processModeSigma =   &
+  real(r8), parameter :: processModeSigma(numberOfProcessModeTracers) = &
        (/ 1.8_r8, 1.59_r8, 1.59_r8, 1.59_r8, 1.59_r8, 1.8_r8  /)
 
-
-  real(r8), parameter, public, dimension(numberOfProcessModeTracers) :: belowCloudScavengingCoefficientProcessModes = &
+  real(r8), parameter :: belowCloudScavengingCoefficientProcessModes(numberOfProcessModeTracers) = &
        (/0.02_r8, 0.01_r8, 0.02_r8, 0.02_r8, 0.02_r8, 0.02_r8 /)
 
-  !Growth of aerosols, duplicated in oslo_aero_sw_tables
-  real(r8), public,dimension (10)      :: rhtab
-  real(r8), public,dimension (10,pcnst):: rdivr0(10,pcnst)
+  real(r8), parameter :: aThird = 1.0_r8/3.0_r8
 
-  data rhtab/ 0.0_r8, 0.37_r8, 0.47_r8, 0.65_r8, 0.75_r8, 0.80_r8, 0.85_r8, 0.90_r8, 0.95_r8, 0.98_r8 /
+  real(r8), parameter :: e=2.718281828_r8
+  real(r8), parameter :: eps=1.0e-30_r8  
 
-  integer, dimension(pcnst) :: cloudTracerIndex
+  !---------------------------
+  ! Public constants
+  !---------------------------
+
+  real(r8) :: nk(0:nmodes,nbinsTab)     !dN/dlogr for modes
+  real(r8) :: normnk(0:nmodes,nbinsTab) !dN for modes (sums to one over size range)
+  real(r8) :: rBinEdge(nBinsTab+1)
+  real(r8) :: rBinMidpoint(nBinsTab)
+  real(r8) :: volumeToNumber(0:nmodes)  !m3 ==> #
+  real(r8) :: numberToSurface(0:nmodes) !# ==> m2
+
+  ! Constants used in interpolation
+  ! Internal mixtures of process-tagged mass
+  ! cate : total added mass (Âµg/m3 per particle per cm3) from condensation
+  !        and wet phase chemistry/cloud processing, for kcomp = 1-2.
+  !        cate should be scaled up/down whenever the modal parameters (modal
+  !        radius and width) are increased/decreased a lot.
+  ! cat  : total added mass (Âµg/m3 per particle per cm-3) from coagulation, condensation
+  !        and wet phase chemistry/cloud processing, for kcomp = 5-10.
+  !        cat should be scaled up/down whenever the modal parameters (modal
+  !        radius and width) are increased/decreased a lot.
+  ! fac  : mass fraction of cat or cate from coagulating carbonaceous aerosols (BC+OM).
+  !        The remaining mass cate*(1-fac) or cat*(1-fac) is SO4.
+  ! fbc  : mass fraction of BC from coagulating carbonaceous aerosols, BC/(BC+OM).
+  ! faq  : mass fraction of sulfate which is produced in wet-phase, SO4aq/SO4.
+  !        The remaining SO4 mass, SO4*(1-faq), is from condensation. 
+
+  real(r8) :: rh(10)
+  real(r8) :: fombg(6), fbcbg(6), fac(6), fbc(6), faq(6)
+  real(r8) :: cate(4,16)
+  real(r8) :: cat(5:10,6)
+
+  ! relative humidity (RH, as integer for output variable names) for use in AeroCom code
+  integer  :: RF(6)
+
+  ! AeroCom specific RH input variables for use in opticsAtConstRh.F90
+  integer  :: irhrf1(6)
+  real(r8) :: xrhrf(6)
+
+  integer :: tracerInProcessMode(numberOfProcessModeTracers)
+  integer :: processModeMap(pcnst)
+
+  ! NUMBERS BELOW ARE ESSENTIAL TO CALCULATE HYGROSCOPICITY AND THEREFORE INDIRECT EFFECT!
+  ! These numbers define the "hygroscopicity parameter" Numbers are selected so that they give reasonable hygroscipity
+  ! note that changing numbers individually changes the hygroscopicity!
+  ! Hygroscopicity is defined in Abdul-Razzak and S. Ghan: (B in their eqn 4)
+  ! A parameterization of aerosol activation 2. Multiple aerosol types, JGR, vol 105, noD5, pp 6837
+  ! http://onlinelibrary.wiley.com/doi/10.1029/1999JD901161/abstract
+  !
+  ! Further note that changing any of these numbers without changing aerotab will lead to
+  ! inconsistencies in the simulation since Aerotab tabulates hygroscopical growth!
+  !
+  ! Main reference for numbers chosen: Ghan et al MIRAGE paper (JRG, vol 106, D6, pp 5295), 2001 References:
+  ! SULFATE : Using same numbers as MIRAGE paper (ammonium sulfate)
+  ! BC      : Does not really matter as long as soluble mass fraction is small
+  !           However, numbers below reproduces values from MIRAGE paper
+  !           New mass density (October 2016) is based on Bond and Bergstrom (2007): Light Absorption
+  !           by Carbonaceous Particles: An Investigative Review, Aerosol Science and Technology, 40:27•¡¹67.
+  ! OM      : Soluble mass fraction tuned to give B of MIRAGE Paper
+  ! DUST    : The numbers give B of ~ 0.07 (high end of Kohler, Kreidenweis et al, GRL, vol 36, 2009.
+  !                                  (10% as soluble mass fraction seems reasonable)
+  !                                  (see also Osada et al, Atmospheric Research, vol 124, 2013, pp 101
+  ! SEA SALT: Soluble mass fraction tuned to give consistent values for (r/r0) at 99% when using the parametrization in
+  !           Koepke, Hess, Schult and Shettle: Max-Plack-Institut fur Meteorolgie, report No. 243 "GLOBAL AEROSOL DATA SET"
+  !           These values give "B" of 1.20 instead of 1.16 in MIRAGE paper.
+
+  character(len=8) :: aerosol_type_name(N_AEROSOL_TYPES) = &
+       (/"SULFATE ", "BC      ","OM      ", "DUST    ", "SALT    " /)
+  real(r8) :: aerosol_type_density(N_AEROSOL_TYPES) =               &
+       (/1769.0_r8, 1800.0_r8,  1500.0_r8, 2600.0_r8,  2200.0_r8 /)   !kg/m3
+  real(r8) :: aerosol_type_molecular_weight(N_AEROSOL_TYPES) =      &
+       (/132.0_r8,  12.0_r8,    168.2_r8,  135.0_r8,   58.44_r8  /)   !kg/kmol
+  real(r8) :: aerosol_type_osmotic_coefficient(N_AEROSOL_TYPES) =   &
+       (/0.7_r8,    1.111_r8,     1.0_r8,    1.0_r8,     1.0_r8    /) ![-]
+  real(r8) :: aerosol_type_soluble_mass_fraction(N_AEROSOL_TYPES) = &
+       (/1.0_r8,    1.67e-7_r8, 0.8725_r8, 0.1_r8,     0.885_r8  /)   ![-]
+  real(r8) :: aerosol_type_number_of_ions(N_AEROSOL_TYPES) =        &
+       (/3.0_r8,    1.0_r8,     1.0_r8,    2.0_r8,     2.0_r8    /)   ![-]
+
+  real(r8) :: rhopart(pcnst)
+  real(r8) :: sgpart(pcnst)
+  real(r8) :: osmoticCoefficient(pcnst)
+  real(r8) :: numberOfIons(pcnst)
+  real(r8) :: solubleMassFraction(pcnst)
+  integer  :: aerosolType(pcnst)
+  real(r8) :: numberFractionAvailableAqChem(nbmodes)
+  real(r8) :: invrhopart(pcnst)
+
+  !These tables describe how the tracers behave chemically
+  integer, dimension(numberOfExternallyMixedModes) :: externallyMixedMode = &
+       (/MODE_IDX_BC_EXT_AC,  &
+       MODE_IDX_SO4SOA_NUC, &
+       MODE_IDX_BC_NUC,     &
+       MODE_IDX_OMBC_INTMIX_AIT /)
+
+  integer, dimension(numberOfInternallyMixedMOdes) :: internallyMixedMode = &
+       (/MODE_IDX_SO4SOA_AIT,           &
+       MODE_IDX_BC_AIT,               &
+       MODE_IDX_OMBC_INTMIX_COAT_AIT, &
+       MODE_IDX_SO4_AC,               &
+       MODE_IDX_DST_A2,               &
+       MODE_IDX_DST_A3,               &
+       MODE_IDX_SS_A1,                &
+       MODE_IDX_SS_A2,                &
+       MODE_IDX_SS_A3 /)
+
+  ! species indices for individual camuio species
+  integer :: l_so4_na, l_so4_a1, l_so4_a2, l_so4_ac
+  integer :: l_bc_n, l_bc_ax, l_bc_ni, l_bc_a, l_bc_ai,l_bc_ac
+  integer :: l_om_ni, l_om_ai, l_om_ac
+  integer :: l_so4_pr
+  integer :: l_dst_a2, l_dst_a3
+  integer :: l_ss_a1, l_ss_a2, l_ss_a3, l_h2so4
+  integer :: l_soa_na, l_soa_a1, l_soa_lv, l_soa_sv
+
+  integer :: n_aerosol_tracers !number of aerosol tracers
+  integer :: imozart
+
+  ! Number of transported tracers in each mode
+  integer  :: tracer_in_mode(0:nmodes, max_tracers_per_mode)
+
+  ! Growth of aerosols, duplicated in oslo_aero_sw_tables
+  real(r8) :: rdivr0(10,pcnst)
+
+  real(r8) :: rhtab(10) = (/ 0.0_r8, 0.37_r8, 0.47_r8, 0.65_r8, 0.75_r8, 0.80_r8, 0.85_r8, 0.90_r8, 0.95_r8, 0.98_r8/)
+
+  integer  :: cloudTracerIndex(pcnst)
   character(len=20) :: cloudTracerName(pcnst)
 
   integer, private :: qqcw(pcnst)=-1 ! Remaps modal_aero indices into pbuf
@@ -206,11 +309,11 @@ contains
     ! return true if tracer is a "process mode"
     answer = .false.
     if(l_index_phys .eq. l_so4_a1 .or. &
-       l_index_phys .eq. l_so4_a2 .or. &
-       l_index_phys .eq. l_so4_ac .or. &
-       l_index_phys .eq. l_bc_ac  .or. &
-       l_index_phys .eq. l_om_ac  .or. &
-       l_index_phys .eq. l_soa_a1 ) then
+         l_index_phys .eq. l_so4_a2 .or. &
+         l_index_phys .eq. l_so4_ac .or. &
+         l_index_phys .eq. l_bc_ac  .or. &
+         l_index_phys .eq. l_om_ac  .or. &
+         l_index_phys .eq. l_soa_a1 ) then
        answer = .true.
     endif
   end function is_process_mode
@@ -634,15 +737,15 @@ contains
           print*, "fraction ==>", cam/(CProcessModes+smallConcentration)*100.0, fraction*100 , "%"
        endif
 
-    else if(l_so4_ac .eq. constituentIndex)then         !so4 coagulation
-       fraction = (cam                         &
-            * (1.0_r8 - f_acm)  & !sulfate fraction
-            * (1.0_r8 - f_aqm)  & !fraction not from aq phase
-            * (1.0_r8 - f_so4_condm) & !fraction not being condensate
-            )                                        &
-            /                                   &
-            (CProcessModes*(1.0_r8-f_c)*(1.0_r8-f_aq)*(1.0_r8-f_so4_cond) & !total non-aq sulf
-            +smallConcentration)
+    else if(l_so4_ac .eq. constituentIndex) then ! so4 coagulation
+       fraction = (cam                   &
+                * (1.0_r8 - f_acm)       & !sulfate fraction
+                * (1.0_r8 - f_aqm)       & !fraction not from aq phase
+                * (1.0_r8 - f_so4_condm) & !fraction not being condensate
+                )                        &
+                /                        &
+                (CProcessModes*(1.0_r8-f_c)*(1.0_r8-f_aq)*(1.0_r8-f_so4_cond) & !total non-aq sulf
+                + smallConcentration)
 
     else if(l_so4_a2 .eq. constituentIndex) then  !so4 wet phase
        fraction = (cam            &
@@ -789,7 +892,6 @@ contains
     integer  , intent(in)  :: ncol                                       !number of columns used
     real(r8) , intent(out) :: numberMedianRadius(pcols,pver,nmodes)      ![m] 
 
-    real(r8), parameter :: aThird = 1.0_r8/3.0_r8
     integer :: n,k
 
     do n=1,nmodes
@@ -810,9 +912,9 @@ contains
   !===================================================
   function calculateEquivalentDensityOfFractalMode( &
        emissionDensity, emissionRadius, fractalDimension, modeNumberMedianRadius, modeStandardDeviation) &
-    result (equivalentDensityOfFractal)
+       result (equivalentDensityOfFractal)
 
-    ! Purpose: output equivalent density of a fractal mode 
+    ! output equivalent density of a fractal mode 
 
     ! arguments
     real(r8), intent(in) :: emissionDensity        ![kg/m3] density at point of emission
@@ -836,7 +938,7 @@ contains
        dNdLogR = calculatedNdLogR(rBinMidPoint(i), modeNumberMedianRadius, modeStandardDeviation)
 
        !Equivalent density (decreases with size since larger particles are long "hair like" threads..)
-       if(rBinMidPoint(i) < emissionRadius)then
+       if (rBinMidPoint(i) < emissionRadius)then
           densityBin = emissionDensity
        else
           densityBin = emissionDensity*(emissionRadius/rBinMidPoint(i))**(3.0 - fractalDimension)
@@ -848,10 +950,9 @@ contains
        !sum up volume and mass (factor of 4*pi/3 omitted since in both numerator and nominator)
        sumVolume = sumVolume + dN * (rBinMidPoint(i)**3)
        sumMass   = sumMass + dN * densityBin * (rBinMidPoint(i)**3)
-
     end do
 
-    !Equivalent density is mass by volume
+    ! Equivalent density is mass by volume
     equivalentDensityOfFractal = sumMass / sumVolume
 
   end function calculateEquivalentDensityOfFractalMode
@@ -868,7 +969,7 @@ contains
 
     logSigma = log(sigma)
 
-    !This is the formula for the lognormal distribution
+    ! This is the formula for the lognormal distribution
     dNdLogR = 1.0_r8/(sqrt(2.0_r8*pi)*log(sigma)) &
          * DEXP(-0.5_r8*(log(actualRadius/numberMedianRadius))**2/(logSigma**2))
 
@@ -889,5 +990,86 @@ contains
     CDF = 0.5_r8 * erfc(argument)
 
   end function calculateLognormalCDF
+
+  !===================================================
+  subroutine init_interp_constants()
+
+    !---------------------------------------------------------------
+    ! set module variables for interpolation of tables
+    !---------------------------------------------------------------
+
+    ! Local variables
+    integer :: irf, irelh, kcomp, i
+    !-----------------------------------------------------------
+
+    ! Defining array bounds for tabulated optical parameters (and r and sigma)
+    ! relative humidity (only 0 value used for r and sigma tables):
+    rh = (/ 0.0_r8, 0.37_r8, 0.47_r8, 0.65_r8, 0.75_r8, 0.8_r8, 0.85_r8, 0.9_r8, 0.95_r8, 0.995_r8 /)
+
+    ! relative humidity (RH, as integer for output variable names) for use in AeroCom code
+    RF = (/0, 40, 55, 65, 75, 85 /)
+
+    ! AeroCom specific RH input variables for use in opticsAtConstRh.F90
+    do irf=1,6
+       xrhrf(irf)  = real(RF(irf))*0.01_r8
+    enddo
+    do irelh=1,9
+       do irf=1,6
+          if(xrhrf(irf)>=rh(irelh).and.xrhrf(irf)<=rh(irelh+1)) then
+             irhrf1(irf)=irelh
+          endif
+       end do
+    end do
+
+    ! mass fractions internal mixtures in background (fombg and fbcbg) and mass added to the
+    ! background modes (fac, faq, faq)
+    fombg = (/ 0.0_r8, 0.2_r8,  0.4_r8, 0.6_r8, 0.8_r8, 1.0_r8  /)
+    fac =   (/ 0.0_r8, 0.2_r8,  0.4_r8, 0.6_r8, 0.8_r8, 1.0_r8  /)
+    faq =   (/ 0.0_r8, 0.2_r8,  0.4_r8, 0.6_r8, 0.8_r8, 1.0_r8  /)
+
+    ! with more weight on low fractions (thus a logaritmic f axis) for BC,
+    ! which is less ambundant than sulfate and OC, and the first value
+    ! corresponding to a clean background mode:
+    ! and most weight on small concentrations for added mass onto the background:
+
+    fbcbg(1)=1.e-10_r8
+    fbc(1)=1.e-10_r8
+    do i=2,6
+       fbcbg(i)=10**((i-1)/4.0_r8-1.25_r8)
+       fbc(i)=fbcbg(i)
+    end do
+
+    do kcomp=1,4
+       cate(kcomp,1)=1.e-10_r8
+       do i=2,16
+          if(kcomp.eq.1.or.kcomp.eq.2) then
+             cate(kcomp,i)=10.0_r8**((i-1)/3.0_r8-6.222_r8)
+          elseif(kcomp.eq.3) then
+             cate(kcomp,i)=1.0e-10_r8  ! not used
+          else
+             cate(kcomp,i)=10.0_r8**((i-1)/3.0_r8-4.301_r8)
+          endif
+       end do
+    end do
+    do kcomp=5,10
+       cat(kcomp,1) =1.e-10_r8
+       do i=2,6
+          if(kcomp.eq.5) then
+             cat(kcomp,i)=10.0_r8**((i-1)-3.824_r8)
+          elseif(kcomp.eq.6) then
+             cat(kcomp,i)=10.0_r8**((i-1)-3.523_r8)
+          elseif(kcomp.eq.7) then
+             cat(kcomp,i)=10.0_r8**((i-1)-3.699_r8)
+          elseif(kcomp.eq.8) then
+             cat(kcomp,i)=10.0_r8**((i-1)-4.921_r8)
+          elseif(kcomp.eq.9) then
+             cat(kcomp,i)=10.0_r8**((i-1)-3.301_r8)
+          else
+             cat(kcomp,i)=10.0_r8**((i-1)-3.699_r8)
+          endif
+       end do
+    end do
+
+  end subroutine init_interp_constants
 
 end module oslo_aero_share

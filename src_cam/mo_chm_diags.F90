@@ -69,14 +69,14 @@ contains
     use mo_drydep,    only : has_drydep
     use species_sums_diags, only : species_sums_init
 #ifdef OSLO_AERO
-    use oslo_aero_share, only: getCloudTracerIndexDirect, getCloudTracerName, isAerosol 
-    use oslo_aero_params
+    use oslo_aero_share, only: getCloudTracerIndexDirect, getCloudTracerName, isAerosol
+    use oslo_aero_share,only : aerosol_type_name, N_AEROSOL_TYPES
 #endif
 
     integer :: j, k, m, n
     character(len=16) :: jname, spc_name, attr
     character(len=2)  :: jchar
-    character(len=2)  :: unit_basename  ! Units 'kg' or '1' 
+    character(len=2)  :: unit_basename  ! Units 'kg' or '1'
 
     integer :: id_pan, id_onit, id_mpan, id_isopno3, id_onitr, id_nh4no3
     integer :: id_so2, id_so4, id_h2so4
@@ -95,7 +95,7 @@ contains
     integer :: id_dst01, id_dst02, id_dst03, id_dst04, id_sslt01, id_sslt02, id_sslt03, id_sslt04
     integer :: id_soa,  id_oc1, id_oc2, id_cb1, id_cb2
     integer :: id_soam,id_soai,id_soat,id_soab,id_soax
-    integer :: id_bry, id_cly 
+    integer :: id_bry, id_cly
 
     logical :: history_aerosol      ! Output the MAM aerosol tendencies
     logical :: history_chemistry
@@ -105,7 +105,7 @@ contains
     integer :: bulkaero_species(20)
     logical :: history_dust
 #ifdef OSLO_AERO
-    integer :: cloudTracerIndex
+    integer :: cloudTracerIndex_direct
     character(len=20) :: cloudTracerName
 #endif
 
@@ -199,17 +199,17 @@ contains
     id_onitr   = get_spc_ndx( 'ONITR' )
     id_nh4no3  = get_spc_ndx( 'NH4NO3' )
 
-    id_honitr    = get_spc_ndx( 'HONITR' ) 
-    id_alknit    = get_spc_ndx( 'ALKNIT' ) 
-    id_isopnita  = get_spc_ndx( 'ISOPNITA' ) 
-    id_isopnitb  = get_spc_ndx( 'ISOPNITB' ) 
-    id_isopnooh  = get_spc_ndx( 'ISOPNOOH' ) 
-    id_nc4ch2oh  = get_spc_ndx( 'NC4CH2OH' ) 
-    id_nc4cho    = get_spc_ndx( 'NC4CHO' ) 
-    id_noa       = get_spc_ndx( 'NOA' ) 
-    id_nterpooh  = get_spc_ndx( 'NTERPOOH' ) 
+    id_honitr    = get_spc_ndx( 'HONITR' )
+    id_alknit    = get_spc_ndx( 'ALKNIT' )
+    id_isopnita  = get_spc_ndx( 'ISOPNITA' )
+    id_isopnitb  = get_spc_ndx( 'ISOPNITB' )
+    id_isopnooh  = get_spc_ndx( 'ISOPNOOH' )
+    id_nc4ch2oh  = get_spc_ndx( 'NC4CH2OH' )
+    id_nc4cho    = get_spc_ndx( 'NC4CHO' )
+    id_noa       = get_spc_ndx( 'NOA' )
+    id_nterpooh  = get_spc_ndx( 'NTERPOOH' )
     id_pbznit    = get_spc_ndx( 'PBZNIT' )
-    id_terpnit   = get_spc_ndx( 'TERPNIT' ) 
+    id_terpnit   = get_spc_ndx( 'TERPNIT' )
     id_ndep      = get_spc_ndx( 'NDEP' )
     id_nhdep     = get_spc_ndx( 'NHDEP' )
 
@@ -396,7 +396,7 @@ contains
        if (n.gt.0) then
           if(.NOT. isAerosol(n))then
             if(history_chemistry)then
-              call add_default( wetdep_name_area(m), 1, ' ') 
+              call add_default( wetdep_name_area(m), 1, ' ')
             end if
           endif
         end if
@@ -434,7 +434,7 @@ contains
        if ((m /= id_cly) .and. (m /= id_bry)) then
           if (history_aerosol.or.history_chemistry) then
              call add_default( spc_name, 1, ' ' )
-          endif 
+          endif
           if (history_chemspecies_srf) then
              call add_default( trim(spc_name)//'_SRF', 1, ' ' )
           endif
@@ -476,8 +476,8 @@ contains
 
        !output 3d-field of aersol tracer in cloud water
        if(n > 0) then
-          cloudTracerIndex = getCloudTracerIndexDirect(n)
-          if(cloudTracerIndex > 0)then
+          cloudTracerIndex_direct = getCloudTracerIndexDirect(n)
+          if(cloudTracerIndex_direct > 0)then
              cloudTracerName(1:len(CloudTracerName))=" "
              cloudTracerName = getCloudTracerName(n)
              call addfld( trim(cloudTracerName), (/'lev'/), 'A','kg/kg', &
@@ -495,13 +495,13 @@ contains
           call add_default('cb_'//trim(spc_name),1,' ' )
 
           if (history_aerosol)then
-             if (cloudTracerIndex > 0)then
+             if (cloudTracerIndex_direct > 0)then
                 !Output budget-terms for cloud borne aerosols
                 call add_default (trim(cloudTracerName)//'GVF', 1, ' ')
-                call add_default (trim(cloudTracerName)//'SFWET', 1, ' ') 
+                call add_default (trim(cloudTracerName)//'SFWET', 1, ' ')
                 call add_default (trim(cloudTracerName)//'TBF', 1, ' ')
                 call add_default (trim(cloudTracerName)//'DDF', 1, ' ')
-                call add_default (trim(cloudTracerName)//'SFSBS', 1, ' ')      
+                call add_default (trim(cloudTracerName)//'SFSBS', 1, ' ')
                 call add_default (trim(cloudTracerName)//'SFSIC', 1, ' ')
                 call add_default (trim(cloudTracerName)//'SFSBC', 1, ' ')
                 call add_default (trim(cloudTracerName)//'SFSIS', 1, ' ')
@@ -560,7 +560,7 @@ contains
     !--------------------------------------------------------------------
     !	... utility routine to output chemistry diagnostic variables
     !--------------------------------------------------------------------
-    
+
     use cam_history,  only : outfld
     use phys_grid,    only : get_area_all_p
     use species_sums_diags, only : species_sums_output
@@ -571,7 +571,7 @@ contains
     use physics_buffer, only : physics_buffer_desc
     !
     use oslo_aero_share,only : getCloudTracerIndexDirect, getCloudTracerName, aerosolType, isAerosol
-    use oslo_aero_params
+    use oslo_aero_share,only : aerosol_type_name, N_AEROSOL_TYPES
 #endif
 !
 ! CCMI
@@ -605,7 +605,7 @@ contains
     !--------------------------------------------------------------------
 #ifdef OSLO_AERO
     real(r8), dimension(:,:), pointer :: cloudTracerField
-    integer                           :: cloudTracerIndex
+    integer                           :: cloudTracerIndex_direct
     character(len=20)                 :: cloudTracerName
     real(r8)                          :: mass_tmp(pcols,pver)
     real(r8)                          :: cb(pcols)
@@ -617,7 +617,7 @@ contains
     !      real(r8)    :: tmp(ncol,pver)
     !      real(r8)    :: m(ncol,pver)
     real(r8)    :: un2(ncol)
-    
+
     real(r8), dimension(ncol,pver) :: vmr_nox, vmr_noy, vmr_clox, vmr_cloy, vmr_tcly, vmr_brox, vmr_broy, vmr_toth
     real(r8), dimension(ncol,pver) :: vmr_tbry, vmr_foy, vmr_tfy
     real(r8), dimension(ncol,pver) :: mmr_noy, mmr_sox, mmr_nhx, net_chem
@@ -768,10 +768,10 @@ contains
        end if
 
        if (n > 0) then
-         cloudTracerIndex = getCloudTracerIndexDirect(n)
-         if (cloudTracerIndex > 0)then
+         cloudTracerIndex_direct = getCloudTracerIndexDirect(n)
+         if (cloudTracerIndex_direct > 0)then
             cloudTracerName = getCloudTracerName(n)
-            call pbuf_get_field(pbuf, cloudTracerIndex, cloudTracerField ) 
+            call pbuf_get_field(pbuf, cloudTracerIndex_direct, cloudTracerField )
             call outfld ( trim(cloudTracerName),cloudTracerField,pcols,lchnk)
 
             !Treat column burden (cloud tracer)
@@ -788,7 +788,7 @@ contains
          ! Sum column burden per aerosol type
          if(aerosolType(n) .gt. 0)then
             cb_aerosol_type(:ncol,aerosolType(n)) = cb_aerosol_type(:ncol,aerosolType(n)) + cb(:ncol)
-   
+
             !Total mass mixing ratio of aerosol type
             mmr_aerosol_type(:ncol,:,aerosolType(n)) = mmr_aerosol_type(:ncol,:,aerosolType(n)) + mmr(:ncol,:,m)
          endif
@@ -826,15 +826,15 @@ contains
 ! add contribution from non-conservation tracers
 !
        if ( id_ndep == m ) then
-          wd_noy(:ncol) = wd_noy(:ncol) +  wgt * wetdepflx(:ncol,m)*N_molwgt/adv_mass(m) 
+          wd_noy(:ncol) = wd_noy(:ncol) +  wgt * wetdepflx(:ncol,m)*N_molwgt/adv_mass(m)
        end if
        if ( id_nhdep == m ) then
-          wd_nhx(:ncol) = wd_nhx(:ncol) +  wgt * wetdepflx(:ncol,m)*N_molwgt/adv_mass(m) 
+          wd_nhx(:ncol) = wd_nhx(:ncol) +  wgt * wetdepflx(:ncol,m)*N_molwgt/adv_mass(m)
        end if
 
        do k=1,pver
           do i=1,ncol
-             net_chem(i,k) = mmr_tend(i,k,m) * mass(i,k) 
+             net_chem(i,k) = mmr_tend(i,k,m) * mass(i,k)
           end do
        end do
        call outfld( dtchem_name(m), net_chem(:ncol,:), ncol, lchnk )
@@ -872,7 +872,7 @@ contains
     do n=1,N_AEROSOL_TYPES
        call outfld("mmr_"//trim(aerosol_type_name(n)), mmr_aerosol_type(:ncol,:,n), ncol,lchnk)
        call outfld("cb_"//trim(aerosol_type_name(n)), cb_aerosol_type(:ncol,n), ncol,lchnk)
-    enddo 
+    enddo
 #endif
     call outfld( 'NOX',  vmr_nox  (:ncol,:), ncol, lchnk )
     call outfld( 'NOY',  vmr_noy  (:ncol,:), ncol, lchnk )
@@ -895,7 +895,7 @@ contains
     call outfld( 'DF_SOX', df_sox(:ncol), ncol ,lchnk )
     call outfld( 'dry_deposition_NHx_as_N', df_nhx(:ncol), ncol ,lchnk )
     if (gas_wetdep_method=='NEU') then
-      wd_noy(:ncol) = -wd_noy(:ncol) ! downward is possitive 
+      wd_noy(:ncol) = -wd_noy(:ncol) ! downward is possitive
       wd_nhx(:ncol) = -wd_nhx(:ncol)
       call outfld( 'wet_deposition_NOy_as_N', wd_noy(:ncol), ncol, lchnk )
       call outfld( 'wet_deposition_NHx_as_N', wd_nhx(:ncol), ncol, lchnk )
@@ -1041,7 +1041,7 @@ contains
        !
        wrk_wd(:ncol) = 0._r8
        do k = 1,pver
-          wrk_wd(:ncol) = wrk_wd(:ncol) + het_rates(:ncol,k,m) * mmr(:ncol,k,m) * pdel(:ncol,k) 
+          wrk_wd(:ncol) = wrk_wd(:ncol) + het_rates(:ncol,k,m) * mmr(:ncol,k,m) * pdel(:ncol,k)
        end do
        !
        wrk_wd(:ncol) = wrk_wd(:ncol) * rgrav * wght(:ncol) * rearth**2

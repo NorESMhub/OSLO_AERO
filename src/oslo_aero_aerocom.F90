@@ -4,13 +4,13 @@ module oslo_aero_aerocom
   use ppgrid,                   only: pcols, pver, pverp
   use cam_history,              only: outfld
   !
-  use oslo_aero_const,          only: cate, cat, fac, faq, fbc, rh, fombg, fbcbg, rh, xrhrf, irhrf1, eps
+  use oslo_aero_share,          only: cate, cat, fac, faq, fbc, rh, fombg, fbcbg, rh, xrhrf, irhrf1, eps
   use oslo_aero_sw_tables,      only: interpol0, interpol1, interpol2to3, interpol4, interpol5to10
   use oslo_aero_aerodry_tables, only: intdrypar0, intdrypar1, intdrypar2to3, intdrypar4, intdrypar5to10
   use oslo_aero_aerocom_tables, only: intaeropt0, intaeropt1, intaeropt2to3, intaeropt4, intaeropt5to10
   use oslo_aero_linear_interp , only: lininterpol3dim, lininterpol4dim, lininterpol5dim
   use oslo_aero_share,          only: rhopart, l_bc_ni, l_om_ni
-  use oslo_aero_params,         only: nmodes, nbmodes, nbands, nlwbands, nbmp1
+  use oslo_aero_share,          only: nmodes, nbmodes, nbands, nlwbands, nbmp1
 
   public  :: aerocom1
   public  :: aerocom2

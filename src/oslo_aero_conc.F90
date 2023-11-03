@@ -10,8 +10,7 @@ module oslo_aero_conc
   use oslo_aero_logn_tables, only: intlog1to3_sub, intlog4_sub, intlog5to10_sub
   use oslo_aero_coag,        only: normalizedCoagulationSink
   use oslo_aero_condtend,    only: normalizedCondensationSink, COND_VAP_H2SO4, COND_VAP_ORG_SV
-  use oslo_aero_const,       only: smallNumber, volumeToNumber,smallNumber
-  use oslo_aero_params
+  use oslo_aero_share,       only: smallNumber, volumeToNumber,smallNumber
   use oslo_aero_share
 
   implicit none

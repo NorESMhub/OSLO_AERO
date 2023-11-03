@@ -9,8 +9,8 @@ module oslo_aero_aerocom_tables
   use ppgrid                  , only : pcols, pver
   use cam_logfile             , only : iulog
   !
-  use oslo_aero_params        , only : nmodes, nbmodes
-  use oslo_aero_const         , only : cate, cat, fac, faq, fbc, rh, fombg, fbcbg
+  use oslo_aero_share         , only : nmodes, nbmodes
+  use oslo_aero_share         , only : cate, cat, fac, faq, fbc, rh, fombg, fbcbg
   use oslo_aero_control       , only : oslo_aero_getopts, dir_string_length
   use oslo_aero_linear_interp , only : lininterpol3dim, lininterpol4dim, lininterpol5dim
 

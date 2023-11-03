@@ -15,9 +15,7 @@ module oslo_aero_coag
   use cam_history,    only: addfld, add_default, fieldname_len, horiz_only, outfld
   use cam_logfile,    only: iulog
   !
-  !use oslo_aero_const, only: normnk
   use oslo_aero_share
-  use oslo_aero_const
 
   implicit none
   private

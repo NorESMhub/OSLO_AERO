@@ -25,8 +25,8 @@ module oslo_aero_ndrop
   use oslo_aero_share,   only: getNumberOfTracersInMode, getNumberOfAerosolTracers, getTracerIndex
   use oslo_aero_share,   only: getCloudTracerName, getCloudTracerIndex, getConstituentFraction
   use oslo_aero_share,   only: fillAerosolTracerList, fillInverseAerosolTracerList 
-  use oslo_aero_params,  only: nmodes, nbmodes
-  use oslo_aero_const,   only: smallNumber
+  use oslo_aero_share,  only: nmodes, nbmodes
+  use oslo_aero_share,   only: smallNumber
 
   implicit none
   private

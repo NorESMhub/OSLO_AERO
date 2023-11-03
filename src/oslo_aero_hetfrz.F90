@@ -31,7 +31,7 @@ module oslo_aero_hetfrz
   use error_messages,    only: handle_errmsg, alloc_err
   use cam_abortutils,    only: endrun
   !
-  use oslo_aero_params,  only: nmodes_oslo => nmodes
+  use oslo_aero_share,   only: nmodes_oslo => nmodes
   use oslo_aero_share,   only: CalculateNumberConcentration, calculateNumberMedianRadius
   use oslo_aero_share,   only: MODE_IDX_DST_A2, MODE_IDX_DST_A3, MODE_IDX_OMBC_INTMIX_COAT_AIT
   use oslo_aero_share,   only: getNumberOfTracersInMode, getTracerIndex

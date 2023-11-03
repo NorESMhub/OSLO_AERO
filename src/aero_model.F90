@@ -31,11 +31,11 @@ module aero_model
   use ref_pres,                 only: top_lev => clim_modal_aero_top_lev
   use wv_saturation,            only: qsat_water
   !
-  use oslo_aero_params,         only: nmodes_oslo=>nmodes, nbmodes
-  use oslo_aero_params,         only: originalSigma, originalNumberMedianRadius
-  use oslo_aero_const,          only: init_interp_constants
-  use oslo_aero_const,          only: rTabMin, rTabMax, nk, normnk, rBinEdge, rBinMidpoint
-  use oslo_aero_const,          only: volumeToNumber, numberToSurface, nBinsTab, rMinAquousChemistry
+  use oslo_aero_share,         only: nmodes_oslo=>nmodes, nbmodes
+  use oslo_aero_share,         only: originalSigma, originalNumberMedianRadius
+  use oslo_aero_share,          only: init_interp_constants
+  use oslo_aero_share,          only: rTabMin, rTabMax, nk, normnk, rBinEdge, rBinMidpoint
+  use oslo_aero_share,          only: volumeToNumber, numberToSurface, nBinsTab, rMinAquousChemistry
   use oslo_aero_share,          only: calculateLognormalCDF, calculatedNdLogR, calculateNumberConcentration
   use oslo_aero_share,          only: calculateEquivalentDensityOfFractalMode
   use oslo_aero_share,          only: numberFractionAvailableAqChem, isTracerInMode
