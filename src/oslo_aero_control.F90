@@ -80,7 +80,7 @@ contains
     call mpi_bcast(dms_source_type, len(dms_source_type), mpi_character, mstrid, mpicom, ierr)
     if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: dms_source_type")
     call mpi_bcast(dms_cycle_year, 1, mpi_integer, mstrid, mpicom, ierr)
-    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: cms_cycle_type")
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: dms_cycle_type")
 
     ! opom variables
     call mpi_bcast(opom_source, len(opom_source), mpi_character, mstrid, mpicom, ierr)
@@ -126,10 +126,12 @@ contains
        else
           write(iulog,*)"DMS emission source is : "// trim(dms_source)
        endif
-    elseif(dms_source=='kettle' .or.  dms_source=='lana' .or. dms_source=='emission_file')then
+    else if ( dms_source =='kettle'     .or. &
+              dms_source =='lana'       .or. &
+              dms_source =='emission_file') then
        write(iulog,*)"DMS emission source is : "// trim(dms_source)
     else
-       call endrun("oslo_control: no valid dms source from namelist: " //trim(dms_source))
+       call endrun("oslo_aero_control: no valid dms source from namelist: " //trim(dms_source))
     endif
     
     ! Error check for opom_source from namelist
