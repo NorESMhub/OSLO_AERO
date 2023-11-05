@@ -33,31 +33,31 @@ module oslo_aero_coag
   integer, parameter, public :: numberOfCoagulationReceivers = 6
   integer, parameter, public :: numberOfAddCoagReceivers = 6
 
-  real(r8), public :: normalizedCoagulationSink(0:nmodes,0:nmodes) ![m3/#/s]
-  real(r8), public :: NCloudCoagulationSink(0:nmodes)              ![m3/#/s]
-  real(r8), public :: normCoagSinkAdd(numberOfAddCoagReceivers)    ![m3/#/s]
+  real(r8), public :: normalizedCoagulationSink(0:nmodes,0:nmodes) ! [m3/#/s]
+  real(r8), public :: NCloudCoagulationSink(0:nmodes)              ! [m3/#/s]
+  real(r8), public :: normCoagSinkAdd(numberOfAddCoagReceivers)    ! [m3/#/s]
 
-  !These are the modes which are coagulating (belonging to mixtures no. 0, 1, 2, 4, 12, 14)
+  ! These are the modes which are coagulating (belonging to mixtures no. 0, 1, 2, 4, 12, 14)
   integer , parameter :: numberOfCoagulatingModes = 6
   integer, public :: coagulatingMode(numberOfCoagulatingModes) =    &
-       (/MODE_IDX_BC_EXT_AC                                               &  !inert mode
-       , MODE_IDX_SO4SOA_AIT, MODE_IDX_BC_AIT, MODE_IDX_OMBC_INTMIX_COAT_AIT &  !internally mixed small modes
-       , MODE_IDX_BC_NUC, MODE_IDX_OMBC_INTMIX_AIT /)      !externally mixed small modes
+       (/MODE_IDX_BC_EXT_AC                                               &  ! inert mode
+       , MODE_IDX_SO4SOA_AIT, MODE_IDX_BC_AIT, MODE_IDX_OMBC_INTMIX_COAT_AIT &  ! internally mixed small modes
+       , MODE_IDX_BC_NUC, MODE_IDX_OMBC_INTMIX_AIT /)      ! externally mixed small modes
 
-  !These are the modes which are receiving coagulating material in OsloAero
+  ! These are the modes which are receiving coagulating material in OsloAero
   ! (belonging to mixtures no. 5, 6, 7, 8, 9, 10)
   integer, public :: receiverMode(numberOfCoagulationReceivers) = &
        (/MODE_IDX_SO4_AC,MODE_IDX_DST_A2, MODE_IDX_DST_A3, MODE_IDX_SS_A1, MODE_IDX_SS_A2, MODE_IDX_SS_A3 /)
 
-  !And these are the additional modes which are allowed to contribute to the
+  ! And these are the additional modes which are allowed to contribute to the
   ! coagulation sink, defined here and to be used only in the nucleation code in condtend.F90
   ! (belonging to mixtures no. 0, 1, 2, 4, 12, 14)
   integer, public :: addReceiverMode(numberOfAddCoagReceivers) = &
        (/MODE_IDX_BC_EXT_AC,MODE_IDX_SO4SOA_AIT,MODE_IDX_BC_AIT, &
          MODE_IDX_OMBC_INTMIX_COAT_AIT,MODE_IDX_BC_NUC,MODE_IDX_OMBC_INTMIX_AIT /)
 
-  !Coagulation moves aerosol mass to the "coagulate" species, so some
-  !lifecycle species will receive mass in this routine!
+  ! Coagulation moves aerosol mass to the "coagulate" species, so some
+  ! lifecycle species will receive mass in this routine!
   integer :: lifeCycleReceiver(gas_pcnst)
 
   ! Coagulation between aerosol and cloud droplets move coagulate into
@@ -72,10 +72,10 @@ module oslo_aero_coag
   integer :: tableindexcloud
 
   real(r8), parameter :: rcoagdroplet = 10.e-6   ! m
-  real(r8), parameter :: kboltzmann = 1.3806488e-23_r8       ![m2 kg s-2 K-1]
-  real(r8), parameter :: temperatureLookupTables = 293.15_r8 !Temperature used in look up tables
-  real(r8), parameter :: mfpAir = 63.3e-9_r8                 ![m] mean free path air
-  real(r8), parameter :: viscosityAir = 1.983e-5_r8          ![Pa s] viscosity of air
+  real(r8), parameter :: kboltzmann = 1.3806488e-23_r8       ! [m2 kg s-2 K-1]
+  real(r8), parameter :: temperatureLookupTables = 293.15_r8 ! Temperature used in look up tables
+  real(r8), parameter :: mfpAir = 63.3e-9_r8                 ! [m] mean free path air
+  real(r8), parameter :: viscosityAir = 1.983e-5_r8          ! [Pa s] viscosity of air
   real(r8), parameter :: rhoh2o = 1000._r8                   ! Density of water
 
 !================================================================
@@ -85,22 +85,22 @@ contains
   subroutine initializeCoagulation(rhob,rk)
 
     ! arguments
-    real(r8), intent(in) :: rk(0:nmodes)   ![unit] radius of background (receiver) mode
-    real(r8), intent(in) :: rhob(0:nmodes) !density of background mode
+    real(r8), intent(in) :: rk(0:nmodes)   ! [unit] radius of background (receiver) mode
+    real(r8), intent(in) :: rhob(0:nmodes) ! density of background mode
 
     ! local variables
-    real(r8), dimension(numberOfCoagulationReceivers, numberOfCoagulatingModes, nBinsTab) :: K12 = 0.0_r8  !Coagulation coefficient (m3/s)
-    real(r8), dimension(numberOfAddCoagReceivers,nBinsTab) :: CoagCoeffModeAdd = 0.0_r8  !Coagulation coefficient mode 1 (m3/s)
-    real(r8), dimension(numberOfCoagulatingModes,nBinsTab) :: K12Cl = 0.0_r8  !Coagulation coefficient (m3/s)
+    real(r8), dimension(numberOfCoagulationReceivers, numberOfCoagulatingModes, nBinsTab) :: K12 = 0.0_r8  ! Coagulation coefficient (m3/s)
+    real(r8), dimension(numberOfAddCoagReceivers,nBinsTab) :: CoagCoeffModeAdd = 0.0_r8  ! Coagulation coefficient mode 1 (m3/s)
+    real(r8), dimension(numberOfCoagulatingModes,nBinsTab) :: K12Cl = 0.0_r8  ! Coagulation coefficient (m3/s)
     real(r8), dimension(nBinsTab) :: coagulationCoefficient
     !
     integer :: aMode
     integer :: modeIndex
-    integer :: modeIndexCoagulator  !Index of coagulating mode
-    integer :: modeIndexReceiver    !Index of receiving mode
-    integer :: iCoagulatingMode     !Counter for coagulating mode
-    integer :: iReceiverMode        !Counter for receiver modes
-    integer :: nsiz                 !counter for look up table sizes
+    integer :: modeIndexCoagulator  ! Index of coagulating mode
+    integer :: modeIndexReceiver    ! Index of receiving mode
+    integer :: iCoagulatingMode     ! Counter for coagulating mode
+    integer :: iReceiverMode        ! Counter for receiver modes
+    integer :: nsiz                 ! counter for look up table sizes
     !
     integer                        :: iChem
     character(len=fieldname_len+3) :: fieldname_receiver
@@ -115,26 +115,26 @@ contains
 
     lifeCycleReceiver(:) = -99
     lifeCycleReceiver(chemistryIndex(l_bc_ax))  = chemistryIndex(l_bc_ac)
-    lifeCycleReceiver(chemistryIndex(l_so4_na)) = chemistryIndex(l_so4_ac) !create so4 coagulate from so4 in mode 1
-    lifeCycleReceiver(chemistryIndex(l_bc_a))   = chemistryIndex(l_bc_ac)  !create bc coagulate  from bc in mode 2
-    lifeCycleReceiver(chemistryIndex(l_bc_ai))  = chemistryIndex(l_bc_ac)  !create bc coagulate from bc in mode 4
-    lifeCycleReceiver(chemistryIndex(l_om_ai))  = chemistryIndex(l_om_ac)  !create om coagulate from om in mode 4
-    lifeCycleReceiver(chemistryIndex(l_bc_n))   = chemistryIndex(l_bc_ac)  !create bc coagulate from bc in mode 12
-    lifeCycleReceiver(chemistryIndex(l_bc_ni))  = chemistryIndex(l_bc_ac)  !create bc coagulate from om in mode 14
-    lifeCycleReceiver(chemistryIndex(l_om_ni))  = chemistryIndex(l_om_ac)  !create om coagulate from om in mode 14
-    lifeCycleReceiver(chemistryIndex(l_so4_a1)) = chemistryIndex(l_so4_ac) !Create so4 coagulate from so4 condensate
+    lifeCycleReceiver(chemistryIndex(l_so4_na)) = chemistryIndex(l_so4_ac) ! create so4 coagulate from so4 in mode 1
+    lifeCycleReceiver(chemistryIndex(l_bc_a))   = chemistryIndex(l_bc_ac)  ! create bc coagulate  from bc in mode 2
+    lifeCycleReceiver(chemistryIndex(l_bc_ai))  = chemistryIndex(l_bc_ac)  ! create bc coagulate from bc in mode 4
+    lifeCycleReceiver(chemistryIndex(l_om_ai))  = chemistryIndex(l_om_ac)  ! create om coagulate from om in mode 4
+    lifeCycleReceiver(chemistryIndex(l_bc_n))   = chemistryIndex(l_bc_ac)  ! create bc coagulate from bc in mode 12
+    lifeCycleReceiver(chemistryIndex(l_bc_ni))  = chemistryIndex(l_bc_ac)  ! create bc coagulate from om in mode 14
+    lifeCycleReceiver(chemistryIndex(l_om_ni))  = chemistryIndex(l_om_ac)  ! create om coagulate from om in mode 14
+    lifeCycleReceiver(chemistryIndex(l_so4_a1)) = chemistryIndex(l_so4_ac) ! Create so4 coagulate from so4 condensate
     lifeCycleReceiver(chemistryINdex(l_soa_na)) = chemistryIndex(l_soa_a1)
 
     CloudAerReceiver(:) = -99
     CloudAerReceiver(chemistryIndex(l_bc_ax))  = chemistryIndex(l_bc_ac)
-    CloudAerReceiver(chemistryIndex(l_so4_na)) = chemistryIndex(l_so4_a2) !create so4 coagulate from so4 in mode 1
-    CloudAerReceiver(chemistryIndex(l_bc_a))   = chemistryIndex(l_bc_ac)  !create bc coagulate  from bc in mode 2
-    CloudAerReceiver(chemistryIndex(l_bc_ai))  = chemistryIndex(l_bc_ac)  !create bc coagulate from bc in mode 4
-    CloudAerReceiver(chemistryIndex(l_om_ai))  = chemistryIndex(l_om_ac)  !create om coagulate from om in mode 4
-    CloudAerReceiver(chemistryIndex(l_bc_n))   = chemistryIndex(l_bc_ac)  !create bc coagulate from bc in mode 12
-    CloudAerReceiver(chemistryIndex(l_bc_ni))  = chemistryIndex(l_bc_ac)  !create bc coagulate from om in mode 14
-    CloudAerReceiver(chemistryIndex(l_om_ni))  = chemistryIndex(l_om_ac)  !create om coagulate from om in mode 14
-    CloudAerReceiver(chemistryIndex(l_so4_a1)) = chemistryIndex(l_so4_a2) !Create so4 coagulate from so4 condensate
+    CloudAerReceiver(chemistryIndex(l_so4_na)) = chemistryIndex(l_so4_a2) ! create so4 coagulate from so4 in mode 1
+    CloudAerReceiver(chemistryIndex(l_bc_a))   = chemistryIndex(l_bc_ac)  ! create bc coagulate  from bc in mode 2
+    CloudAerReceiver(chemistryIndex(l_bc_ai))  = chemistryIndex(l_bc_ac)  ! create bc coagulate from bc in mode 4
+    CloudAerReceiver(chemistryIndex(l_om_ai))  = chemistryIndex(l_om_ac)  ! create om coagulate from om in mode 4
+    CloudAerReceiver(chemistryIndex(l_bc_n))   = chemistryIndex(l_bc_ac)  ! create bc coagulate from bc in mode 12
+    CloudAerReceiver(chemistryIndex(l_bc_ni))  = chemistryIndex(l_bc_ac)  ! create bc coagulate from om in mode 14
+    CloudAerReceiver(chemistryIndex(l_om_ni))  = chemistryIndex(l_om_ac)  ! create om coagulate from om in mode 14
+    CloudAerReceiver(chemistryIndex(l_so4_a1)) = chemistryIndex(l_so4_a2) ! Create so4 coagulate from so4 condensate
     cloudAerReceiver(chemistryIndex(l_soa_na)) = chemistryIndex(l_soa_a1)
 
     !-------------------------------------
@@ -144,111 +144,111 @@ contains
     do iReceiverMode = 1, numberOfCoagulationReceivers
        do iCoagulatingMode = 1,numberOfCoagulatingModes
 
-          !Index of the coagulating mode (0-14), see list above
+          ! Index of the coagulating mode (0-14), see list above
           modeIndexCoagulator = coagulatingMode(iCoagulatingMode)
 
-          !Index of receiver mode (0-14), see list above
+          ! Index of receiver mode (0-14), see list above
           modeIndexReceiver = receiverMode(iReceiverMode)
 
-          !Pre-calculate coagulation coefficients for this coagulator..
-          !Note: Not using actual density of coagulator here
-          !Since this is not known at init-time
+          ! Pre-calculate coagulation coefficients for this coagulator..
+          ! Note: Not using actual density of coagulator here
+          ! Since this is not known at init-time
           call calculateCoagulationCoefficient( &
-               CoagulationCoefficient,          & !O [m3/s] coagulation coefficient
-               rk(modeIndexCoagulator),         & !I [m] radius of coagulator
-               rhob(modeIndexCoagulator),       & !I [kg/m3] density of coagulator
-               rhob(modeIndexReceiver) )          !I [kg/m3] density of receiver
+               CoagulationCoefficient,          & ! O [m3/s] coagulation coefficient
+               rk(modeIndexCoagulator),         & ! I [m] radius of coagulator
+               rhob(modeIndexCoagulator),       & ! I [kg/m3] density of coagulator
+               rhob(modeIndexReceiver) )          ! I [kg/m3] density of receiver
 
-          !Save values
+          ! Save values
           K12(iReceiverMode,iCoagulatingMode,:) = CoagulationCoefficient(:)
        enddo
-    end do !receiver modes
+    end do ! receiver modes
 
     do iReceiverMode = 1, numberOfAddCoagReceivers
        iCoagulatingMode = 1
 
-       !Index of the coagulating mode (0-14), see list above
+       ! Index of the coagulating mode (0-14), see list above
        modeIndexCoagulator = coagulatingMode(iCoagulatingMode)
 
-       !Index of receiver mode (0-14), see list above
+       ! Index of receiver mode (0-14), see list above
        modeIndexReceiver = addReceiverMode(iReceiverMode)
 
-       !Pre-calculate coagulation coefficients for this coagulator..
-       !Note: Not using actual density of coagulator here
-       !Since this is not known at init-time
-       call calculateCoagulationCoefficient(CoagulationCoefficient    & !O [m3/s] coagulation coefficient
-            , rk(modeIndexCoagulator)                 & !I [m] radius of coagulator
-            , rhob(modeIndexCoagulator)               & !I [kg/m3] density of coagulator
-            , rhob(modeIndexReceiver) )                 !I [kg/m3] density of receiver
+       ! Pre-calculate coagulation coefficients for this coagulator..
+       ! Note: Not using actual density of coagulator here
+       ! Since this is not known at init-time
+       call calculateCoagulationCoefficient(CoagulationCoefficient    & ! O [m3/s] coagulation coefficient
+            , rk(modeIndexCoagulator)                 & ! I [m] radius of coagulator
+            , rhob(modeIndexCoagulator)               & ! I [kg/m3] density of coagulator
+            , rhob(modeIndexReceiver) )                 ! I [kg/m3] density of receiver
 
-       !Save values
+       ! Save values
        CoagCoeffModeAdd(iReceiverMode,:) = CoagulationCoefficient(:)
 
-    end do !receiver modes
+    end do ! receiver modes
 
-    ! Onl one receivermode for cloud coagulation (water)
+    ! Only one receivermode for cloud coagulation (water)
     do iCoagulatingMode = 1,numberOfCoagulatingModes
 
-       !Index of the coagulating mode (0-14), see list above
+       ! Index of the coagulating mode (0-14), see list above
        modeIndexCoagulator = coagulatingMode(iCoagulatingMode)
 
-       !Pre-calculate coagulation coefficients for this coagulator..
-       !Note: Not using actual density of coagulator here
-       !Since this is not known at init-time
-       call calculateCoagulationCoefficient(CoagulationCoefficient    & !O [m3/s] coagulation coefficient
-            , rk(modeIndexCoagulator)                 & !I [m] radius of coagulator
-            , rhob(modeIndexCoagulator)               & !I [kg/m3] density of coagulator
-            , rhoh2o )                 !I [kg/m3] density of receiver
+       ! Pre-calculate coagulation coefficients for this coagulator..
+       ! Note: Not using actual density of coagulator here
+       ! Since this is not known at init-time
+       call calculateCoagulationCoefficient(CoagulationCoefficient & ! O [m3/s] coagulation coefficient
+            , rk(modeIndexCoagulator)                              & ! I [m] radius of coagulator
+            , rhob(modeIndexCoagulator)                            & ! I [kg/m3] density of coagulator
+            , rhoh2o )                                               ! I [kg/m3] density of receiver
 
-       !Save values
+       ! Save values
        K12Cl(iCoagulatingMode,:) = CoagulationCoefficient(:)
 
     enddo
 
-    !We don't need to remember K12 for all lookuptable sizes!!
-    !We only need to rember for 1 [#/m3] of each receiver mode
-    !and then later scale by number concentration in receiver modes
+    ! We don't need to remember K12 for all lookuptable sizes
+    ! We only need to rember for 1 [#/m3] of each receiver mode
+    ! and then later scale by number concentration in receiver modes
     normalizedCoagulationSink(:,:) = 0.0_r8
 
     do iCoagulatingMode = 1, numberOfCoagulatingModes
 
-       !Sum the loss for all possible receivers
+       ! Sum the loss for all possible receivers
        do iReceiverMode = 1, numberOfCoagulationReceivers
 
-          modeIndexCoagulator = coagulatingMode(iCoagulatingMode) !Index of the coagulating mode
+          modeIndexCoagulator = coagulatingMode(iCoagulatingMode) ! Index of the coagulating mode
 
-          modeIndexReceiver = receiverMode(iReceiverMode) !Index of receiver mode
+          modeIndexReceiver = receiverMode(iReceiverMode) ! Index of receiver mode
 
-          do nsiz=1,nBinsTab  !aerotab bin sizes
+          do nsiz=1,nBinsTab  ! aerotab bin sizes
 
-             !Sum up coagulation sink for this coagulating species (for all receiving modes)
-             normalizedCoagulationSink(modeIndexReceiver, modeIndexCoagulator)      =   & ![m3/#/s]
-                  normalizedCoagulationSink(modeIndexReceiver, modeIndexCoagulator)    &  ![m3/#/s] Previous value
-                  + normnk(modeIndexReceiver, nsiz)          &                            !Normalized size distribution for receiver mode
-                  * K12(iReceiverMode, iCoagulatingMode, nsiz)                            !Coagulation coefficient (m3/#/s)
+             ! Sum up coagulation sink for this coagulating species (for all receiving modes)
+             normalizedCoagulationSink(modeIndexReceiver, modeIndexCoagulator)      = & ! [m3/#/s]
+                  normalizedCoagulationSink(modeIndexReceiver, modeIndexCoagulator)   & ! [m3/#/s] Previous value
+                  + normnk(modeIndexReceiver, nsiz)                                   & ! Normalized size distribution for receiver mode
+                  * K12(iReceiverMode, iCoagulatingMode, nsiz)                          ! Coagulation coefficient (m3/#/s)
 
-          end do !Look up table size
-       end do    !receiver modes
-    end do       !coagulator
+          end do ! Look up table size
+       end do    ! receiver modes
+    end do       ! coagulator
 
 
-    !Calculate additional coagulation sink for mode 1 in such a way that it
-    !affects coagulationSink but not the lifecycling (directly) otherwise
+    ! Calculate additional coagulation sink for mode 1 in such a way that it
+    ! affects coagulationSink but not the lifecycling (directly) otherwise
 
-    !Sum the loss for all possible receivers
+    ! Sum the loss for all possible receivers
     normCoagSinkAdd(:) = 0.0_r8
     iCoagulatingMode = 1
     do iReceiverMode = 1, numberOfAddCoagReceivers
-       modeIndexReceiver = addReceiverMode(iReceiverMode) !Index of additional receiver mode
+       modeIndexReceiver = addReceiverMode(iReceiverMode) ! Index of additional receiver mode
 
-       do nsiz=1,nBinsTab  !aerotab bin sizes
-          !Sum up coagulation sink for this coagulating species (for all receiving modes)
-          normCoagSinkAdd(iReceiverMode)      =  &     ![m3/#/s]
-               normCoagSinkAdd(iReceiverMode)    &     ![m3/#/s] Previous value
-               + normnk(modeIndexReceiver, nsiz) &     !Normalized size distribution for receiver mode
-               * CoagCoeffModeAdd(iReceiverMode, nsiz) !Koagulation coefficient (m3/#/s)
-       end do !Look up table size
-    end do    !receiver modes
+       do nsiz=1,nBinsTab  ! aerotab bin sizes
+          ! Sum up coagulation sink for this coagulating species (for all receiving modes)
+          normCoagSinkAdd(iReceiverMode)      =  &     ! [m3/#/s]
+               normCoagSinkAdd(iReceiverMode)    &     ! [m3/#/s] Previous value
+               + normnk(modeIndexReceiver, nsiz) &     ! Normalized size distribution for receiver mode
+               * CoagCoeffModeAdd(iReceiverMode, nsiz) ! Koagulation coefficient (m3/#/s)
+       end do ! Look up table size
+    end do    ! receiver modes
 
     nsiz=1
     do while (rBinMidPoint(nsiz).lt.rcoagdroplet.and.nsiz.lt.nBinsTab)
@@ -264,10 +264,10 @@ contains
          coagulation ',rcoagdroplet, ' nbin ',tableindexcloud,'binmid',rBinMidPoint(tableindexcloud)
 
     do iCoagulatingMode = 1, numberOfCoagulatingModes
-       modeIndexCoagulator = coagulatingMode(iCoagulatingMode) !Index of the coagulating mode
+       modeIndexCoagulator = coagulatingMode(iCoagulatingMode) ! Index of the coagulating mode
 
-       NCloudCoagulationSink(modeIndexCoagulator) =   & ![m3/#/s]
-            K12Cl(iCoagulatingMode, tableindexcloud)    !Koagulation coefficient (m3/#/s)
+       NCloudCoagulationSink(modeIndexCoagulator) =   & ! [m3/#/s]
+            K12Cl(iCoagulatingMode, tableindexcloud)    ! Koagulation coefficient (m3/#/s)
     end do
 
     !-------------------------------------
@@ -278,7 +278,7 @@ contains
 
     isAlreadyOnList(:) = .FALSE.
     do iChem = 1,gas_pcnst
-       !Does this tracer have a receiver? If yes: It contributes to coagulation
+       ! Does this tracer have a receiver? If yes: It contributes to coagulation
        if(lifeCycleReceiver(iChem) .gt. 0)then
           unit = "kg/m2/s"
           fieldname_donor = trim(solsym(iChem))//"coagTend"
@@ -318,49 +318,48 @@ contains
   !================================================================
   subroutine calculateCoagulationCoefficient(CoagulationCoefficient, modeRadius, modeDensity, receiverDensity)
 
-    !Calculates coagulation coefficient for a coagulator mode
-    !with a given radius with all look-up table modes
+    ! Calculates coagulation coefficient for a coagulator mode
+    ! with a given radius with all look-up table modes
 
     real(r8), intent(in)  :: modeRadius      ! [m] (?)
     real(r8), intent(in)  :: modeDensity     ! [kg/m3] densityi
     real(r8), intent(in)  :: receiverDensity ! [kg/m3] density of receiver
-    real(r8), intent(out), dimension(:)  :: coagulationCoefficient ![m3/s]
+    real(r8), intent(out), dimension(:)  :: coagulationCoefficient ! [m3/s]
 
-    integer  :: i     !Counter for look-up tables
-    real(r8) :: diff1 ![m2/s] diffusivity
-    real(r8) :: diff2 ![m2/s] diffusivity
-    real(r8) :: g12   ![-] factor
-    real(r8) :: g1    ![-] factor
-    real(r8) :: g2    ![-] factor
-    real(r8) :: c12   ![m/s] average particle thermal velocity
-    real(r8) :: c1    ![m/s] particle thermal velocity
-    real(r8) :: c2    ![m/s] particle thermal velocity
-    real(r8) :: mfv1  ![m] mean free path particle
-    real(r8) :: mfv2  ![m] mean free path particle
+    integer  :: i     ! Counter for look-up tables
+    real(r8) :: diff1 ! [m2/s] diffusivity
+    real(r8) :: diff2 ! [m2/s] diffusivity
+    real(r8) :: g12   ! [-] factor
+    real(r8) :: g1    ! [-] factor
+    real(r8) :: g2    ! [-] factor
+    real(r8) :: c12   ! [m/s] average particle thermal velocity
+    real(r8) :: c1    ! [m/s] particle thermal velocity
+    real(r8) :: c2    ! [m/s] particle thermal velocity
+    real(r8) :: mfv1  ! [m] mean free path particle
+    real(r8) :: mfv2  ! [m] mean free path particle
 
-    !     coagulation coefficient for SO4 (Brownian, Fuchs form)
-    !Loop through indexes in look-up table
+    ! coagulation coefficient for SO4 (Brownian, Fuchs form)
+    ! loop through indexes in look-up table
     do i=1,nBinsTab
-       c1=calculateThermalVelocity(rBinMidPoint(i), receiverDensity)     !receiving size
-       c2=calculateThermalVelocity(modeRadius, modeDensity)    !coagulating aerosol
+       c1=calculateThermalVelocity(rBinMidPoint(i), receiverDensity) !receiving size
+       c2=calculateThermalVelocity(modeRadius, modeDensity)          !coagulating aerosol
        c12=sqrt(c1**2+c2**2)
 
-       diff1 = calculateParticleDiffusivity(rBinMidPoint(i))             !receiving particle
-       diff2 = calculateParticleDiffusivity(modeRadius)        !coagulating particle
+       diff1 = calculateParticleDiffusivity(rBinMidPoint(i))         !receiving particle
+       diff2 = calculateParticleDiffusivity(modeRadius)              !coagulating particle
 
-       mfv1=calculateMeanFreePath(diff1,c1)  !receiving particle
-       mfv2=calculateMeanFreePath(diff2,c2)  !coagulating particle
+       mfv1=calculateMeanFreePath(diff1,c1)                          !receiving particle
+       mfv2=calculateMeanFreePath(diff2,c2)                          !coagulating particle
 
        g1 = calculateGFactor(rBinMidPoint(i), mfv1)
        g2 = calculateGFactor(modeRadius, mfv2)
 
        g12=sqrt(g1**2+g2**2)
 
-       !Coagulation coefficient of receiver size "i" with the coagulating
-       !mode "kcomp"
-       CoagulationCoefficient(i) =  &
-            4.0_r8*pi*(rBinMidPoint(i)+modeRadius)*(diff1+diff2)          &
-            /((rBinMidPoint(i)+modeRadius)/(rBinMidPoint(i)+modeRadius+g12)         &
+       !Coagulation coefficient of receiver size "i" with the coagulating mode "kcomp"
+       CoagulationCoefficient(i) =                                          &
+            4.0_r8*pi*(rBinMidPoint(i)+modeRadius)*(diff1+diff2)            &
+            /((rBinMidPoint(i)+modeRadius)/(rBinMidPoint(i)+modeRadius+g12) &
             +(4.0_r8/c12)*(diff1+diff2)/(modeRadius+rBinMidPoint(i)))
 
     enddo ! loop on imax
@@ -384,25 +383,25 @@ contains
     integer, intent(in)     :: lchnk            ! [] chnk id needed for output
 
     ! local
-    integer           :: k                   ! level counter
-    integer           :: i                   ! horizontal counter
-    integer           :: m                   ! Species counter
-    integer           :: iCoagulator         !counter for species coagulating
-    integer           :: iReceiver           !counter for species receiving coagulate
-    integer           :: iSpecie             !counter for species in mode
-    integer           :: nsiz                !loop up table size
-    integer           :: l_index_receiver
-    integer           :: l_index_donor
-    integer           :: modeIndexCoagulator !Index of coagulating mode
-    integer           :: modeIndexReceiver   !Index of receiving mode
-    real(r8)          :: rhoAir              ![kg/m3] air density
-    real(r8)          :: coagulationSink     ![1/s] loss for coagulating specie
-    real(r8)          :: numberConcentration(numberOfCoagulationReceivers) ![#/m3] number concentration
-    real(r8)          :: totalLoss(pcols,pver,gas_pcnst) ![kg/kg] tracer lost
-    character(128)    :: long_name                       ![-] needed for diagnostics
-    real(r8)          :: coltend(pcols, gas_pcnst)
-    real(r8)          :: tracer_coltend(pcols)
-    logical           :: history_aerosol
+    integer        :: k                   ! level counter
+    integer        :: i                   ! horizontal counter
+    integer        :: m                   ! Species counter
+    integer        :: iCoagulator         ! counter for species coagulating
+    integer        :: iReceiver           ! counter for species receiving coagulate
+    integer        :: iSpecie             ! counter for species in mode
+    integer        :: nsiz                ! loop up table size
+    integer        :: l_index_receiver
+    integer        :: l_index_donor
+    integer        :: modeIndexCoagulator ! Index of coagulating mode
+    integer        :: modeIndexReceiver   ! Index of receiving mode
+    real(r8)       :: rhoAir              ! [kg/m3] air density
+    real(r8)       :: coagulationSink     ! [1/s] loss for coagulating specie
+    real(r8)       :: numberConcentration(numberOfCoagulationReceivers) ! [#/m3] number concentration
+    real(r8)       :: totalLoss(pcols,pver,gas_pcnst) ! [kg/kg] tracer lost
+    character(128) :: long_name           ! [-] needed for diagnostics
+    real(r8)       :: coltend(pcols, gas_pcnst)
+    real(r8)       :: tracer_coltend(pcols)
+    logical        :: history_aerosol
 
     totalLoss(:,:,:)=0.0_r8
 
@@ -411,31 +410,31 @@ contains
     do k=1,pver
        do i=1,ncol
 
-          !Air density
+          ! Air density
           rhoAir = pmid(i,k)/rair/temperature(i,k)
 
-          !Initialize number concentration for all receivers
+          ! Initialize number concentration for all receivers
           numberConcentration(:) = 0.0_r8
 
-          !Go though all modes receiving coagulation
+          ! Go though all modes receiving coagulation
           do ireceiver = 1,numberOfCoagulationReceivers
 
-             !Go through all core species in that mode
+             ! Go through all core species in that mode
              do iSpecie = 1,getNumberOfTracersInMode(receiverMode(ireceiver))
 
-                !Find the lifecycle-specie receiving the coagulation
+                ! Find the lifecycle-specie receiving the coagulation
                 l_index_receiver = getTracerIndex(receiverMode(ireceiver) , iSpecie , .true.)
 
-                long_name = solsym(l_index_receiver) !For testing
+                long_name = solsym(l_index_receiver) ! For testing
 
 
                 if(.NOT. is_process_mode(l_index_receiver,.true.)) then
-                   !Add up the number concentration of the receiving mode
-                   numberConcentration(iReceiver) = numberConcentration(iReceiver)     &  !previous value
-                        + q(i,k,l_index_receiver)                 &  !kg/kg
-                        / rhopart(physicsIndex(l_index_receiver))    &  !*[m3/kg] ==> m3/kg
-                        * volumeToNumber(receiverMode(ireceiver)) &  ![#/m3] ==> #/kg
-                        * rhoAir                                 !#/kg ==> #/m3
+                   ! Add up the number concentration of the receiving mode
+                   numberConcentration(iReceiver) = numberConcentration(iReceiver) & !previous value
+                        + q(i,k,l_index_receiver)                                  & !kg/kg
+                        / rhopart(physicsIndex(l_index_receiver))                  & !*[m3/kg] ==> m3/kg
+                        * volumeToNumber(receiverMode(ireceiver))                  & ![#/m3] ==> #/kg
+                        * rhoAir                                                     !#/kg ==> #/m3
                 end if
              end do !Lifecycle "core" species in this mode
           enddo
@@ -455,10 +454,10 @@ contains
                 modeIndexReceiver = receiverMode(iReceiver)
 
                 !Sum up coagulation sink for this coagulating species (for all receiving modes)
-                coagulationSink =   &                                                    ![1/s]
-                     coagulationSink + &                                                   ![1/] previous value
-                     normalizedCoagulationSink(modeIndexReceiver, modeIndexCoagulator) &   ![m3/#/s]
-                     * numberConcentration(ireceiver)                       !numberConcentration (#/m3)
+                coagulationSink =                                                      & ![1/s]
+                     coagulationSink +                                                 & ![1/] previous value
+                     normalizedCoagulationSink(modeIndexReceiver, modeIndexCoagulator) & ![m3/#/s]
+                     * numberConcentration(ireceiver)                                    !numberConcentration (#/m3)
              end do    !receiver modes
 
              !SOME LIFECYCLE SPECIES CHANGE "HOST MODE" WHEN THEY PARTICIPATE
@@ -536,31 +535,31 @@ contains
        do i=1,gas_pcnst
           if(lifeCycleReceiver(i) .gt. 0)then
              long_name= trim(solsym(i))//"coagTend"
-             call outfld(long_name, coltend(:ncol,i), pcols, lchnk)
+             call outfld(long_name, coltend(:ncol,i), ncol, lchnk)
              long_name= trim(solsym(lifeCycleReceiver(i)))//"coagTend"
-             call outfld(long_name, coltend(:ncol,lifeCycleReceiver(i)),pcols,lchnk)
+             call outfld(long_name, coltend(:ncol,lifeCycleReceiver(i)), ncol, lchnk)
           end if
        end do
     endif
   end subroutine coagtend
 
   !================================================================
-  subroutine clcoag(  q, pmid, pdel, temperature, cldnum, cldfrc, delt_inverse, ncol , lchnk, im, pbuf)
+  subroutine clcoag(q, pmid, pdel, temperature, cldnum, cldfrc, delt_inverse, ncol , lchnk, im, pbuf)
 
     ! Calculate the coagulation of small aerosols with larger particles and
     ! cloud droplets. Only particles smaller that dry radius of
     ! 40 nm is assumed to have an efficient coagulation with other particles.
 
     !  input arguments
-    integer  , intent(in)    :: ncol                    ! number of horizontal grid cells (columns)
-    real(r8) , intent(inout) :: q(pcols,pver,gas_pcnst) ! TMR [kg/kg]  including moisture
-    real(r8) , intent(in)    :: pmid(pcols,pver)        ! [Pa] midpoint pressure
-    real(r8) , intent(in)    :: pdel(pcols,pver)
-    real(r8) , intent(in)    :: temperature(pcols,pver) ! [K] temperature
-    real(r8) , intent(in)    :: cldnum(:,:)             ! Droplet concentration #/kg
-    real(r8) , intent(in)    :: cldfrc(:,:)             ! Cloud volume fraction
-    real(r8) , intent(in)    :: delt_inverse            ! [1/s] inverse time step
-    integer  , intent(in)    :: lchnk                   ! [] chnk id needed for output
+    real(r8) , intent(inout) :: q(:,:,:)         ! TMR [kg/kg]  including moisture
+    real(r8) , intent(in)    :: pmid(:,:)        ! [Pa] midpoint pressure
+    real(r8) , intent(in)    :: pdel(:,:)
+    real(r8) , intent(in)    :: temperature(:,:) ! [K] temperature
+    real(r8) , intent(in)    :: cldnum(:,:)      ! Droplet concentration #/kg
+    real(r8) , intent(in)    :: cldfrc(:,:)      ! Cloud volume fraction
+    real(r8) , intent(in)    :: delt_inverse     ! [1/s] inverse time step
+    integer  , intent(in)    :: ncol             ! number of horizontal grid cells (columns)
+    integer  , intent(in)    :: lchnk            ! [] chnk id needed for output
     integer  , intent(in)    :: im
     type(physics_buffer_desc), pointer :: pbuf(:)
 
@@ -618,13 +617,14 @@ contains
 
                    !process modes don't change mode except so4 condensate which becomes coagulate instead
                    !assumed to have same sink as MODE_IDX_OMBC_INTMIX_AIT
-                   if( .NOT. is_process_mode(l_index_donor,.true.)   &
-                        .OR. ( (l_index_donor.eq.chemistryIndex(l_so4_a1))  .AND. modeIndexCoagulator .eq. MODE_IDX_OMBC_INTMIX_COAT_AIT) ) then
+                   if( .NOT. is_process_mode(l_index_donor,.true.) .or.  &
+                        ( (l_index_donor.eq.chemistryIndex(l_so4_a1)) .and. &
+                           modeIndexCoagulator == MODE_IDX_OMBC_INTMIX_COAT_AIT) ) then
 
                       !Done summing total loss of this coagulating specie
-                      cloudLoss(i,k,l_index_donor) = coagulationSink         &   !loss rate for a mode in [1/s] summed over all receivers
-                           * cldfrc(i,k)*q(i,k,l_index_donor)                     &   !* mixing ratio ==> MMR/s
-                           / delt_inverse                                 ! seconds ==> MMR
+                      cloudLoss(i,k,l_index_donor) = coagulationSink & !loss rate for a mode in [1/s] summed over all receivers
+                           * cldfrc(i,k)*q(i,k,l_index_donor)        & !* mixing ratio ==> MMR/s
+                           / delt_inverse                              ! seconds ==> MMR
 
                       !Can not loose more than we have
                       ! At present day assumed lost within the cloud
@@ -668,7 +668,7 @@ contains
        end do
     end do
 
-    !Output for diagnostics
+    ! Output for diagnostics
     if(history_aerosol)then
        coltend(:ncol,:) = 0.0_r8
        do i=1,gas_pcnst
@@ -684,9 +684,9 @@ contains
        do i=1,gas_pcnst
           if(CloudAerReceiver(i) .gt. 0)then
              long_name= trim(solsym(i))//"clcoagTend"
-             call outfld(long_name, coltend(:ncol,i), pcols, lchnk)
+             call outfld(long_name, coltend(:ncol,i), ncol, lchnk)
              long_name= trim(solsym(CloudAerReceiver(i)))//"_OCWclcoagTend"
-             call outfld(long_name, coltend(:ncol,CloudAerReceiver(i)),pcols,lchnk)
+             call outfld(long_name, coltend(:ncol,CloudAerReceiver(i)), ncol, lchnk)
           end if
        end do
     endif
@@ -704,12 +704,13 @@ contains
 
   !================================================================
   function calculateParticleDiffusivity(radius) result (diffusivity)
-    real(r8), intent(in) :: radius        ![m] particle radius
 
-    real(r8)             :: knudsenNumber ![-] knudsen number
-    real(r8)             :: diffusivity   ![m2/s] diffusivity
-    real(r8)             :: factor
-    real(r8)             :: numerator, nominator
+    real(r8), intent(in) :: radius        ![m] particle radius
+    real(r8) :: diffusivity   ![m2/s] diffusivity
+
+    real(r8) :: knudsenNumber ![-] knudsen number
+    real(r8) :: factor
+    real(r8) :: numerator, nominator
 
     !Solve eqn for diffusivity in Seinfeld/Pandis, table 12.1
     knudsenNumber = mfpAir/radius

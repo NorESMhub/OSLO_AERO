@@ -11,7 +11,16 @@ module oslo_aero_conc
   use oslo_aero_coag,        only: normalizedCoagulationSink
   use oslo_aero_condtend,    only: normalizedCondensationSink, COND_VAP_H2SO4, COND_VAP_ORG_SV
   use oslo_aero_share,       only: smallNumber, volumeToNumber,smallNumber
-  use oslo_aero_share
+  use oslo_aero_share,       only: nmodes, nbmodes
+  use oslo_aero_share,       only: istracerinmode, getNumberofBackgroundtracersInMode, getTracerIndex
+  use oslo_aero_share,       only: l_bc_ac, l_soa_a1, l_bc_ai, l_om_ai, l_bc_ni, l_om_ni, l_soa_na, l_om_ac
+  use oslo_aero_share,       only: l_so4_a1, l_so4_a2, l_so4_ac, l_so4_na
+  use oslo_aero_share,       only: solubleMassFraction, rhopart, numberOfIons, osmoticCoefficient
+  use oslo_aero_share,       only: aerosolType, aerosol_type_molecular_weight
+  use oslo_aero_share,       only: MODE_IDX_SO4SOA_AIT, MODE_IDX_BC_AIT, MODE_IDX_OMBC_INTMIX_COAT_AIT
+  use oslo_aero_share,       only: MODE_IDX_SO4_AC, MODE_IDX_SS_A3, MODE_IDX_BC_NUC
+  use oslo_aero_share,       only: originalSigma, numberFractionAvailableAqChem
+  use oslo_aero_share,       only: calculateNumberConcentration
 
   implicit none
   private

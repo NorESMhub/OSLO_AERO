@@ -103,16 +103,16 @@ module oslo_aero_share
   ! Number median radius of background emissions THESE DO NOT ASSUME IMPLICIT GROWTH!!
   real(r8), parameter :: originalNumberMedianRadius(0:nmodes) =        &
        1.e-6_r8* (/ 0.0626_r8,                                         & !0
-       0.0118_r8, 0.024_r8, 0.04_r8,  0.04_r8, 0.075_r8,  & !1-5
-       0.22_r8,   0.63_r8,   0.0475_r8, 0.30_r8, 0.75_r8, & !6-10    ! SS: Salter et al. (2015)
-       0.0118_r8, 0.024_r8, 0.04_r8,  0.04_r8    /)         !11-14
+                    0.0118_r8, 0.024_r8, 0.04_r8,  0.04_r8, 0.075_r8,  & !1-5
+                    0.22_r8,   0.63_r8,   0.0475_r8, 0.30_r8, 0.75_r8, & !6-10    ! SS: Salter et al. (2015)
+                    0.0118_r8, 0.024_r8, 0.04_r8,  0.04_r8    /)         !11-14
 
-  ! sigma of background aerosols )
+  ! sigma of background aerosols
   real(r8), parameter :: originalSigma(0:nmodes) =  &
        (/1.6_r8,                                    & !0
-       1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8, 1.59_r8,   & !1-5
-       1.59_r8, 2.0_r8, 2.1_r8, 1.72_r8, 1.60_r8, & !6-10   ! SS: Salter et al. (2015)
-       1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8  /)           !11-14
+         1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8, 1.59_r8,   & !1-5
+         1.59_r8, 2.0_r8, 2.1_r8, 1.72_r8, 1.60_r8, & !6-10   ! SS: Salter et al. (2015)
+         1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8  /)           !11-14
 
   !Radius used for the modes in the lifeCycle MAY ASSUME SOME GROWTH ALREADY HAPPENED
   real(r8), parameter :: lifeCycleNumberMedianRadius(0:nmodes) = &
@@ -121,11 +121,11 @@ module oslo_aero_share
                    0.0118_r8, 0.024_r8, 0.04_r8  , 0.04_r8    /)
 
   !Sigma based on original lifecycle code (taken from "sigmak" used previously in lifecycle code)
-  real(r8), parameter :: lifeCycleSigma(0:nmodes) =  (/1.6_r8, 1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8 &   !0-4
-       ,1.59_r8, 1.59_r8, 2.0_r8               &   !5,6,7 (SO4+dust)
-       ,2.1_r8, 1.72_r8, 1.6_r8                &   !8-10  (SS)     ! Salter et al. (2015)
-       ,1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8         &   !11-14
-       /)
+  real(r8), parameter :: lifeCycleSigma(0:nmodes) =  &
+       (/1.6_r8, 1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8, &   !0-4
+         1.59_r8, 1.59_r8, 2.0_r8,               &   !5,6,7 (SO4+dust)
+         2.1_r8, 1.72_r8, 1.6_r8,                &   !8-10  (SS)     ! Salter et al. (2015)
+         1.8_r8, 1.8_r8, 1.8_r8, 1.8_r8/)            !11-14
 
   !Below cloud scavenging coefficients for modes which have an actual size
   real(r8), parameter :: belowCloudScavengingCoefficient(0:nmodes) =     &
@@ -151,7 +151,7 @@ module oslo_aero_share
   real(r8), parameter :: aThird = 1.0_r8/3.0_r8
 
   real(r8), parameter :: e=2.718281828_r8
-  real(r8), parameter :: eps=1.0e-30_r8  
+  real(r8), parameter :: eps=1.0e-30_r8
 
   !---------------------------
   ! Public constants
@@ -178,7 +178,7 @@ module oslo_aero_share
   !        The remaining mass cate*(1-fac) or cat*(1-fac) is SO4.
   ! fbc  : mass fraction of BC from coagulating carbonaceous aerosols, BC/(BC+OM).
   ! faq  : mass fraction of sulfate which is produced in wet-phase, SO4aq/SO4.
-  !        The remaining SO4 mass, SO4*(1-faq), is from condensation. 
+  !        The remaining SO4 mass, SO4*(1-faq), is from condensation.
 
   real(r8) :: rh(10)
   real(r8) :: fombg(6), fbcbg(6), fac(6), fbc(6), faq(6)
@@ -865,7 +865,7 @@ contains
        do l=1,getNumberOfBackgroundTracersInMode(m)
           mm = getTracerIndex(m,l,.false.)
           do k=1,pver
-             numberConcentration(:ncol,k,m) = numberConcentration(:ncol,k,m) & 
+             numberConcentration(:ncol,k,m) = numberConcentration(:ncol,k,m) &
                   + ( q(:ncol,k,mm) / getDryDensity(m,l))  !Volume of this tracer
           end do
        end do
@@ -890,16 +890,16 @@ contains
     real(r8) , intent(in)  :: volumeConcentration(pcols,pver,nmodes)     ![kg/kg] mass mixing ratios
     real(r8) , intent(in)  :: lnSigma(pcols,pver,nmodes)                 ![kg/m3] air density
     integer  , intent(in)  :: ncol                                       !number of columns used
-    real(r8) , intent(out) :: numberMedianRadius(pcols,pver,nmodes)      ![m] 
+    real(r8) , intent(out) :: numberMedianRadius(pcols,pver,nmodes)      ![m]
 
     integer :: n,k
 
     do n=1,nmodes
        do k=1,pver
           where(volumeConcentration(:ncol,k,n) .gt. 1.e-20_r8)
-             numberMedianRadius(:ncol, k, n) = 0.5_r8 &                  !diameter ==> radius 
+             numberMedianRadius(:ncol, k, n) = 0.5_r8 &                  !diameter ==> radius
                   * (volumeConcentration(:ncol,k,n)       &              !conversion formula
-                  * 6.0_r8/pi/numberConcentration(:ncol,k,n) &            
+                  * 6.0_r8/pi/numberConcentration(:ncol,k,n) &
                   *DEXP(-4.5_r8*lnsigma(:ncol,k,n)*lnsigma(:ncol,k,n)))**aThird
           elsewhere
              numberMedianRadius(:ncol,k,n) = originalNumberMedianRadius(n)
@@ -914,7 +914,7 @@ contains
        emissionDensity, emissionRadius, fractalDimension, modeNumberMedianRadius, modeStandardDeviation) &
        result (equivalentDensityOfFractal)
 
-    ! output equivalent density of a fractal mode 
+    ! output equivalent density of a fractal mode
 
     ! arguments
     real(r8), intent(in) :: emissionDensity        ![kg/m3] density at point of emission
@@ -925,8 +925,8 @@ contains
     real(r8)             :: equivalentDensityOfFractal ! Output
 
     ! local variables
-    real(r8) :: sumVolume 
-    real(r8) :: sumMass 
+    real(r8) :: sumVolume
+    real(r8) :: sumMass
     real(r8) :: dN, dNdLogR, dLogR
     real(r8) :: densityBin
     integer  :: i

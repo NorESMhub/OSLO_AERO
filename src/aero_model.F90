@@ -31,8 +31,8 @@ module aero_model
   use ref_pres,                 only: top_lev => clim_modal_aero_top_lev
   use wv_saturation,            only: qsat_water
   !
-  use oslo_aero_share,         only: nmodes_oslo=>nmodes, nbmodes
-  use oslo_aero_share,         only: originalSigma, originalNumberMedianRadius
+  use oslo_aero_share,          only: nmodes_oslo=>nmodes, nbmodes
+  use oslo_aero_share,          only: originalSigma, originalNumberMedianRadius
   use oslo_aero_share,          only: init_interp_constants
   use oslo_aero_share,          only: rTabMin, rTabMax, nk, normnk, rBinEdge, rBinMidpoint
   use oslo_aero_share,          only: volumeToNumber, numberToSurface, nBinsTab, rMinAquousChemistry
@@ -153,9 +153,9 @@ contains
     call aero_model_constants
     call init_interp_constants() ! table initialization constants
     call initopt()               ! table initialization
-    call initdry()               ! table initialization
     call initlogn()              ! table initialization
 #ifdef AEROCOM
+    call initdry()               ! table initialization
     call initaeropt()            ! table initialization
 #endif
     call initializeCondensation()
@@ -669,10 +669,8 @@ contains
 
   !=============================================================================
   subroutine aero_model_constants()
-    !
-    ! A number of constants used in the emission and size-calculation in CAM-Oslo Jan 2011.
-    ! Updated by Alf Kirkev May 2013
-    ! Updated by Alf Grini February 2014
+
+    ! A number of constants used in the emission and size-calculation in CAM-Oslo
 
     ! local variables
     integer  :: kcomp,i
@@ -756,15 +754,14 @@ contains
        enddo
     enddo  ! kcomp
 
-    !++test: Normalized size distribution must sum to one (accept 2% error)
+    ! Normalized size distribution must sum to one (accept 2% error)
     do kcomp=0,nmodes_oslo
        sumNormNk = sum(normnk(kcomp,:))
        if(abs(sum(normnk(kcomp,:)) - 1.0_r8) .gt. 2.0e-2_r8)then
           print*, "sum normnk", sum(normnk(kcomp,:))
-          stop
+          call endrun()
        endif
     enddo
-    !--test
 
     ! Initialize coagulation including Calculate the coagulation coefficients
     ! Note: Inaccurate density used!
