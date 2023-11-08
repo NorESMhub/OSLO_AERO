@@ -1,7 +1,25 @@
 module oslo_aero_sw_tables
 
   ! Purpose: To read in SW look-up tables for calculation of aerosol optical properties,
-  ! and to interpolate between look-up table entries for SW optical aerosol properties.  
+  ! and to interpolate between look-up table entries for SW optical aerosol properties.
+
+  ! Purpose: To interpolate between look-up table entries for SW optical aerosol properties.
+  ! Optimized for speed by Arild Burud and Egil Storen (NoSerC), June-July 2002
+  ! Updated for new kcomp1.out including condensed SOA - Alf Kirkevaag, May 2013.
+  ! Extended for new SOA treatment for  kcomp1-4.out and treating SOA as coagulated OC
+  ! for kcomp5-10 - Alf Kirkevaag, August 2015, and also rewritten to a more generalized
+  ! for for interpolations using common subroutines interpol*dim.
+
+  ! Modified for new wavelength bands and look-up tables - Alf Kirkevaag Dec. 2013.
+  ! Updated for reading input files with extra header info - Alf Kirkevaag, May 2015.
+  ! Extended for new SOA treatment - Alf Kirkevaag, August 2015.
+  ! Added output (ASCII) Jabuary 2016: #ifdef COLTST4INTCONS -> extinction
+  ! koefficients (wrt. all added mass including condensed water vapour) are
+  ! written out for checking against the look-up tables (using xmgrace), e.g.
+  ! as function of RH (to be changed to whatever parameter the user is interested in)
+  ! Modified for optimized added masses and mass fractions for concentrations from
+  ! condensation, coagulation or cloud-processing - Alf Kirkevaag, May 2016.
+  ! Modified cate values for kcomp=2 (as  in AeroTab) - Alf Kirkevaag October 2016.
 
   ! Internal mixtures of process-tagged mass
   ! cate : total added mass (µg/m3 per particle per cm3) from condensation
@@ -16,7 +34,7 @@ module oslo_aero_sw_tables
   !        The remaining mass cate*(1-fac) or cat*(1-fac) is SO4.
   ! fbc  : mass fraction of BC from coagulating carbonaceous aerosols, BC/(BC+OM).
   ! faq  : mass fraction of sulfate which is produced in wet-phase, SO4aq/SO4.
-  !        The remaining SO4 mass, SO4*(1-faq), is from condensation. 
+  !        The remaining SO4 mass, SO4*(1-faq), is from condensation.
 
   use shr_kind_mod            , only: r8 => shr_kind_r8
   use shr_sys_mod             , only: shr_sys_abort
@@ -447,8 +465,8 @@ contains
     ! Read in lwkcompN.out tables and set module variables
     ! om[0,1,2to3,4,5-10], g[0,1,2to3,4,5-10], be[0,1,2to3,4,5-10] and ke[0,1,2to3,4,5-10]
     !
-    ! Modified for new aerosol schemes by Alf Kirkevaag in 2006. 
-    ! Modified for new wavelength bands and look-up tables by 
+    ! Modified for new aerosol schemes by Alf Kirkevaag in 2006.
+    ! Modified for new wavelength bands and look-up tables by
     ! Alf Kirkevaag in 2014 and for SOA in 2015.
     !---------------------------------------------------------------
 

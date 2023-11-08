@@ -31,7 +31,7 @@ module oslo_aero_microp
   use oslo_aero_hetfrz,       only: hetfrz_classnuc_oslo_calc, hetfrz_classnuc_oslo_save_cbaero
   use oslo_aero_nucleate_ice, only: nucleate_ice_oslo_register, nucleate_ice_oslo_init, nucleate_ice_oslo_readnl
   use oslo_aero_nucleate_ice, only: nucleate_ice_oslo_calc, use_preexisting_ice
-  use oslo_aero_share,       only: nmodes_oslo => nmodes
+  use oslo_aero_share,        only: nmodes_oslo => nmodes
   use oslo_aero_share,        only: MODE_IDX_DST_A2, MODE_IDX_DST_A3, MODE_IDX_SO4_AC, MODE_IDX_OMBC_INTMIX_COAT_AIT
   use oslo_aero_share,        only: lifeCycleNumberMedianRadius, l_dst_a2, l_dst_a3, l_bc_ai
   use oslo_aero_share,        only: getNumberOfTracersInMode, getTracerIndex, getCloudTracerIndex
@@ -156,7 +156,7 @@ contains
 
   !=========================================================================================
 
-  subroutine oslo_aero_microp_init
+  subroutine oslo_aero_microp_init()
 
     !----------------------------------------------------------------------- 
     ! Initialize constants for aerosols needed by microphysics
@@ -164,11 +164,6 @@ contains
     !-----------------------------------------------------------------------
 
     ! local variables
-    integer  :: iaer, ierr
-    integer  :: m, n, nmodes, nspec
-
-    character(len=32) :: str32
-    character(len=*), parameter :: routine = 'oslo_aero_microp_init'
     logical :: history_amwg
     !-----------------------------------------------------------------------
 
@@ -220,7 +215,6 @@ contains
     ! all units mks unless otherwise stated
     integer :: i, k, m
     integer :: itim_old
-    integer :: nmodes
     type(physics_state) :: state1                             ! Local copy of state variable
     type(physics_ptend) :: ptend_loc
     real(r8), pointer :: ast(:,:)        
@@ -365,8 +359,8 @@ contains
        end do
     end do
 
-    call outfld('WSUB',   wsub, pcols, lchnk)
-    call outfld('WSUBI', wsubi, pcols, lchnk)
+    call outfld('WSUB',   wsub(:ncol,:), ncol, lchnk)
+    call outfld('WSUBI', wsubi(:ncol,:), ncol, lchnk)
 
     if (trim(eddy_scheme) == 'CLUBB_SGS') deallocate(tke)
 
@@ -409,7 +403,7 @@ contains
        end do
     end do
 
-    call outfld('LCLOUD', lcldn, pcols, lchnk)
+    call outfld('LCLOUD', lcldn(:ncol,:), ncol, lchnk)
 
     ! If not using preexsiting ice, then only use cloudbourne aerosol for the
     ! liquid clouds. This is the same behavior as CAM5.

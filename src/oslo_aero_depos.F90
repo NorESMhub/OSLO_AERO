@@ -321,8 +321,8 @@ contains
     call calcram( ncol,landfrac, icefrac, ocnfrac, obklen, &
          ustar, ram1in, ram1, t(:,pver), pmid(:,pver), pdel(:,pver), fvin, fv)
 
-    call outfld( 'airFV', fv(:), pcols, lchnk )
-    call outfld( 'RAM1', ram1(:), pcols, lchnk )
+    call outfld( 'airFV', fv(:ncol), ncol, lchnk )
+    call outfld( 'RAM1', ram1(:ncol), ncol, lchnk )
 
     ! note that tendencies are not only in sfc layer (because of sedimentation)
     ! and that ptend is updated within each subroutine for different species
@@ -422,7 +422,7 @@ contains
                 pvmzaer(:ncol,1)=0._r8
                 pvmzaer(:ncol,2:pverp) = vlc_dry(:ncol,:,jvlc)
 
-                call outfld( trim(cnst_name(mm))//'DDV', pvmzaer(:,2:pverp), pcols, lchnk )
+                call outfld( trim(cnst_name(mm))//'DDV', pvmzaer(:ncol,2:pverp), ncol, lchnk )
 
                 ! use phil's method
                 ! convert from meters/sec to pascals/sec, use density from layer above in conversion
@@ -485,10 +485,10 @@ contains
                    endif
                 enddo
 
-                call outfld( trim(cnst_name(mm))//'DDF', sflx, pcols, lchnk)
-                call outfld( trim(cnst_name(mm))//'TBF', dep_trb, pcols, lchnk )
-                call outfld( trim(cnst_name(mm))//'GVF', dep_grv, pcols, lchnk )
-                call outfld( trim(cnst_name(mm))//'DTQ', ptend%q(:,:,mm), pcols, lchnk)
+                call outfld( trim(cnst_name(mm))//'DDF', sflx(:ncol), ncol, lchnk)
+                call outfld( trim(cnst_name(mm))//'TBF', dep_trb(:ncol), ncol, lchnk )
+                call outfld( trim(cnst_name(mm))//'GVF', dep_grv(:ncol), ncol, lchnk )
+                call outfld( trim(cnst_name(mm))//'DTQ', ptend%q(:ncol,:,mm), ncol, lchnk)
                 aerdepdryis(:ncol,mm) = sflx(:ncol)
 
              else  ! lphase == 2
@@ -524,9 +524,9 @@ contains
 
                 fldcw(1:ncol,:) = fldcw(1:ncol,:) + dqdt_tmp(1:ncol,:) * dt
 
-                call outfld( trim(getCloudTracerName(mm))//'DDF', sflx, pcols, lchnk)
-                call outfld( trim(getCloudTracerName(mm))//'TBF', dep_trb, pcols, lchnk )
-                call outfld( trim(getCloudTracerName(mm))//'GVF', dep_grv, pcols, lchnk )
+                call outfld( trim(getCloudTracerName(mm))//'DDF', sflx(:ncol), ncol, lchnk)
+                call outfld( trim(getCloudTracerName(mm))//'TBF', dep_trb(:ncol), ncol, lchnk )
+                call outfld( trim(getCloudTracerName(mm))//'GVF', dep_grv(:ncol), ncol, lchnk )
                 aerdepdrycw(:ncol,mm) = sflx(:ncol)
 
              endif
@@ -751,11 +751,11 @@ contains
 
                 ptend%q(1:ncol,:,mm) = ptend%q(1:ncol,:,mm) + dqdt_tmp(1:ncol,:)
 
-                call outfld( trim(cnst_name(mm))//'WET', dqdt_tmp(:,:), pcols, lchnk)
-                call outfld( trim(cnst_name(mm))//'SIC', icscavt, pcols, lchnk)
-                call outfld( trim(cnst_name(mm))//'SIS', isscavt, pcols, lchnk)
-                call outfld( trim(cnst_name(mm))//'SBC', bcscavt, pcols, lchnk)
-                call outfld( trim(cnst_name(mm))//'SBS', bsscavt, pcols, lchnk)
+                call outfld(trim(cnst_name(mm))//'WET', dqdt_tmp(:ncol,:), ncol, lchnk)
+                call outfld(trim(cnst_name(mm))//'SIC', icscavt(:ncol,:),  ncol, lchnk)
+                call outfld(trim(cnst_name(mm))//'SIS', isscavt(:ncol,:),  ncol, lchnk)
+                call outfld(trim(cnst_name(mm))//'SBC', bcscavt(:ncol,:),  ncol, lchnk)
+                call outfld(trim(cnst_name(mm))//'SBS', bsscavt(:ncol,:),  ncol, lchnk)
 
                 sflx(:)=0._r8
                 do k=1,pver
@@ -763,7 +763,7 @@ contains
                       sflx(i)=sflx(i)+dqdt_tmp(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
-                if (.not.convproc_do_aer) call outfld( trim(cnst_name(mm))//'SFWET', sflx, pcols, lchnk)
+                if (.not. convproc_do_aer) call outfld( trim(cnst_name(mm))//'SFWET', sflx(:ncol), ncol, lchnk)
                 aerdepwetis(:ncol,mm) = sflx(:ncol)
 
                 sflx(:)=0._r8
@@ -772,7 +772,7 @@ contains
                       sflx(i)=sflx(i)+icscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
-                if (.not.convproc_do_aer) call outfld( trim(cnst_name(mm))//'SFSIC', sflx, pcols, lchnk)
+                if (.not. convproc_do_aer) call outfld( trim(cnst_name(mm))//'SFSIC', sflx(:ncol), ncol, lchnk)
                 if (convproc_do_aer) sflxic = sflx
 
                 sflx(:)=0._r8
@@ -781,7 +781,7 @@ contains
                       sflx(i)=sflx(i)+isscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
-                call outfld( trim(cnst_name(mm))//'SFSIS', sflx, pcols, lchnk)
+                call outfld( trim(cnst_name(mm))//'SFSIS', sflx(:ncol), ncol, lchnk)
 
                 sflx(:)=0._r8
                 do k=1,pver
@@ -789,7 +789,7 @@ contains
                       sflx(i)=sflx(i)+bcscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
-                call outfld( trim(cnst_name(mm))//'SFSBC', sflx, pcols, lchnk)
+                call outfld( trim(cnst_name(mm))//'SFSBC', sflx(:ncol), ncol, lchnk)
                 if (convproc_do_aer)sflxbc = sflx
 
                 sflx(:)=0._r8
@@ -798,7 +798,7 @@ contains
                       sflx(i)=sflx(i)+bsscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
-                call outfld( trim(cnst_name(mm))//'SFSBS', sflx, pcols, lchnk)
+                call outfld( trim(cnst_name(mm))//'SFSBS', sflx(:ncol), ncol, lchnk)
 
              else   ! lphase == 2
 
@@ -839,7 +839,7 @@ contains
                       sflx(i)=sflx(i)+dqdt_tmp(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
-                call outfld( trim(getCloudTracerName(mm))//'SFWET', sflx, pcols, lchnk)
+                call outfld( trim(getCloudTracerName(mm))//'SFWET', sflx(:ncol), ncol, lchnk)
                 aerdepwetcw(:ncol,mm) = sflx(:ncol)
 
                 sflx(:)=0._r8
@@ -848,28 +848,28 @@ contains
                       sflx(i)=sflx(i)+icscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
-                call outfld( trim(getCloudTracerName(mm))//'SFSIC', sflx, pcols, lchnk)
+                call outfld( trim(getCloudTracerName(mm))//'SFSIC', sflx(:ncol), ncol, lchnk)
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
                       sflx(i)=sflx(i)+isscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
-                call outfld( trim(getCloudTracerName(mm))//'SFSIS', sflx, pcols, lchnk)
+                call outfld( trim(getCloudTracerName(mm))//'SFSIS', sflx(:ncol), ncol, lchnk)
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
                       sflx(i)=sflx(i)+bcscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
-                call outfld( trim(getCloudTracerName(mm))//'SFSBC', sflx, pcols, lchnk)
+                call outfld( trim(getCloudTracerName(mm))//'SFSBC', sflx(:ncol), ncol, lchnk)
                 sflx(:)=0._r8
                 do k=1,pver
                    do i=1,ncol
                       sflx(i)=sflx(i)+bsscavt(i,k)*pdel(i,k)/gravit
                    enddo
                 enddo
-                call outfld( trim(getCloudTracerName(mm))//'SFSBS', sflx, pcols, lchnk)
+                call outfld( trim(getCloudTracerName(mm))//'SFSBS', sflx(:ncol), ncol, lchnk)
 
              endif
 
@@ -1080,6 +1080,10 @@ contains
 
     bcphiwet(:) = 0._r8
     ocphiwet(:) = 0._r8
+    dstwet1(:)  = 0._r8
+    dstwet2(:)  = 0._r8
+    dstwet3(:)  = 0._r8
+    dstwet4(:)  = 0._r8
 
     ! derive cam_out variables from deposition fluxes
     !  note: wet deposition fluxes are negative into surface,
@@ -1139,6 +1143,10 @@ contains
     bcphodry(:) = 0._r8
     ocphidry(:) = 0._r8
     ocphodry(:) = 0._r8
+    dstdry1(:)  = 0._r8
+    dstdry2(:)  = 0._r8
+    dstdry3(:)  = 0._r8
+    dstdry4(:)  = 0._r8
 
     ! wet deposition fluxes are negative into surface,
     ! dry deposition fluxes are positive into surface.

@@ -7,10 +7,10 @@ module oslo_aero_nucleate_ice
   !  The current method is based on Liu & Penner (2005) & Liu et al. (2007)
   !  It related the ice nucleation with the aerosol number, temperature and the
   !  updraft velocity. It includes homogeneous freezing of sulfate & immersion
-  !  freezing on mineral dust (soot disabled) in cirrus clouds, and 
+  !  freezing on mineral dust (soot disabled) in cirrus clouds, and
   !  Meyers et al. (1992) deposition nucleation in mixed-phase clouds
   !
-  !  The effect of preexisting ice crystals on ice nucleation in cirrus clouds is included, 
+  !  The effect of preexisting ice crystals on ice nucleation in cirrus clouds is included,
   !  and also consider the sub-grid variability of temperature in cirrus clouds,
   !  following X. Shi et al. ACP (2014).
   !
@@ -41,7 +41,7 @@ module oslo_aero_nucleate_ice
   use cam_abortutils,    only: endrun
   !
   use oslo_aero_share,   only: l_dst_a2, l_dst_a3, MODE_IDX_DST_A2, MODE_IDX_DST_A3, rhopart, qqcw_get_field
-  use oslo_aero_share,   only: MODE_IDX_DST_A2, MODE_IDX_DST_A3, MODE_IDX_SO4_AC,MODE_IDX_OMBC_INTMIX_COAT_AIT 
+  use oslo_aero_share,   only: MODE_IDX_DST_A2, MODE_IDX_DST_A3, MODE_IDX_SO4_AC,MODE_IDX_OMBC_INTMIX_COAT_AIT
   use oslo_aero_share,   only: volumeToNumber
   use oslo_aero_share,  only: nmodes
 
@@ -74,25 +74,18 @@ module oslo_aero_nucleate_ice
   real(r8) :: ci
 
   ! constituent indices
-  integer :: &
-       cldliq_idx = -1, &
-       cldice_idx = -1, &
-       numice_idx = -1
-
-  integer :: &
-       naai_idx,     &
-       naai_hom_idx
-
-  integer :: &
-       ast_idx   = -1
-
-  integer :: &
-       qsatfac_idx
+  integer :: cldliq_idx   = -1
+  integer :: cldice_idx   = -1
+  integer :: numice_idx   = -1
+  integer :: naai_idx     = -1
+  integer :: naai_hom_idx = -1
+  integer :: ast_idx      = -1
+  integer :: qsatfac_idx  = -1
 
   real(r8), parameter :: Shet   = 1.3_r8     ! het freezing threshold
   real(r8), parameter :: rhoice = 0.5e3_r8   ! kg/m3, Wpice is not sensitive to rhoice
   real(r8), parameter :: minweff= 0.001_r8   ! m/s
-  real(r8), parameter :: gamma4=6.0_r8 
+  real(r8), parameter :: gamma4=6.0_r8
 
 !===============================================================================
 contains
@@ -205,7 +198,7 @@ contains
     endif
 
     if (use_preexisting_ice) then
-       call addfld('fhom',      (/ 'lev' /), 'A','fraction', 'Fraction of cirrus where homogeneous freezing occur'   ) 
+       call addfld('fhom',      (/ 'lev' /), 'A','fraction', 'Fraction of cirrus where homogeneous freezing occur'   )
        call addfld ('WICE',     (/ 'lev' /), 'A','m/s','Vertical velocity Reduction caused by preexisting ice'  )
        call addfld ('WEFF',     (/ 'lev' /), 'A','m/s','Effective Vertical velocity for ice nucleation' )
        call addfld ('INnso4',   (/ 'lev' /), 'A','1/m3','Number Concentation so4 (in) to ice_nucleation')
@@ -222,7 +215,7 @@ contains
        if (hist_preexisting_ice) then
           call add_default ('WSUBI   ', 1, ' ')  ! addfld/outfld calls are in microp_aero
 
-          call add_default ('fhom    ', 1, ' ') 
+          call add_default ('fhom    ', 1, ' ')
           call add_default ('WICE    ', 1, ' ')
           call add_default ('WEFF    ', 1, ' ')
           call add_default ('INnso4  ', 1, ' ')
@@ -235,8 +228,8 @@ contains
        end if
     end if
 
-    lq(l_dst_a2) = .TRUE.
-    lq(l_dst_a3) = .TRUE.
+    lq(l_dst_a2) = .true.
+    lq(l_dst_a3) = .true.
 
     ! get indices for fields in the physics buffer
     ast_idx  = pbuf_get_index('AST')
@@ -250,17 +243,17 @@ contains
   subroutine nucleate_ice_oslo_calc( state, wsubi, pbuf, dtime, ptend, numberConcentration)
 
     ! arguments
-    real(r8), intent(in)                       :: numberConcentration(pcols,pver,0:nmodes)
-    type(physics_state), target, intent(in)    :: state
-    real(r8),                    intent(in)    :: wsubi(:,:)
-    type(physics_buffer_desc),   pointer       :: pbuf(:)
-    real(r8),                    intent(in)    :: dtime
-    type(physics_ptend),         intent(out)   :: ptend
+    real(r8),                    intent(in)  :: numberConcentration(pcols,pver,0:nmodes)
+    type(physics_state), target, intent(in)  :: state
+    real(r8),                    intent(in)  :: wsubi(:,:)
+    type(physics_buffer_desc),   pointer     :: pbuf(:)
+    real(r8),                    intent(in)  :: dtime
+    type(physics_ptend),         intent(out) :: ptend
 
     ! local workspace
 
     ! naai and naai_hom are the outputs shared with the microphysics
-    real(r8), pointer :: naai(:,:)       ! number of activated aerosol for ice nucleation 
+    real(r8), pointer :: naai(:,:)       ! number of activated aerosol for ice nucleation
     real(r8), pointer :: naai_hom(:,:)   ! number of activated aerosol for ice nucleation (homogeneous freezing only)
 
     integer :: lchnk, ncol
@@ -288,18 +281,19 @@ contains
     real(r8) :: relhum(pcols,pver)  ! relative humidity
     real(r8) :: icldm(pcols,pver)   ! ice cloud fraction
 
-    real(r8) :: so4_num                               ! so4 aerosol number (#/cm^3)
-    real(r8) :: soot_num                              ! soot (hydrophilic) aerosol number (#/cm^3)
-    real(r8) :: dst1_num,dst2_num,dst3_num,dst4_num   ! dust aerosol number (#/cm^3)
-    real(r8) :: dst_num                               ! total dust aerosol number (#/cm^3)
+    real(r8) :: dst_num                      ! total dust aerosol number (#/cm^3)
+    real(r8) :: dso4_num                     ! tuning factor for increased so4
+    real(r8) :: so4_num                      ! so4 aerosol number (#/cm^3)
+    real(r8) :: soot_num                     ! soot (hydrophilic) aerosol number (#/cm^3)
     real(r8) :: wght
-    real(r8) :: dmc
-    real(r8) :: ssmc
     real(r8) :: oso4_num
     real(r8) :: odst_num
     real(r8) :: osoot_num
-    real(r8) :: dso4_num                              ! tuning factor for increased so4
-    real(r8) :: ramp                                  ! ---------- " ----------------
+    real(r8) :: so4_num_st_cr_tot
+    real(r8) :: ramp
+
+    real(r8) :: dmc
+    real(r8) :: ssmc
     real(r8) :: dust_coarse_fraction                  ! fraction of dust in coarse (a3) mode
     real(r8) :: masslost                              ! [kg/kg] tmp variable for mass lost
     real(r8) :: numberFromSmallDustMode               ! [#/cm3] number of dust activated from small mode
@@ -309,8 +303,8 @@ contains
 
     ! For pre-existing ice
     real(r8) :: fhom(pcols,pver)     ! how much fraction of cloud can reach Shom
-    real(r8) :: wice(pcols,pver)     ! diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at Shom 
-    real(r8) :: weff(pcols,pver)     ! effective Vertical velocity for ice nucleation (m/s); weff=wsubi-wice 
+    real(r8) :: wice(pcols,pver)     ! diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at Shom
+    real(r8) :: weff(pcols,pver)     ! effective Vertical velocity for ice nucleation (m/s); weff=wsubi-wice
     real(r8) :: INnso4(pcols,pver)   ! #/m3, so4 aerosol number used for ice nucleation
     real(r8) :: INnbc(pcols,pver)    ! #/m3, bc aerosol number used for ice nucleation
     real(r8) :: INndust(pcols,pver)  ! #/m3, dust aerosol number used for ice nucleation
@@ -340,13 +334,9 @@ contains
     ni    => state%q(:,:,numice_idx)
     pmid  => state%pmid
 
-    do k = top_lev, pver
-       do i = 1, ncol
-          rho(i,k) = pmid(i,k)/(rair*t(i,k))
-       end do
-    end do
+    rho(:ncol,:) = pmid(:ncol,:)/(rair*t(:ncol,:))
 
-    call physics_ptend_init(ptend, state%psetcols, 'nucleatei', lq=lq) 
+    call physics_ptend_init(ptend, state%psetcols, 'nucleatei', lq=lq)
 
     cld_dst_a2 => qqcw_get_field(pbuf, l_dst_a2)
     cld_dst_a3 => qqcw_get_field(pbuf, l_dst_a2)
@@ -359,8 +349,8 @@ contains
     ! naai and naai_hom are the outputs from this parameterization
     call pbuf_get_field(pbuf, naai_idx, naai)
     call pbuf_get_field(pbuf, naai_hom_idx, naai_hom)
-    naai(1:ncol,1:pver)     = 0._r8  
-    naai_hom(1:ncol,1:pver) = 0._r8  
+    naai(1:ncol,1:pver)     = 0._r8
+    naai_hom(1:ncol,1:pver) = 0._r8
 
     ! Use the same criteria that is used in chemistry and in CLUBB (for cloud fraction)
     ! to determine whether to use tropospheric or stratospheric settings. Include the
@@ -393,12 +383,13 @@ contains
        end do
     end do
 
-
     ! initialize history output fields for ice nucleation
-    nihf(1:ncol,1:pver)  = 0._r8  
-    niimm(1:ncol,1:pver) = 0._r8  
-    nidep(1:ncol,1:pver) = 0._r8 
-    nimey(1:ncol,1:pver) = 0._r8 
+    nihf(1:ncol,1:pver)  = 0._r8
+    niimm(1:ncol,1:pver) = 0._r8
+    nidep(1:ncol,1:pver) = 0._r8
+    nimey(1:ncol,1:pver) = 0._r8
+
+    regm(1:ncol,1:pver) = 0._r8
 
     if (use_preexisting_ice) then
        fhom(:,:)     = 0.0_r8
@@ -451,10 +442,9 @@ contains
                 !Oslo aerosols have two modes.. Need mode-fractions
                 dust_coarse_fraction = numberConcentration(i,k,MODE_IDX_DST_A3)*1.e-6_r8 / (dst_num+1.e-100_r8)
 
-
-                so4_num = (numberConcentration(i,k,MODE_IDX_SO4_AC))*1.0e-6_r8 
-
+                so4_num = (numberConcentration(i,k,MODE_IDX_SO4_AC))*1.0e-6_r8
              end if !clim modal aero
+
              ! *** Turn off soot nucleation ***
              soot_num = 0.0_r8
 
@@ -466,7 +456,7 @@ contains
                   wice(i,k), weff(i,k), fhom(i,k), regm(i,k),               &
                   oso4_num, odst_num, osoot_num)
 
-             ! Move aerosol used for nucleation from interstial to cloudborne, 
+             ! Move aerosol used for nucleation from interstial to cloudborne,
              ! otherwise the same coarse mode aerosols will be available again
              ! in the next timestep and will supress homogeneous freezing.
              if (use_preexisting_ice) then
@@ -483,19 +473,19 @@ contains
                    masslost = (odst_num               & !all removed
                         - dst_num*dust_coarse_fraction) & !fraction to coarse mode
                         / volumeToNumber(MODE_IDX_DST_A2) &
-                        * rhopart(l_dst_a2) & 
-                        /rho(i,k)*1e6_r8 
+                        * rhopart(l_dst_a2) &
+                        /rho(i,k)*1e6_r8
 
                    ptend%q(i,k,l_dst_a2) = -masslost*icldm(i,k)/ dtime
                    cld_dst_a2(i,k) = cld_dst_a2(i,k) + masslost*icldm(i,k)
 
                 end if
 
-                ! Coarse mode (is always lost)  
+                ! Coarse mode (is always lost)
                 masslost = (odst_num - numberFromSmallDustMode) &
                      / volumeToNumber(MODE_IDX_DST_A3) &
-                     * rhopart(l_dst_a3) & 
-                     / rho(i,k)*1e6_r8 
+                     * rhopart(l_dst_a3) &
+                     / rho(i,k)*1e6_r8
 
                 ptend%q(i,k,l_dst_a3) = -masslost * icldm(i,k) / dtime
                 cld_dst_a3(i,k) = cld_dst_a3(i,k) + masslost*icldm(i,k)
@@ -522,7 +512,7 @@ contains
              ! particles. It may not represent the proper saturation threshold for
              ! nucleation, and wsubi from CLUBB is probably not representative of
              ! wave driven varaibility in the polar stratosphere.
-             if (nucleate_ice_use_troplev) then 
+             if (nucleate_ice_use_troplev) then
                 if ((k < troplev(i)) .and. (nucleate_ice_strat > 0._r8)) then
                    if (oso4_num > 0._r8) then
                       so4_num_ac = so4_num*rho(i,k)*1.0e-6_r8 !This is maximum sulfate which can activate
@@ -568,8 +558,8 @@ contains
                    INFrehom(i,k)=1.0_r8       ! 1, hom freezing occur
                 endif
 
-                ! exclude  no ice nucleaton 
-                if ((INFrehom(i,k) < 0.5_r8) .and. (INhet(i,k) < 1.0_r8))   then   
+                ! exclude  no ice nucleaton
+                if ((INFrehom(i,k) < 0.5_r8) .and. (INhet(i,k) < 1.0_r8))   then
                    INnso4(i,k) =0.0_r8
                    INnbc(i,k)  =0.0_r8
                    INndust(i,k)=0.0_r8
@@ -577,9 +567,9 @@ contains
                    INFreIN(i,k)=0.0_r8
                    INhet(i,k) = 0.0_r8
                    INhom(i,k) = 0.0_r8
-                   INFrehom(i,k)=0.0_r8    
+                   INFrehom(i,k)=0.0_r8
                    wice(i,k) = 0.0_r8
-                   weff(i,k) = 0.0_r8 
+                   weff(i,k) = 0.0_r8
                    fhom(i,k) = 0.0_r8
                 endif
              end if
@@ -631,7 +621,7 @@ contains
     real(r8), intent(in) :: cldn        ! new value of cloud fraction    (fraction)
     real(r8), intent(in) :: qc          ! liquid water mixing ratio (kg/kg)
     real(r8), intent(in) :: qi          ! grid-mean preexisting cloud ice mass mixing ratio (kg/kg)
-    real(r8), intent(in) :: ni_in       ! grid-mean preexisting cloud ice number conc (#/kg) 
+    real(r8), intent(in) :: ni_in       ! grid-mean preexisting cloud ice number conc (#/kg)
     real(r8), intent(in) :: rhoair      ! air density (kg/m3)
     real(r8), intent(in) :: so4_num     ! so4 aerosol number (#/cm^3)
     real(r8), intent(in) :: dst_num     ! total dust aerosol number (#/cm^3)
@@ -663,12 +653,12 @@ contains
     real(r8) :: wbar1, wbar2
 
     ! used in SUBROUTINE Vpreice
-    real(r8) :: Ni_preice        ! cloud ice number conc (1/m3)   
+    real(r8) :: Ni_preice        ! cloud ice number conc (1/m3)
     real(r8) :: lami,Ri_preice   ! mean cloud ice radius (m)
     real(r8) :: Shom             ! initial ice saturation ratio; if <1, use hom threshold Si
     real(r8) :: detaT,RHimean    ! temperature standard deviation, mean cloudy RHi
     real(r8) :: wpicehet   ! diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at shet
-    real(r8) :: weffhet    ! effective Vertical velocity for ice nucleation (m/s)  weff=wbar-wpicehet 
+    real(r8) :: weffhet    ! effective Vertical velocity for ice nucleation (m/s)  weff=wbar-wpicehet
     !-------------------------------------------------------------------------------
 
     RHimean = relhum*svp_water(tair)/svp_ice(tair)*subgrid
@@ -684,9 +674,9 @@ contains
     if (use_preexisting_ice) then
 
        Ni_preice = ni_in*rhoair                    ! (convert from #/kg -> #/m3)
-       Ni_preice = Ni_preice / max(mincld,cldn)   ! in-cloud ice number density 
+       Ni_preice = Ni_preice / max(mincld,cldn)   ! in-cloud ice number density
 
-       if (Ni_preice > 10.0_r8 .and. qi > 1.e-10_r8) then    ! > 0.01/L = 10/m3   
+       if (Ni_preice > 10.0_r8 .and. qi > 1.e-10_r8) then    ! > 0.01/L = 10/m3
           Shom = -1.5_r8   ! if Shom<1 , Shom will be recalculated in SUBROUTINE Vpreice, according to Ren & McKenzie, 2005
           lami = (gamma4*ci*ni_in/qi)**(1._r8/3._r8)
           Ri_preice = 0.5_r8/lami                  ! radius
@@ -769,8 +759,8 @@ contains
                    nihf = 0._r8
                    n1   = niimm + nidep
 
-                   osoot_num = soot_num * (niimm + nidep) / (soot_num + dst_num) 
-                   odst_num  = dst_num  * (niimm + nidep) / (soot_num + dst_num) 
+                   osoot_num = soot_num * (niimm + nidep) / (soot_num + dst_num)
+                   odst_num  = dst_num  * (niimm + nidep) / (soot_num + dst_num)
                 endif
 
                 ! homogeneous nucleation only
@@ -859,7 +849,7 @@ contains
        esl = svp_water(tair)     ! over water in mixed clouds
        esi = svp_ice(tair)     ! over ice
        deles = (esl - esi)
-       nimey=1.e-3_r8*exp(12.96_r8*deles/esi - 0.639_r8) 
+       nimey=1.e-3_r8*exp(12.96_r8*deles/esi - 0.639_r8)
     else
        nimey=0._r8
     endif
@@ -997,25 +987,25 @@ contains
     !  VERTICAL VELOCITY CALCULATED FROM DEPOSITIONAL LOSS TERM
 
     ! arguments
-    REAL(r8), INTENT(in)  :: P_in       ! [Pa],INITIAL AIR pressure 
-    REAL(r8), INTENT(in)  :: T_in       ! [K] ,INITIAL AIR temperature 
-    REAL(r8), INTENT(in)  :: R_in       ! [m],INITIAL MEAN  ICE CRYSTAL NUMBER RADIUS 
+    REAL(r8), INTENT(in)  :: P_in       ! [Pa],INITIAL AIR pressure
+    REAL(r8), INTENT(in)  :: T_in       ! [K] ,INITIAL AIR temperature
+    REAL(r8), INTENT(in)  :: R_in       ! [m],INITIAL MEAN  ICE CRYSTAL NUMBER RADIUS
     REAL(r8), INTENT(in)  :: C_in       ! [m-3],INITIAL TOTAL ICE CRYSTAL NUMBER DENSITY, [1/cm3]
-    REAL(r8), INTENT(in)  :: S_in       ! [-],INITIAL ICE SATURATION RATIO;; if <1, use hom threshold Si 
+    REAL(r8), INTENT(in)  :: S_in       ! [-],INITIAL ICE SATURATION RATIO;; if <1, use hom threshold Si
     REAL(r8), INTENT(out) :: V_out      ! [m/s], VERTICAL VELOCITY REDUCTION (caused by preexisting ice)
 
     ! parameters
-    REAL(r8), PARAMETER :: ALPHAc  = 0.5_r8 ! density of ice (g/cm3), !!!V is not related to ALPHAc 
-    REAL(r8), PARAMETER :: FA1c    = 0.601272523_r8        
+    REAL(r8), PARAMETER :: ALPHAc  = 0.5_r8 ! density of ice (g/cm3), !!!V is not related to ALPHAc
+    REAL(r8), PARAMETER :: FA1c    = 0.601272523_r8
     REAL(r8), PARAMETER :: FA2c    = 0.000342181855_r8
-    REAL(r8), PARAMETER :: FA3c    = 1.49236645E-12_r8        
-    REAL(r8), PARAMETER :: WVP1c   = 3.6E+10_r8   
+    REAL(r8), PARAMETER :: FA3c    = 1.49236645E-12_r8
+    REAL(r8), PARAMETER :: WVP1c   = 3.6E+10_r8
     REAL(r8), PARAMETER :: WVP2c   = 6145.0_r8
     REAL(r8), PARAMETER :: FVTHc   = 11713803.0_r8
     REAL(r8), PARAMETER :: THOUBKc = 7.24637701E+18_r8
     REAL(r8), PARAMETER :: SVOLc   = 3.23E-23_r8    ! SVOL=XMW/RHOICE
     REAL(r8), PARAMETER :: FDc     = 249.239822_r8
-    REAL(r8), PARAMETER :: FPIVOLc = 3.89051704E+23_r8         
+    REAL(r8), PARAMETER :: FPIVOLc = 3.89051704E+23_r8
     REAL(r8) :: T,P,S,R,C
     REAL(r8) :: A1,A2,A3,B1,B2
     REAL(r8) :: T_1,PICE,FLUX,ALP4,CISAT,DLOSS,VICE
@@ -1033,15 +1023,15 @@ contains
     C     = C_in*1e-6_r8  ! m-3 => cm-3
     T_1   = 1.0_r8/ T
     PICE  = WVP1c * EXP(-(WVP2c*T_1))
-    ALP4  = 0.25_r8 * ALPHAc      
+    ALP4  = 0.25_r8 * ALPHAc
     FLUX  = ALP4 * SQRT(FVTHc*T)
-    CISAT = THOUBKc * PICE * T_1   
-    A1    = ( FA1c * T_1 - FA2c ) * T_1 
-    A2    = 1.0_r8/ CISAT      
+    CISAT = THOUBKc * PICE * T_1
+    A1    = ( FA1c * T_1 - FA2c ) * T_1
+    A2    = 1.0_r8/ CISAT
     A3    = FA3c * T_1 / P
-    B1    = FLUX * SVOLc * CISAT * ( S-1.0_r8 ) 
-    B2    = FLUX * FDc * P * T_1**1.94_r8 
-    DLOSS = FPIVOLc * C * B1 * R**2 / ( 1.0_r8+ B2 * R )         
+    B1    = FLUX * SVOLc * CISAT * ( S-1.0_r8 )
+    B2    = FLUX * FDc * P * T_1**1.94_r8
+    DLOSS = FPIVOLc * C * B1 * R**2 / ( 1.0_r8+ B2 * R )
     VICE  = ( A2 + A3 * S ) * DLOSS / ( A1 * S )  ! 2006,(19)
     V_out = VICE*1e-2_r8  ! cm/s => m/s
 
@@ -1051,7 +1041,7 @@ contains
 
   subroutine frachom(Tmean,RHimean,detaT,fhom)
 
-    ! How much fraction of cirrus might reach Shom  
+    ! How much fraction of cirrus might reach Shom
     ! base on "A cirrus cloud scheme for general circulation models",
     ! B. Karcher and U. Burkhardt 2008
 
@@ -1062,7 +1052,7 @@ contains
     integer,  parameter :: Nbin=200          ! (Tmean - 3*detaT, Tmean + 3*detaT)
 
     real(r8) :: PDF_T(Nbin)    ! temperature PDF;  ! PDF_T=0  outside (Tmean-3*detaT, Tmean+3*detaT)
-    real(r8) :: Sbin(Nbin)     ! the fluctuations of Si that are driven by the T variations 
+    real(r8) :: Sbin(Nbin)     ! the fluctuations of Si that are driven by the T variations
     real(r8) :: Sihom, deta
     integer  :: i
 

@@ -70,7 +70,7 @@ contains
     use species_sums_diags, only : species_sums_init
 #ifdef OSLO_AERO
     use oslo_aero_share, only: getCloudTracerIndexDirect, getCloudTracerName, isAerosol
-    use oslo_aero_share,only : aerosol_type_name, N_AEROSOL_TYPES
+    use oslo_aero_share, only: aerosol_type_name, N_AEROSOL_TYPES
 #endif
 
     integer :: j, k, m, n
