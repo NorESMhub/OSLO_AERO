@@ -423,10 +423,6 @@ contains
              ! compute aerosol number for so4, soot, and dust with units #/cm^3
              so4_num  = 0._r8
              soot_num = 0._r8
-             dst1_num = 0._r8
-             dst2_num = 0._r8
-             dst3_num = 0._r8
-             dst4_num = 0._r8
              dst_num  = 0._r8
 
              if (clim_modal_aero) then
