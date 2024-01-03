@@ -24,7 +24,7 @@ module oslo_aero_ndrop
   use oslo_aero_share,   only: calculateNumberMedianRadius
   use oslo_aero_share,   only: getNumberOfTracersInMode, getNumberOfAerosolTracers, getTracerIndex
   use oslo_aero_share,   only: getCloudTracerName, getCloudTracerIndex, getConstituentFraction
-  use oslo_aero_share,   only: fillAerosolTracerList, fillInverseAerosolTracerList 
+  use oslo_aero_share,   only: fillAerosolTracerList, fillInverseAerosolTracerList
   use oslo_aero_share,  only: nmodes, nbmodes
   use oslo_aero_share,   only: smallNumber
 
@@ -1410,7 +1410,7 @@ contains
        call ccncalc_oslo(state, pbuf, cs, hasAerosol, numberConcentration, volumeConcentration, &
             hygroscopicity, lnSigma, ccn)
        do l = 1, psat
-          call outfld(ccn_name(l), ccn(1,1,l), ncol, lchnk)
+          call outfld(ccn_name(l), ccn(:,:,l), pcols, lchnk)
        enddo
     end if
 

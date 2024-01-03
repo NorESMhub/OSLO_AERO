@@ -586,19 +586,19 @@ contains
        do i=1,gas_pcnst
           if(lifeCycleReceiver(i) .gt. 0 )then
              long_name= trim(solsym(i))//"condTend"
-             call outfld(long_name, coltend(:ncol,i), ncol, lchnk)
+             call outfld(long_name, coltend(:,i), pcols, lchnk)
              long_name= trim(solsym(lifeCycleReceiver(i)))//"condTend"
-             call outfld(long_name, coltend(:ncol,lifeCycleReceiver(i)),ncol,lchnk)
+             call outfld(long_name, coltend(:,lifeCycleReceiver(i)),pcols,lchnk)
           end if
        end do
        long_name=trim(solsym(chemistryIndex(l_so4_a1)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_so4_a1)),ncol,lchnk)
+       call outfld(long_name, coltend(:,chemistryIndex(l_so4_a1)),pcols,lchnk)
        long_name=trim(solsym(chemistryIndex(l_soa_a1)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_soa_a1)),ncol,lchnk)
+       call outfld(long_name, coltend(:,chemistryIndex(l_soa_a1)),pcols,lchnk)
        long_name=trim(solsym(chemistryIndex(l_so4_na)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_so4_na)),ncol,lchnk)
+       call outfld(long_name, coltend(:,chemistryIndex(l_so4_na)),pcols,lchnk)
        long_name=trim(solsym(chemistryIndex(l_soa_na)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_soa_na)),ncol,lchnk)
+       call outfld(long_name, coltend(:,chemistryIndex(l_soa_na)),pcols,lchnk)
 
     endif
 
