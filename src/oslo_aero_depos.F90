@@ -363,7 +363,7 @@ contains
              if(top_lev .gt. 1) then
                 rad_aer(1:ncol,:top_lev-1) = 0._r8
              end if
-             rad_aer(1:ncol,top_lev:) = 0.5_r8*dgncur_awet(1:ncol,top_lev:,m) *exp(1.5_r8*(logSigma))
+             rad_aer(1:ncol,top_lev:) = 0.5_r8*dgncur_awet(1:ncol,top_lev:,m) *exp(1.5_r8*(logSigma**2))
 
              ! dens_aer(1:ncol,:) = wet density (kg/m3)
              if(top_lev.gt.1)then
@@ -390,8 +390,8 @@ contains
              if (lphase == 1) then
                 jvlc = 2              !mass in clean air tracers
 
-                !Process tracers have their own velocity based on fixed size / density
-                !Calculate the velocity to use for this specie..
+                ! Process tracers have their own velocity based on fixed size / density
+                ! Calculate the velocity to use for this specie..
                 if ( is_process_mode(mm, .false.) ) then
                    jvlc = 1
                    logSigma = log(processModeSigma(processModeMap(mm)))
@@ -399,7 +399,7 @@ contains
                       rad_aer(1:ncol, top_lev-1) = 0.0_r8
                    end if
                    rad_aer(1:ncol,top_lev:) = 0.5_r8*dgncur_awet_processmode(1:ncol,top_lev:,processModeMap(mm))   &
-                        *exp(1.5_r8*(logSigma))
+                        *exp(1.5_r8*(logSigma**2))
 
                    call oslo_aero_depvel_part( ncol, t(:,:), pmid(:,:), ram1, fv,  &
                         vlc_dry(:,:,jvlc), vlc_trb(:,jvlc), vlc_grv(:,:,jvlc),  &
@@ -1144,7 +1144,7 @@ contains
     dstdry2(:)  = 0._r8
     dstdry3(:)  = 0._r8
     dstdry4(:)  = 0._r8
- 
+
     ! wet deposition fluxes are negative into surface,
     ! dry deposition fluxes are positive into surface.
     ! srf models want positive definite fluxes.
