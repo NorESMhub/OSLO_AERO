@@ -15,9 +15,19 @@ module oslo_aero_coag
   use cam_history,    only: addfld, add_default, fieldname_len, horiz_only, outfld
   use cam_logfile,    only: iulog
   !
-  !use oslo_aero_const, only: normnk
-  use oslo_aero_share
-  use oslo_aero_const
+  use oslo_aero_share, only: nmodes
+  use oslo_aero_share, only: normnk, rBinMidpoint, nBinsTab, VolumeToNumber, rhopart
+  use oslo_aero_share, only: MODE_IDX_BC_EXT_AC, MODE_IDX_SO4_AC, MODE_IDX_BC_AIT
+  use oslo_aero_share, only: MODE_IDX_OMBC_INTMIX_COAT_AIT, MODE_IDX_BC_NUC, MODE_IDX_OMBC_INTMIX_AIT
+  use oslo_aero_share, only: MODE_IDX_SO4_AC, MODE_IDX_DST_A2, MODE_IDX_DST_A3
+  use oslo_aero_share, only: MODE_IDX_SS_A1, MODE_IDX_SS_A2, MODE_IDX_SS_A3, MODE_IDX_SO4SOA_AIT
+  use oslo_aero_share, only: l_bc_ax, l_so4_na, l_bc_a, l_bc_ai, l_om_ai
+  use oslo_aero_share, only: l_bc_n, l_bc_ni, l_om_ni, l_so4_a1
+  use oslo_aero_share, only: l_bc_ax, l_bc_ac, l_so4_na, l_so4_ac, l_bc_a, l_bc_ai
+  use oslo_aero_share, only: l_om_ai, l_om_ac, l_om_ni, l_bc_n, l_bc_ni
+  use oslo_aero_share, only: l_so4_a1, l_soa_na, l_soa_a1, l_so4_a2
+  use oslo_aero_share, only: chemistryindex, physicsindex, is_process_mode
+  use oslo_aero_share, only: getNumberOfTracersInMode, getTracerIndex, qqcw_get_field
 
   implicit none
   private
@@ -42,21 +52,33 @@ module oslo_aero_coag
   !These are the modes which are coagulating (belonging to mixtures no. 0, 1, 2, 4, 12, 14)
   integer , parameter :: numberOfCoagulatingModes = 6
   integer, public :: coagulatingMode(numberOfCoagulatingModes) =    &
-       (/MODE_IDX_BC_EXT_AC                                               &  !inert mode
-       , MODE_IDX_SO4SOA_AIT, MODE_IDX_BC_AIT, MODE_IDX_OMBC_INTMIX_COAT_AIT &  !internally mixed small modes
-       , MODE_IDX_BC_NUC, MODE_IDX_OMBC_INTMIX_AIT /)      !externally mixed small modes
+       (/MODE_IDX_BC_EXT_AC,            & !inert mode
+         MODE_IDX_SO4SOA_AIT,           & !internally mixed small mode
+         MODE_IDX_BC_AIT,               & !internally mixed small mode
+         MODE_IDX_OMBC_INTMIX_COAT_AIT, & !internally mixed small mode
+         MODE_IDX_BC_NUC,               & !externally mixed small mode
+         MODE_IDX_OMBC_INTMIX_AIT /)      !externally mixed small mode
 
   !These are the modes which are receiving coagulating material in OsloAero
   ! (belonging to mixtures no. 5, 6, 7, 8, 9, 10)
   integer, public :: receiverMode(numberOfCoagulationReceivers) = &
-       (/MODE_IDX_SO4_AC,MODE_IDX_DST_A2, MODE_IDX_DST_A3, MODE_IDX_SS_A1, MODE_IDX_SS_A2, MODE_IDX_SS_A3 /)
+       (/MODE_IDX_SO4_AC, &
+         MODE_IDX_DST_A2, &
+         MODE_IDX_DST_A3, &
+         MODE_IDX_SS_A1,  &
+         MODE_IDX_SS_A2,  &
+         MODE_IDX_SS_A3 /)
 
   !And these are the additional modes which are allowed to contribute to the
   ! coagulation sink, defined here and to be used only in the nucleation code in condtend.F90
   ! (belonging to mixtures no. 0, 1, 2, 4, 12, 14)
   integer, public :: addReceiverMode(numberOfAddCoagReceivers) = &
-       (/MODE_IDX_BC_EXT_AC,MODE_IDX_SO4SOA_AIT,MODE_IDX_BC_AIT, &
-         MODE_IDX_OMBC_INTMIX_COAT_AIT,MODE_IDX_BC_NUC,MODE_IDX_OMBC_INTMIX_AIT /)
+       (/MODE_IDX_BC_EXT_AC,            &
+         MODE_IDX_SO4SOA_AIT,           &
+         MODE_IDX_BC_AIT,               &
+         MODE_IDX_OMBC_INTMIX_COAT_AIT, &
+         MODE_IDX_BC_NUC,               &
+         MODE_IDX_OMBC_INTMIX_AIT /)
 
   !Coagulation moves aerosol mass to the "coagulate" species, so some
   !lifecycle species will receive mass in this routine!
@@ -67,7 +89,6 @@ module oslo_aero_coag
   ! Exception: Sulphate coagulation with cloud droplets is merged with
   ! component from aqueous phase chemistry in order to take advantage of the
   ! more detailed addition onto larger particles.
-
   integer :: CloudAerReceiver(gas_pcnst)
 
   ! Closest Table index for assumed size of droplets used in coagulation

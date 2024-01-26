@@ -7,13 +7,20 @@ module oslo_aero_conc
   use physconst    ,         only: density_water =>rhoh2o, molecularWeightWater=>mwh2o, pi
   use constituents ,         only: pcnst, cnst_name
   !
-  use oslo_aero_logn_tables, only: intlog1to3_sub, intlog4_sub, intlog5to10_sub, initlogn
-  use oslo_aero_utils,       only: calculateNumberConcentration
+  use oslo_aero_logn_tables, only: intlog1to3_sub, intlog4_sub, intlog5to10_sub
   use oslo_aero_coag,        only: normalizedCoagulationSink
   use oslo_aero_condtend,    only: normalizedCondensationSink, COND_VAP_H2SO4, COND_VAP_ORG_SV
-  use oslo_aero_const,       only: smallNumber, volumeToNumber,smallNumber
-  use oslo_aero_params
-  use oslo_aero_share
+  use oslo_aero_share,       only: smallNumber, volumeToNumber,smallNumber
+  use oslo_aero_share,       only: nmodes, nbmodes
+  use oslo_aero_share,       only: istracerinmode, getNumberofBackgroundtracersInMode, getTracerIndex
+  use oslo_aero_share,       only: l_bc_ac, l_soa_a1, l_bc_ai, l_om_ai, l_bc_ni, l_om_ni, l_soa_na, l_om_ac
+  use oslo_aero_share,       only: l_so4_a1, l_so4_a2, l_so4_ac, l_so4_na
+  use oslo_aero_share,       only: solubleMassFraction, rhopart, numberOfIons, osmoticCoefficient
+  use oslo_aero_share,       only: aerosolType, aerosol_type_molecular_weight
+  use oslo_aero_share,       only: MODE_IDX_SO4SOA_AIT, MODE_IDX_BC_AIT, MODE_IDX_OMBC_INTMIX_COAT_AIT
+  use oslo_aero_share,       only: MODE_IDX_SO4_AC, MODE_IDX_SS_A3, MODE_IDX_BC_NUC
+  use oslo_aero_share,       only: originalSigma, numberFractionAvailableAqChem
+  use oslo_aero_share,       only: calculateNumberConcentration
 
   implicit none
   private
@@ -35,8 +42,6 @@ module oslo_aero_conc
   real(r8), parameter :: solubleMassFractionCoatingLimit=0.50_r8
   real(r8), parameter :: aThird       = 1.0_r8/3.0_r8
   real(r8), parameter :: ln10         = log(10.0_r8)
-
-  logical :: init_logn_tables = .false.
 
 contains
 
@@ -506,12 +511,6 @@ contains
     real(r8) :: f_ocm(pcols,pver,4)     ! [-] fraction of added mass which is either SOA condensate or OC coagulate
     real(r8) :: cxs(pcols,pver,nbmodes) ![ug/m3] NOTE NON-SI UNITS non-allocated mass
     real(r8) :: radius_tmp(pcols,pver)  ![m] radius in look up tables
-
-    ! Initialize logn tables for interpolation
-    if (.not. init_logn_tables) then
-       call initlogn()
-       init_logn_tables = .true.
-    end if
 
     ! total mass not allocated to any mode
     ! this is non-zero if the look-up table can not cope with all the add-on mass

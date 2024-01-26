@@ -23,11 +23,14 @@ module oslo_aero_depos
   use cam_history,             only: outfld, fieldname_len, addfld, add_default, horiz_only
   use ref_pres,                only: top_lev => clim_modal_aero_top_lev
   !
+  use oslo_aero_share,         only: nmodes
+  use oslo_aero_share,         only: numberOfProcessModeTracers, getNumberOfTracersInMode, getTracerIndex
+  use oslo_aero_share,         only: is_process_mode, processModeMap, processModeSigma, lifeCycleSigma
+  use oslo_aero_share,         only: belowCloudScavengingCoefficientProcessModes, belowCloudScavengingCoefficient
+  use oslo_aero_share,         only: getCloudTracerIndex, GetCloudTracerIndexDirect, getCloudTracerName, qqcw_get_field
+  use oslo_aero_share,         only: l_bc_ax, l_bc_ni, l_bc_ai, l_bc_a, l_bc_ac
+  use oslo_aero_share,         only: l_bc_n, l_om_ni, l_om_ai, l_om_ac, l_dst_a2, l_dst_a3
   use oslo_aero_dust_sediment, only: oslo_aero_dust_sediment_tend, oslo_aero_dust_sediment_vel
-  use oslo_aero_params
-  use oslo_aero_share
-  ! use oslo_aero_share,       only: l_bc_n,l_bc_ax,l_bc_ni,l_bc_a,l_bc_ai,l_bc_ac
-  ! use oslo_aero_share,       only: l_om_ni,l_om_ai,l_om_ac,l_dst_a2,l_dst_a3
 
   implicit none
   private          ! Make default type private to the module
@@ -363,7 +366,7 @@ contains
              if(top_lev .gt. 1) then
                 rad_aer(1:ncol,:top_lev-1) = 0._r8
              end if
-             rad_aer(1:ncol,top_lev:) = 0.5_r8*dgncur_awet(1:ncol,top_lev:,m) *exp(1.5_r8*(logSigma**2))
+             rad_aer(1:ncol,top_lev:) = 0.5_r8*dgncur_awet(1:ncol,top_lev:,m)*exp(1.5_r8*(logSigma**2))
 
              ! dens_aer(1:ncol,:) = wet density (kg/m3)
              if(top_lev.gt.1)then
@@ -390,16 +393,16 @@ contains
              if (lphase == 1) then
                 jvlc = 2              !mass in clean air tracers
 
-                ! Process tracers have their own velocity based on fixed size / density
-                ! Calculate the velocity to use for this specie..
+                !Process tracers have their own velocity based on fixed size / density
+                !Calculate the velocity to use for this specie..
                 if ( is_process_mode(mm, .false.) ) then
                    jvlc = 1
                    logSigma = log(processModeSigma(processModeMap(mm)))
                    if(top_lev.gt.1)then
                       rad_aer(1:ncol, top_lev-1) = 0.0_r8
                    end if
-                   rad_aer(1:ncol,top_lev:) = 0.5_r8*dgncur_awet_processmode(1:ncol,top_lev:,processModeMap(mm))   &
-                        *exp(1.5_r8*(logSigma**2))
+                   rad_aer(1:ncol,top_lev:) = &
+                        0.5_r8*dgncur_awet_processmode(1:ncol,top_lev:,processModeMap(mm))*exp(1.5_r8*(logSigma**2))
 
                    call oslo_aero_depvel_part( ncol, t(:,:), pmid(:,:), ram1, fv,  &
                         vlc_dry(:,:,jvlc), vlc_trb(:,jvlc), vlc_grv(:,:,jvlc),  &
@@ -534,7 +537,7 @@ contains
 
     ! if the user has specified prescribed aerosol dep fluxes then
     ! do not set cam_out dep fluxes according to the prognostic aerosols
-    if (.not. aerodep_flx_prescribed()) then
+    if (.not.aerodep_flx_prescribed()) then
        call  oslo_set_srf_drydep(ncol, aerdepdryis, aerdepdrycw, &
             cam_out%bcphidry, cam_out%bcphodry, cam_out%ocphidry, cam_out%ocphodry, &
             cam_out%dstdry1, cam_out%dstdry2, cam_out%dstdry3, cam_out%dstdry4)
