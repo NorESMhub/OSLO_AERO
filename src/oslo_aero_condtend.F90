@@ -7,23 +7,31 @@ module oslo_aero_condtend
   ! used the h2so4 lifetime onto the particles, and not a given
   ! increase in particle radius. Will be improved in future versions of the model
 
-  use shr_kind_mod,       only: r8 => shr_kind_r8
-  use ppgrid,             only: pcols, pver, pverp
-  use constituents,       only: pcnst  ! h2so4 and soa nucleation (cka)
-  use phys_control,       only: phys_getopts
-  use chem_mods,          only: gas_pcnst
-  use mo_tracname,        only: solsym
-  use cam_history,        only: addfld, add_default, fieldname_len, horiz_only, outfld
-  use physconst,          only: rair, gravit, pi, avogad
-  use chem_mods,          only: adv_mass !molecular weights from mozart
-  use wv_saturation,      only: qsat_water
-  use m_spc_id,           only: id_H2SO4, id_soa_lv
+  use shr_kind_mod,    only: r8 => shr_kind_r8
+  use ppgrid,          only: pcols, pver, pverp
+  use constituents,    only: pcnst  ! h2so4 and soa nucleation (cka)
+  use phys_control,    only: phys_getopts
+  use chem_mods,       only: gas_pcnst
+  use mo_tracname,     only: solsym
+  use cam_history,     only: addfld, add_default, fieldname_len, horiz_only, outfld
+  use physconst,       only: rair, gravit, pi, avogad
+  use chem_mods,       only: adv_mass !molecular weights from mozart
+  use wv_saturation,   only: qsat_water
+  use m_spc_id,        only: id_H2SO4, id_soa_lv
   !
-  use oslo_aero_coag,     only: normalizedCoagulationSink, receiverMode,numberOfCoagulationReceivers
-  use oslo_aero_coag,     only: numberOfAddCoagReceivers,addReceiverMode,normCoagSinkAdd
-  use oslo_aero_share   ! only: MODE_IDX_SO4SOA_AIT, rhopart, l_so4_a1, l_soa_lv, l_so4_na, l_soa_na
-  use oslo_aero_params  ! only: originalNumberMedianRadius
-  use oslo_aero_const   ! only: volumeToNumber
+  use oslo_aero_share, only: nmodes, nBinsTab
+  use oslo_aero_share, only: MODE_IDX_SO4SOA_AIT, MODE_IDX_BC_EXT_AC, MODE_IDX_BC_AIT
+  use oslo_aero_share, only: MODE_IDX_OMBC_INTMIX_COAT_AIT, MODE_IDX_DST_A2, MODE_IDX_DST_A3
+  use oslo_aero_share, only: MODE_IDX_BC_NUC, MODE_IDX_OMBC_INTMIX_AIT
+  use oslo_aero_share, only: l_so4_a1, l_soa_lv, l_so4_na, l_soa_na
+  use oslo_aero_share, only: l_bc_n, l_bc_a, l_bc_ni, l_bc_ai, l_om_ni, l_om_ai
+  use oslo_aero_share, only: l_bc_ax, l_h2so4, l_soa_sv, l_soa_a1
+  use oslo_aero_coag,  only: normalizedCoagulationSink, receiverMode,numberOfCoagulationReceivers
+  use oslo_aero_coag,  only: numberOfAddCoagReceivers,addReceiverMode,normCoagSinkAdd
+  use oslo_aero_share, only: originalNumberMedianRadius, rhopart, invrhopart, volumeToNumber
+  use oslo_aero_share, only: chemistryIndex, physicsIndex, getNumberOfBackgroundTracersInMode
+  use oslo_aero_share, only: externallyMixedMode, rBinMidpoint, getTracerIndex, getNumberOfTracersInMode, normnk
+  use oslo_aero_share, only: numberToSurface, volumeToNumber, numberOfExternallyMixedModes
 
   implicit none
   private
@@ -60,23 +68,22 @@ contains
 
   subroutine initializeCondensation()
 
-    !condensation coefficients:
-    !Theory: Poling et al, "The properties of gases and liquids"
-    !5th edition, eqn 11-4-4
+    ! condensation coefficients:
+    ! Theory: Poling et al, "The properties of gases and liquids"! 5th edition, eqn 11-4-4
 
     ! local variables
-    real(r8), parameter :: aunit = 1.6606e-27_r8  ![kg] Atomic mass unit
-    real(r8), parameter :: boltz = 1.3806e-23_r8   ![J/K/molec]
-    real(r8), parameter :: t0 = 273.15_r8         ![K] standard temperature
-    real(r8), parameter :: p0 = 101325.0_r8       ! [Pa] Standard pressure
-    real(r8), parameter :: radair = 1.73e-10_r8   ![m] Typical air molecule collision radius
-    real(r8), parameter :: Mair = 28.97_r8        ![amu/molec] Molecular weight for dry air
+    real(r8), parameter :: aunit = 1.6606e-27_r8 ! [kg] Atomic mass unit
+    real(r8), parameter :: boltz = 1.3806e-23_r8 ! [J/K/molec]
+    real(r8), parameter :: t0 = 273.15_r8        ! [K] standard temperature
+    real(r8), parameter :: p0 = 101325.0_r8      ! [Pa] Standard pressure
+    real(r8), parameter :: radair = 1.73e-10_r8  ! [m] Typical air molecule collision radius
+    real(r8), parameter :: Mair = 28.97_r8       ! [amu/molec] Molecular weight for dry air
 
     !Diffusion volumes for simple molecules [Poling et al], table 11-1
-    real(r8), dimension(N_COND_VAP), parameter :: vad = (/51.96_r8, 208.18_r8, 208.18_r8/) ![cm3/mol]
-    real(r8), parameter :: vadAir       = 19.7_r8                                          ![cm3/mol]
-    real(r8), parameter :: aThird = 1.0_r8/3.0_r8
-    real(r8), parameter :: cm2Tom2 = 1.e-4_r8       !convert from cm2 ==> m2
+    real(r8), parameter :: vad(N_COND_VAP) = (/51.96_r8, 208.18_r8, 208.18_r8/) ![cm3/mol]
+    real(r8), parameter :: vadAir          = 19.7_r8                            ![cm3/mol]
+    real(r8), parameter :: cm2Tom2         = 1.e-4_r8                           !convert from cm2 ==> m2
+    real(r8), parameter :: aThird          = 1.0_r8/3.0_r8
     !
     real(r8) :: DiffusionCoefficient(0:100,0:nmodes,N_COND_VAP)  ! [m2/s] Diffusion coefficient
     character(len=fieldname_len+3) :: fieldname_donor
@@ -107,13 +114,11 @@ contains
     !the externally mixed modes receive condensate,
     !e.g. the receiver of l_so4_n mass is the tracer l_so4_na
     lifeCycleReceiver(:) = -99
-    lifeCycleReceiver(chemistryIndex(l_bc_n))   = chemistryIndex(l_bc_a)    !create bc int mix from bc in mode 12
-    lifeCycleReceiver(chemistryIndex(l_bc_ni))  = chemistryIndex(l_bc_ai)   !create bc int mix from bc in mode 14
-    lifeCycleReceiver(chemistryIndex(l_om_ni))  = chemistryIndex(l_om_ai)
-
-    !!create om int mix from om in mode 14
-    lifeCycleReceiver(chemistryIndex(l_bc_ax))  = chemistryIndex(l_bc_ai)
-    !!create bc int mix from bc in mode 0. Note Mass is conserved but not number
+    lifeCycleReceiver(chemistryIndex(l_bc_n))   = chemistryIndex(l_bc_a)  !create bc int mix from bc in mode 12
+    lifeCycleReceiver(chemistryIndex(l_bc_ni))  = chemistryIndex(l_bc_ai) !create bc int mix from bc in mode 14
+    lifeCycleReceiver(chemistryIndex(l_om_ni))  = chemistryIndex(l_om_ai) !create om int mix from om in mode 14
+    lifeCycleReceiver(chemistryIndex(l_bc_ax))  = chemistryIndex(l_bc_ai) !create bc int mix from bc in mode 0
+                                                                          !Note Mass is conserved but not number
 
     !Sticking coeffcients for H2SO4 condensation
     !See table 1 in Kirkevag et al (2013)
@@ -581,19 +586,19 @@ contains
        do i=1,gas_pcnst
           if(lifeCycleReceiver(i) .gt. 0 )then
              long_name= trim(solsym(i))//"condTend"
-             call outfld(long_name, coltend(:ncol,i), ncol, lchnk)
+             call outfld(long_name, coltend(:,i), pcols, lchnk)
              long_name= trim(solsym(lifeCycleReceiver(i)))//"condTend"
-             call outfld(long_name, coltend(:ncol,lifeCycleReceiver(i)),ncol,lchnk)
+             call outfld(long_name, coltend(:,lifeCycleReceiver(i)),pcols,lchnk)
           end if
        end do
        long_name=trim(solsym(chemistryIndex(l_so4_a1)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_so4_a1)),ncol,lchnk)
+       call outfld(long_name, coltend(:,chemistryIndex(l_so4_a1)),pcols,lchnk)
        long_name=trim(solsym(chemistryIndex(l_soa_a1)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_soa_a1)),ncol,lchnk)
+       call outfld(long_name, coltend(:,chemistryIndex(l_soa_a1)),pcols,lchnk)
        long_name=trim(solsym(chemistryIndex(l_so4_na)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_so4_na)),ncol,lchnk)
+       call outfld(long_name, coltend(:,chemistryIndex(l_so4_na)),pcols,lchnk)
        long_name=trim(solsym(chemistryIndex(l_soa_na)))//"condTend"
-       call outfld(long_name, coltend(:ncol,chemistryIndex(l_soa_na)),ncol,lchnk)
+       call outfld(long_name, coltend(:,chemistryIndex(l_soa_na)),pcols,lchnk)
 
     endif
 
@@ -961,7 +966,6 @@ contains
     call outfld('GRSOA',    grorg(:ncol,:),   ncol, lchnk)
     call outfld('GR',       gr(:ncol,:),      ncol, lchnk)
 
-    return
   end subroutine aeronucl
 
   !===============================================================================

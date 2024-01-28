@@ -16,8 +16,8 @@ module mo_chm_diags
   use physics_buffer,  only : pbuf_get_field, pbuf_get_index, physics_buffer_desc ! OSLO_AERO
   use constituents,    only : cnst_get_ind                                        ! OSLO_AERO
 #ifdef OSLO_AERO
-  use oslo_aero_share, only : getCloudTracerIndexDirect, getCloudTracerName, aerosolType, isAerosol
-  use oslo_aero_params
+  use oslo_aero_share, only : getCloudTracerIndexDirect, getCloudTracerName
+  use oslo_aero_share, only : aerosol_type_name, aerosolType, isAerosol, N_AEROSOL_TYPES
 #endif
 
   implicit none

@@ -44,8 +44,8 @@ module oslo_aero_nucleate_ice
   !
   use oslo_aero_share,   only: l_dst_a2, l_dst_a3, MODE_IDX_DST_A2, MODE_IDX_DST_A3, rhopart, qqcw_get_field
   use oslo_aero_share,   only: MODE_IDX_DST_A2, MODE_IDX_DST_A3, MODE_IDX_SO4_AC,MODE_IDX_OMBC_INTMIX_COAT_AIT
-  use oslo_aero_const,   only: volumeToNumber
-  use oslo_aero_params,  only: nmodes
+  use oslo_aero_share,   only: volumeToNumber
+  use oslo_aero_share,   only: nmodes
 
   implicit none
   private

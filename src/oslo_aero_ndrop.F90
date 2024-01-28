@@ -21,12 +21,12 @@ module oslo_aero_ndrop
   use cam_abortutils,    only: endrun
   use cam_logfile,       only: iulog
   !
-  use oslo_aero_utils,   only: calculateNumberMedianRadius
+  use oslo_aero_share,   only: calculateNumberMedianRadius
   use oslo_aero_share,   only: getNumberOfTracersInMode, getNumberOfAerosolTracers, getTracerIndex
   use oslo_aero_share,   only: getCloudTracerName, getCloudTracerIndex, getConstituentFraction
   use oslo_aero_share,   only: fillAerosolTracerList, fillInverseAerosolTracerList
-  use oslo_aero_params,  only: nmodes, nbmodes
-  use oslo_aero_const,   only: smallNumber
+  use oslo_aero_share,   only: nmodes, nbmodes
+  use oslo_aero_share,   only: smallNumber
 
   implicit none
   private
@@ -1410,7 +1410,7 @@ contains
        call ccncalc_oslo(state, pbuf, cs, hasAerosol, numberConcentration, volumeConcentration, &
             hygroscopicity, lnSigma, ccn)
        do l = 1, psat
-          call outfld(ccn_name(l), ccn(1,1,l), ncol, lchnk)
+          call outfld(ccn_name(l), ccn(:,:,l), pcols, lchnk)
        enddo
     end if
 
