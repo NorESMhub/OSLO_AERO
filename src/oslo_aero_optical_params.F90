@@ -419,7 +419,6 @@ contains
           per_tau_w_f(i,k,ib)=per_tau_w_g(i,k,ib)*asymtot(i,k,ib)
        end do
     end do  ! ncol
-    !------------------------------------------------------------------------------------------------
 
     ! LW Optical properties of total aerosol:
     do ib=1,nlwbands

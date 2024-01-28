@@ -40,7 +40,7 @@ module oslo_aero_ocean
 
   ! Public interfaces
   public :: oslo_aero_ocean_init ! initializing, reading file
-  public :: oslo_aero_ocean_time ! time interpolation
+  public :: oslo_aero_ocean_adv  ! spatial and time interpolation
   public :: oslo_aero_dms_emis   ! calculate dms surface emissions
   public :: oslo_aero_dms_inq    ! logical function which tells mo_srf_emis what to do
   public :: oslo_aero_opom_emis  ! calculate opom surface emissions
@@ -58,7 +58,7 @@ module oslo_aero_ocean
   integer            :: dms_cycle_yr  = 0               !will be collected from NAMELIST
 
   !will be collected from NAMELIST - but can be overwritten by atm_import_export if the ocean is sending DMS to the atm
-  character(len=20), public  :: dms_source = 'emission_file' 
+  character(len=20), public  :: dms_source = 'emission_file'
   !
   character(len=16)  :: opomo_fld_name = 'chlor_a'      !not set from namelist, hard coded, name of nc var
   character(len=16)  :: opomn_fld_name = 'poc'          !not set from namelist, hard coded, name of nc var
@@ -189,7 +189,7 @@ contains
   endsubroutine oslo_aero_ocean_init
 
   !===============================================================================
-  subroutine oslo_aero_ocean_time(state, pbuf2d)
+  subroutine oslo_aero_ocean_adv(state, pbuf2d)
 
     ! Interpolate ocean_species in space and time to model grid and time
 
@@ -204,7 +204,7 @@ contains
        call advance_trcdata( oceanspcs(m)%fields, oceanspcs(m)%file, state, pbuf2d  )
     end do
 
-  endsubroutine oslo_aero_ocean_time
+  endsubroutine oslo_aero_ocean_adv
 
   !===============================================================================
   subroutine oslo_aero_dms_emis(ncol, lchnk, u, v, zm, ocnfrc, icefrc, sst, fdms, cflx)
@@ -219,7 +219,7 @@ contains
     real(r8) , intent(in)    :: icefrc(pcols)
     real(r8) , intent(in)    :: sst(pcols)
     real(r8) , intent(in)    :: fdms(pcols)
-    real(r8) , intent(inout) :: cflx(pcols,pcnst) 
+    real(r8) , intent(inout) :: cflx(pcols,pcnst)
 
     ! local variables
     real(r8) :: u10m(pcols)     ! [m/s]

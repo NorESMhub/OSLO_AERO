@@ -43,8 +43,6 @@ module aero_model
   use oslo_aero_share,          only: lifeCycleNumberMedianRadius, rhopart, lifeCycleSigma
   use oslo_aero_share,          only: l_so4_a2, l_bc_n, l_bc_ax
   use oslo_aero_share,          only: MODE_IDX_BC_NUC, MODE_IDX_BC_EXT_AC
-  use oslo_aero_share,          only: getNumberofTracersInMode, getCloudTracerIndexDirect, getCloudTracerName
-  use oslo_aero_share,          only: getCloudTracerName, getTracerIndex, aero_register
   use oslo_aero_control,        only: oslo_aero_ctl_readnl
   use oslo_aero_depos,          only: oslo_aero_depos_init
   use oslo_aero_depos,          only: oslo_aero_depos_dry, oslo_aero_depos_wet, oslo_aero_wetdep_init
@@ -54,6 +52,8 @@ module aero_model
   use oslo_aero_seasalt,        only: oslo_aero_seasalt_init, oslo_aero_seasalt_emis, seasalt_active
   use oslo_aero_dust,           only: oslo_aero_dust_init, oslo_aero_dust_emis, dust_active
   use oslo_aero_ocean,          only: oslo_aero_ocean_init, oslo_aero_dms_emis
+  use oslo_aero_share,          only: getNumberofTracersInMode, getCloudTracerIndexDirect, getCloudTracerName
+  use oslo_aero_share,          only: getCloudTracerName, getTracerIndex, aero_register
   use oslo_aero_sox_cldaero,    only: sox_cldaero_init
   use oslo_aero_microp,         only: oslo_aero_microp_readnl
   use oslo_aero_sw_tables,      only: initopt
@@ -213,24 +213,24 @@ contains
        endif
     enddo
 
-    call addfld ('NUCLRATE' ,(/'lev'/), 'A', '#/cm3/s','Nucleation rate')
-    call addfld ('FORMRATE' ,(/'lev'/), 'A', '#/cm3/s','Formation rate of 12nm particles')
-    call addfld ('COAGNUCL' ,(/'lev'/), 'A', '/s'     ,'Coagulation sink for nucleating particles')
-    call addfld ('GRH2SO4'  ,(/'lev'/), 'A', 'nm/hour','Growth rate H2SO4')
-    call addfld ('GRSOA'    ,(/'lev'/), 'A', 'nm/hour','Growth rate SOA')
-    call addfld ('GR'       ,(/'lev'/), 'A', 'nm/hour','Growth rate, H2SO4+SOA')
-    call addfld ('NUCLSOA'  ,(/'lev'/), 'A', 'kg/kg'  ,'SOA nucleate')
-    call addfld ('ORGNUCL'  ,(/'lev'/), 'A', 'kg/kg'  ,'Organic gas available for nucleation')
+    call addfld ('NUCLRATE',(/'lev'/), 'A','#/cm3/s','Nucleation rate')
+    call addfld ('FORMRATE',(/'lev'/), 'A','#/cm3/s','Formation rate of 12nm particles')
+    call addfld ('COAGNUCL',(/'lev'/), 'A', '/s','Coagulation sink for nucleating particles')
+    call addfld ('GRH2SO4',(/'lev'/), 'A', 'nm/hour','Growth rate H2SO4')
+    call addfld ('GRSOA',(/'lev'/),'A','nm/hour','Growth rate SOA')
+    call addfld ('GR',(/'lev'/), 'A', 'nm/hour','Growth rate, H2SO4+SOA')
+    call addfld ('NUCLSOA',(/'lev'/),'A','kg/kg','SOA nucleate')
+    call addfld ('ORGNUCL',(/'lev'/),'A','kg/kg','Organic gas available for nucleation')
 
     if(history_aerosol)then
        call add_default ('NUCLRATE', 1, ' ')
        call add_default ('FORMRATE', 1, ' ')
        call add_default ('COAGNUCL', 1, ' ')
-       call add_default ('GRH2SO4',  1, ' ')
-       call add_default ('GRSOA',    1, ' ')
-       call add_default ('GR',       1, ' ')
-       call add_default ('NUCLSOA',  1, ' ')
-       call add_default ('ORGNUCL',  1, ' ')
+       call add_default ('GRH2SO4', 1, ' ')
+       call add_default ('GRSOA', 1, ' ')
+       call add_default ('GR', 1, ' ')
+       call add_default ('NUCLSOA', 1, ' ')
+       call add_default ('ORGNUCL', 1, ' ')
     end if
 
     call addfld( 'XPH_LWC',    (/ 'lev' /), 'A','kg/kg',   'pH value multiplied by lwc')
@@ -238,9 +238,9 @@ contains
     call addfld ('AQSO4_O3',   horiz_only,  'A','kg/m2/s', 'SO4 aqueous phase chemistry due to O3')
 
     if ( history_aerosol ) then
-       call add_default ('XPH_LWC',    1, ' ')
+       call add_default ('XPH_LWC', 1, ' ')
        call add_default ('AQSO4_H2O2', 1, ' ')
-       call add_default ('AQSO4_O3',   1, ' ')
+       call add_default ('AQSO4_O3', 1, ' ')
     endif
 
   end subroutine aero_model_init
@@ -668,8 +668,8 @@ contains
 
   !=============================================================================
   subroutine aero_model_constants()
-    !
-    ! A number of constants used in the emission and size-calculation in CAM-Oslo Jan 2011.
+
+    ! A number of constants used in the emission and size-calculation in CAM-Oslo
 
     ! local variables
     integer  :: kcomp,i
