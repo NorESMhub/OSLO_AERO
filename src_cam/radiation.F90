@@ -778,7 +778,6 @@ subroutine radiation_tend( &
 
    type(rad_out_t), target, optional, intent(out) :: rd_out
 
-
    ! Local variables
    real(r8)                 :: volc_fraction_coarse ! Fraction of volcanic aerosols going to coarse mode
    real(r8), pointer        :: rvolcmmr(:,:)        ! stratospheric volcanoes aerosol mmr
@@ -1292,18 +1291,19 @@ subroutine radiation_tend( &
                ! follwoing the Ghan (2013) method:
                ! for calculation of direct radiative forcing, not necessarily "offline" as such anymore
                ! (just nudged), but with an extra call with 0 aerosol extiction.
+
                call rad_rrtmg_sw( &
-                  lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,          &
-                  cldfprime, aer_tau, aer_tau_w, aer_tau_w_g,  aer_tau_w_f,  &
-                  eccf, coszrs, rd%solin, sfac, cam_in%asdir,                &
-                  cam_in%asdif, cam_in%aldir, cam_in%aldif, qrs, rd%qrsc,    &
-                  fsnt, rd%fsntc, rd%fsntoa, rd%fsutoa, rd%fsntoac,          &
-                  rd%fsnirt, rd%fsnrtc, rd%fsnirtsq, fsns, rd%fsnsc,         &
-                  rd%fsdsc, fsds, cam_out%sols, cam_out%soll, cam_out%solsd, &
-                  cam_out%solld, fns, fcns, Nday, Nnite,                     &
-                  IdxDay, IdxNite, su, sd, E_cld_tau=c_cld_tau,              &
-                  E_cld_tau_w=c_cld_tau_w, E_cld_tau_w_g=c_cld_tau_w_g,      &
-                  E_cld_tau_w_f=c_cld_tau_w_f, old_convert=.true.)
+                  lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,               &
+                  cldfprime, aer_tau*0.0_r8, aer_tau_w, aer_tau_w_g, aer_tau_w_f, &
+                  eccf, coszrs, rd%solin, sfac, cam_in%asdir,                     &
+                  cam_in%asdif, cam_in%aldir, cam_in%aldif, qrs, rd%qrsc,         &
+                  fsnt, rd%fsntc, rd%fsntoa, rd%fsutoa, rd%fsntoac,               &
+                  rd%fsnirt, rd%fsnrtc, rd%fsnirtsq, fsns, rd%fsnsc,              &
+                  rd%fsdsc, fsds, cam_out%sols, cam_out%soll, cam_out%solsd,      &
+                  cam_out%solld, fns, fcns, Nday, Nnite,                          &
+                  IdxDay, IdxNite, su, sd, E_cld_tau=c_cld_tau,                   &
+                  E_cld_tau_w=c_cld_tau_w, E_cld_tau_w_g=c_cld_tau_w_g,           &
+                  E_cld_tau_w_f=c_cld_tau_w_f, old_convert=.false., idrf=.true.)
 
                ! Dump shortwave radiation information to history tape buffer (diagnostics)
                ! Note that DRF fields are now from the aer_tau=0 call (clean), no longer with
@@ -1407,18 +1407,29 @@ subroutine radiation_tend( &
 
             if (active_calls(icall)) then
 
-               ! update the conctrations in the RRTMG state object
+               ! update the concentrations in the RRTMG state object
                call  rrtmg_state_update( state, pbuf, icall, r_state)
 
-               call rad_rrtmg_lw( &
-                    lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,  &
+               call rad_rrtmg_lw(                                             &
+                    lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,         &
                     aer_lw_abs*0.0_r8, cldfprime, c_cld_lw_abs, qrl, rd%qrlc, &
-                    flns, flnt, rd%flnsc, rd%flntc, cam_out%flwds,     &
-                    rd%flut, rd%flutc, fnl, fcnl, rd%fldsc,            &
+                    flns, flnt, rd%flnsc, rd%flntc, cam_out%flwds,            &
+                    rd%flut, rd%flutc, fnl, fcnl, rd%fldsc,                   &
                     lu, ld)
 
                call outfld('FLNT_DRF',flnt(:)    , pcols, lchnk)
                call outfld('FLNTCDRF',rd%flntc(:), pcols, lchnk)
+
+               call rad_rrtmg_lw( &
+                    lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,  &
+                    aer_lw_abs, cldfprime, c_cld_lw_abs, qrl, rd%qrlc, &
+                    flns, flnt, rd%flnsc, rd%flntc, cam_out%flwds,     &
+                    rd%flut, rd%flutc, fnl, fcnl, rd%fldsc,            &
+                    lu, ld)
+
+               ! FLNT_ORG is just for temporary testing vs. FLNT
+               ftem_1d(1:ncol) = cam_out%flwds(1:ncol) - flns(1:ncol)
+               call outfld('FLUS    ',ftem_1d ,pcols,lchnk)
 
                !  Output fluxes at 200 mb
                call vertinterp(ncol, pcols, pverp, state%pint, 20000._r8, fnl,  rd%fln200)
