@@ -20,7 +20,6 @@ module aero_model
   use physics_types,            only: physics_state, physics_ptend, physics_ptend_init
   use physics_buffer,           only: physics_buffer_desc, pbuf_get_field, pbuf_get_index, pbuf_set_field
   use physconst,                only: gravit, rair, rhoh2o, pi
-  use spmd_utils,               only: masterproc
   use time_manager,             only: get_nstep
   use cam_history,              only: outfld, fieldname_len, addfld, add_default, horiz_only
   use chem_mods,                only: gas_pcnst, adv_mass

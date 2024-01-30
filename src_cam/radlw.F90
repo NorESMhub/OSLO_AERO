@@ -1,7 +1,7 @@
 
 module radlw
-!----------------------------------------------------------------------- 
-! 
+!-----------------------------------------------------------------------
+!
 ! Purpose: Longwave radiation calculations.
 !
 !-----------------------------------------------------------------------
@@ -28,14 +28,14 @@ save
 public ::&
    radlw_init,   &! initialize constants
    rad_rrtmg_lw   ! driver for longwave radiation code
-   
+
 ! Private data
 integer :: ntoplw    ! top level to solve for longwave cooling
 
 ! Flag for cloud overlap method
 ! 0=clear, 1=random, 2=maximum/random, 3=maximum
 integer, parameter :: icld = 2
-                              
+
 
 !===============================================================================
 CONTAINS
@@ -92,7 +92,7 @@ subroutine rad_rrtmg_lw(lchnk   ,ncol      ,rrtmg_levs,r_state,       &
 
    real(r8), pointer, dimension(:,:,:) :: lu ! longwave spectral flux up
    real(r8), pointer, dimension(:,:,:) :: ld ! longwave spectral flux down
-   
+
 !
 !---------------------------Local variables-----------------------------
 !
@@ -110,7 +110,7 @@ subroutine rad_rrtmg_lw(lchnk   ,ncol      ,rrtmg_levs,r_state,       &
 
    real(r8), parameter :: dps = 1._r8/86400._r8 ! Inverse of seconds per day
 
-   ! Cloud arrays for McICA 
+   ! Cloud arrays for McICA
    integer, parameter :: nsubclw = ngptlw       ! rrtmg_lw g-point (quadrature point) dimension
    integer :: permuteseed                       ! permute seed for sub-column generator
 
@@ -140,10 +140,10 @@ subroutine rad_rrtmg_lw(lchnk   ,ncol      ,rrtmg_levs,r_state,       &
    ! mji/rrtmg
 
    ! Calculate cloud optical properties here if using CAM method, or if using one of the
-   ! methods in RRTMG_LW, then pass in cloud physical properties and zero out cloud optical 
+   ! methods in RRTMG_LW, then pass in cloud physical properties and zero out cloud optical
    ! properties here
-   
-   ! Zero optional cloud optical depth input array tauc_lw, 
+
+   ! Zero optional cloud optical depth input array tauc_lw,
    ! if inputting cloud physical properties into RRTMG_LW
    !          tauc_lw(:,:,:) = 0.
    ! Or, pass in CAM cloud longwave optical depth to RRTMG_LW
@@ -156,7 +156,7 @@ subroutine rad_rrtmg_lw(lchnk   ,ncol      ,rrtmg_levs,r_state,       &
    ! Call sub-column generator for McICA in radiation
    call t_startf('mcica_subcol_lw')
 
-   ! Set permute seed (must be offset between LW and SW by at least 140 to insure 
+   ! Set permute seed (must be offset between LW and SW by at least 140 to insure
    ! effective randomization)
    permuteseed = 150
 
@@ -172,7 +172,7 @@ subroutine rad_rrtmg_lw(lchnk   ,ncol      ,rrtmg_levs,r_state,       &
 
    call t_stopf('mcica_subcol_lw')
 
-   
+
    call t_startf('rrtmg_lw')
 
    ! Convert incoming water amounts from specific humidity to vmr as needed;
@@ -206,7 +206,7 @@ subroutine rad_rrtmg_lw(lchnk   ,ncol      ,rrtmg_levs,r_state,       &
    ! extra layer above model top with vertical indexing from bottom to top.
    ! Heating units are in K/d on output from RRTMG and contain output for
    ! extra layer above model top with vertical indexing from bottom to top.
-   ! Heating units are converted to J/kg/s below for use in CAM. 
+   ! Heating units are converted to J/kg/s below for use in CAM.
 
    flwds(:ncol) = dflx (:ncol,1)
    fldsc(:ncol) = dflxc(:ncol,1)
@@ -229,17 +229,11 @@ subroutine rad_rrtmg_lw(lchnk   ,ncol      ,rrtmg_levs,r_state,       &
    fsul(:ncol,pverp-rrtmg_levs+1:pverp)=uflxc(:ncol,rrtmg_levs:1:-1)
    fsdl(:ncol,pverp-rrtmg_levs+1:pverp)=dflxc(:ncol,rrtmg_levs:1:-1)
 
-#ifndef OSLO_AERO
-   if (single_column.and.scm_crm_mode) then
-#endif
       call outfld('FUL     ',ful,pcols,lchnk)
       call outfld('FDL     ',fdl,pcols,lchnk)
       call outfld('FULC    ',fsul,pcols,lchnk)
       call outfld('FDLC    ',fsdl,pcols,lchnk)
-#ifndef OSLO_AERO
-   endif
-#endif
-   
+
    fnl(:ncol,:) = ful(:ncol,:) - fdl(:ncol,:)
    ! mji/ cam excluded this?
    fcnl(:ncol,:) = fsul(:ncol,:) - fsdl(:ncol,:)
@@ -262,12 +256,12 @@ subroutine rad_rrtmg_lw(lchnk   ,ncol      ,rrtmg_levs,r_state,       &
       lu(:ncol,pverp-rrtmg_levs+1:pverp,:) = reshape(lwuflxs(:,:ncol,rrtmg_levs:1:-1), &
            (/ncol,rrtmg_levs,nbndlw/), order=(/3,1,2/))
    end if
-   
+
    if (associated(ld)) then
       ld(:ncol,pverp-rrtmg_levs+1:pverp,:) = reshape(lwdflxs(:,:ncol,rrtmg_levs:1:-1), &
            (/ncol,rrtmg_levs,nbndlw/), order=(/3,1,2/))
    end if
-   
+
    call t_stopf('rrtmg_lw')
 
 end subroutine rad_rrtmg_lw
@@ -275,9 +269,9 @@ end subroutine rad_rrtmg_lw
 !-------------------------------------------------------------------------------
 
 subroutine radlw_init()
-!----------------------------------------------------------------------- 
-! 
-! Purpose: 
+!-----------------------------------------------------------------------
+!
+! Purpose:
 ! Initialize various constants for radiation scheme.
 !
 !-----------------------------------------------------------------------

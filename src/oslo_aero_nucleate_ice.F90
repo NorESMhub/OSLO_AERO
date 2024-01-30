@@ -155,7 +155,7 @@ contains
     integer :: ierr
     integer :: m, n
     logical :: history_cesm_forcing
-    character(len=*), parameter :: routine = 'nucleate_ice_cam_init'
+    character(len=*), parameter :: routine = 'nucleate_ice_oslo_init'
     !--------------------------------------------------------------------------------------------
 
     call phys_getopts(history_cesm_forcing_out = history_cesm_forcing)

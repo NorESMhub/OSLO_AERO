@@ -72,9 +72,10 @@ use cam_logfile,      only : iulog
 use ref_pres,         only : do_molec_diff, nbot_molec
 use phys_control,     only : phys_getopts
 use time_manager,     only : is_first_step
-#ifdef OSLO_AERO
-  use oslo_aero_share, only: getNumberOfAerosolTracers, fillAerosolTracerList
-#endif
+! OSLO_AERO begin
+use oslo_aero_share, only: getNumberOfAerosolTracers, fillAerosolTracerList
+! OSLO_AERO enda
+
 
 implicit none
 private
@@ -322,37 +323,12 @@ subroutine vertical_diffusion_init(pbuf2d)
   ! prog_modal_aero determines whether prognostic modal aerosols are present in the run.
   call phys_getopts(prog_modal_aero_out=prog_modal_aero)
 
-#ifdef OSLO_AERO
+! OSLO_AERO begin
   prog_modal_aero = .TRUE.
   pmam_ncnst = getNumberOfAerosolTracers()
   allocate(pmam_cnst_idx(pmam_ncnst))
   call fillAerosolTracerList(pmam_cnst_idx)
-#else
-  if (prog_modal_aero) then
-     ! NOTE THAT THIS BREAKS THE CONCEPT OF KEEPEING MAM-AEROSOLS OUT OF
-     ! DIFFUSION, BUT IF YOU ARE USING MAM, YOU SHOULD NOT BEE HERE ANYWAY!!
-
-     ! First need total number of mam constituents
-     call rad_cnst_get_info(0, nmodes=nmodes)
-     do m = 1, nmodes
-        call rad_cnst_get_info(0, m, nspec=nspec)
-        pmam_ncnst = pmam_ncnst + 1 + nspec
-     end do
-     allocate(pmam_cnst_idx(pmam_ncnst))
-
-     ! Get the constituent indicies
-     im = 1
-     do m = 1, nmodes
-        call rad_cnst_get_mode_num_idx(m, pmam_cnst_idx(im))
-        im = im + 1
-        call rad_cnst_get_info(0, m, nspec=nspec)
-        do l = 1, nspec
-           call rad_cnst_get_mam_mmr_idx(m, l, pmam_cnst_idx(im))
-           im = im + 1
-        end do
-     end do
-  end if
-#endif
+  ! OSLO_AERO end
 
   ! Initialize upper boundary condition module
 
@@ -579,10 +555,10 @@ subroutine vertical_diffusion_init(pbuf2d)
   if( history_budget ) then
      call add_default( vdiffnam(ixcldliq), history_budget_histfile_num, ' ' )
      call add_default( vdiffnam(ixcldice), history_budget_histfile_num, ' ' )
-#ifdef OSLO_AERO
+     ! OSLO_AERO begin
      call add_default( vdiffnam(ixnumliq), history_budget_histfile_num, ' ' )
      call add_default( vdiffnam(ixnumice), history_budget_histfile_num, ' ' )
-#endif
+     ! OSLO_AERO end
      if( history_budget_histfile_num > 1 ) then
         call add_default(  vdiffnam(1), history_budget_histfile_num, ' ' )
         call add_default( 'DTV'       , history_budget_histfile_num, ' ' )
@@ -1067,9 +1043,9 @@ subroutine vertical_diffusion_tend( &
      call outfld( 'slv_pre_PBL  ', slv_prePBL,                pcols, lchnk )
      call outfld( 'u_pre_PBL    ', state%u,                   pcols, lchnk )
      call outfld( 'v_pre_PBL    ', state%v,                   pcols, lchnk )
-     call outfld( 'qv_pre_PBL   ', state%q(:ncol,:,1),        pcols, lchnk )
-     call outfld( 'ql_pre_PBL   ', state%q(:ncol,:,ixcldliq), pcols, lchnk )
-     call outfld( 'qi_pre_PBL   ', state%q(:ncol,:,ixcldice), pcols, lchnk )
+     call outfld( 'qv_pre_PBL   ', state%q(:,:,1),        pcols, lchnk )
+     call outfld( 'ql_pre_PBL   ', state%q(:,:,ixcldliq), pcols, lchnk )
+     call outfld( 'qi_pre_PBL   ', state%q(:,:,ixcldice), pcols, lchnk )
      call outfld( 't_pre_PBL    ', state%t,                   pcols, lchnk )
      call outfld( 'rh_pre_PBL   ', ftem_prePBL,               pcols, lchnk )
 
@@ -1158,7 +1134,7 @@ subroutine vertical_diffusion_tend( &
           p_dry , state%t      , rhoi_dry,  ztodt         , taux          , &
           tauy          , shflux             , cflux        , &
           kvh           , kvm                , kvq          , cgs           , cgh           , &
-          state%zi      , ksrftms            , dragblj      , & 
+          state%zi      , ksrftms            , dragblj      , &
           qmincg       , fieldlist_dry , fieldlist_molec,&
           u_tmp         , v_tmp              , q_tmp        , s_tmp         ,                 &
           tautmsx_temp  , tautmsy_temp       , dtk_temp     , topflx_temp   , errstring     , &
@@ -1174,20 +1150,7 @@ subroutine vertical_diffusion_tend( &
 
   end if
 
-  if (prog_modal_aero) then
-
-     ! Modal aerosol species not diffused, so just add the explicit surface fluxes to the
-     ! lowest layer
-
-     ! NOTE: Oslo aero adds emissions together with dry deposition
-#ifndef OSLO_AERO
-     tmp1(:ncol) = ztodt * gravit * state%rpdel(:ncol,pver)
-     do m = 1, pmam_ncnst
-        l = pmam_cnst_idx(m)
-        q_tmp(:ncol,pver,l) = q_tmp(:ncol,pver,l) + tmp1(:ncol) * cam_in%cflx(:ncol,l)
-     enddo
-#endif
-  end if
+  ! NOTE: Oslo aero adds emissions together with dry deposition
 
   ! -------------------------------------------------------- !
   ! Diagnostics and output writing after applying PBL scheme !
@@ -1417,12 +1380,11 @@ subroutine vertical_diffusion_tend( &
      call outfld( 'uflx_cg_PBL'  , uflx_cg,                   pcols, lchnk )
      call outfld( 'vflx_cg_PBL'  , vflx_cg,                   pcols, lchnk )
      call outfld( 'slten_PBL'    , slten,                     pcols, lchnk )
-     call outfld( 'qtten_PBL'    , qtten,                     pcols, lchnk )
-     call outfld( 'uten_PBL'     , ptend%u(:ncol,:),          pcols, lchnk )
-     call outfld( 'vten_PBL'     , ptend%v(:ncol,:),          pcols, lchnk )
-     call outfld( 'qvten_PBL'    , ptend%q(:ncol,:,1),        pcols, lchnk )
-     call outfld( 'qlten_PBL'    , ptend%q(:ncol,:,ixcldliq), pcols, lchnk )
-     call outfld( 'qiten_PBL'    , ptend%q(:ncol,:,ixcldice), pcols, lchnk )
+     call outfld( 'uten_PBL'     , ptend%u(:,:),              pcols, lchnk )
+     call outfld( 'vten_PBL'     , ptend%v(:,:),              pcols, lchnk )
+     call outfld( 'qvten_PBL'    , ptend%q(:,:,1),            pcols, lchnk )
+     call outfld( 'qlten_PBL'    , ptend%q(:,:,ixcldliq),     pcols, lchnk )
+     call outfld( 'qiten_PBL'    , ptend%q(:,:,ixcldice),     pcols, lchnk )
      call outfld( 'tten_PBL'     , tten,                      pcols, lchnk )
      call outfld( 'rhten_PBL'    , rhten,                     pcols, lchnk )
 
@@ -1458,7 +1420,7 @@ subroutine vertical_diffusion_tend( &
   call outfld( 'DUV'          , ptend%u,                   pcols, lchnk )
   call outfld( 'DVV'          , ptend%v,                   pcols, lchnk )
   do m = 1, pcnst
-     call outfld( vdiffnam(m) , ptend%q(1,1,m),            pcols, lchnk )
+     call outfld( vdiffnam(m) , ptend%q(:,:,m),            pcols, lchnk )
   end do
   if( do_molec_diff ) then
      call outfld( 'TTPXMLC'  , topflx,                    pcols, lchnk )

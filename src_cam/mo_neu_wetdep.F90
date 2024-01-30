@@ -14,10 +14,10 @@ module mo_neu_wetdep
   use cam_abortutils,   only : endrun
   use seq_drydep_mod,   only : n_species_table, species_name_table, dheff
   use gas_wetdep_opts,  only : gas_wetdep_method, gas_wetdep_list, gas_wetdep_cnt
-#ifdef OSLO_AERO
+  ! OSLO_AERO begin
   use mo_constants, only: rgrav
   use phys_control, only: phys_getopts
-#endif
+  ! OSLO_AERO end
 !
   implicit none
 !
@@ -281,10 +281,10 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
   real(r8) :: pi
   real(r8) :: lats(pcols)
 
-#ifdef OSLO_AERO
+  ! OSLO_AERO begin
   real(r8) :: wrk_wd(pcols)
   logical history_aerosol
-#endif
+  ! OSLO_AERO end
 !
 ! from cam/src/physics/cam/stratiform.F90
 !
@@ -483,7 +483,7 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
 
 !This is output normally in mo_chm_diags, but
 !if neu wetdep, we have to output it here!
-#ifdef OSLO_AERO
+   ! OSLO_AERO begin
    call phys_getopts( history_aerosol_out = history_aerosol)
    if(history_aerosol)then
       do m=1,gas_wetdep_cnt
@@ -496,7 +496,7 @@ subroutine neu_wetdep_tend(lchnk,ncol,mmr,pmid,pdel,zint,tfld,delt, &
          call outfld('WD_A_'//trim(gas_wetdep_list(m)),wrk_wd(:ncol),ncol,lchnk)
       end do
    end if
-#endif
+   ! OSLO_AERO end
 !
   if ( do_diag ) then
     call outfld('QT_RAIN_HNO3', qt_rain, ncol, lchnk )
