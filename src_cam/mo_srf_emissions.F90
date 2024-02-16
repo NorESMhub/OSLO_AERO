@@ -12,9 +12,9 @@ module mo_srf_emissions
   use ppgrid,        only : pcols, begchunk, endchunk
   use cam_logfile,   only : iulog
   use tracer_data,   only : trfld,trfile
-#ifdef OSLO_AERO
+  ! OSLO_AERO begin
   use oslo_aero_ocean, only: oslo_aero_dms_inq
-#endif
+  ! OSLO_AERO end
 
   implicit none
 
@@ -33,18 +33,18 @@ module mo_srf_emissions
 
   private
 
-  public  :: srf_emissions_inti, set_srf_emissions, set_srf_emissions_time 
+  public  :: srf_emissions_inti, set_srf_emissions, set_srf_emissions_time
 
   save
 
   real(r8), parameter :: amufac = 1.65979e-23_r8         ! 1.e4* kg / amu
   logical :: has_emis(gas_pcnst)
   type(emission), allocatable :: emissions(:)
-  integer                     :: n_emis_files 
+  integer                     :: n_emis_files
   integer :: c10h16_ndx, isop_ndx
-#ifdef OSLO_AERO
+  ! OSLO_AERO begin
   integer :: dms_ndx
-#endif
+  ! OSLO_AERO end
 
 contains
 
@@ -57,7 +57,7 @@ contains
     use chem_mods,        only : adv_mass
     use mo_constants,     only : d2r, pi, rearth
     use string_utils,     only : to_upper
-    use mo_chem_utls,     only : get_spc_ndx 
+    use mo_chem_utls,     only : get_spc_ndx
     use tracer_data,      only : trcdata_init
     use cam_pio_utils,    only : cam_pio_openfile
     use pio,              only : pio_inquire, pio_nowrite, pio_closefile, pio_inq_varndims
@@ -119,7 +119,7 @@ contains
 
        i = scan(srf_emis_specifier(n),'->')
        spc_name = trim(adjustl(srf_emis_specifier(n)(:i-1)))
-       
+
        ! need to parse out scalefactor ...
        tmp_string = adjustl(srf_emis_specifier(n)(i+2:))
        j = scan( tmp_string, '*' )
@@ -136,7 +136,7 @@ contains
 
        if (m > 0) then
           has_emis(m) = .true.
-       else 
+       else
           write(iulog,*) 'srf_emis_inti: spc_name ',spc_name,' is not included in the simulation'
           call endrun('srf_emis_inti: invalid surface emission specification')
        endif
@@ -167,7 +167,7 @@ contains
     end if
 
     !-----------------------------------------------------------------------
-    ! Sort the input files so that the emissions sources are summed in the 
+    ! Sort the input files so that the emissions sources are summed in the
     ! same order regardless of the order of the input files in the namelist
     !-----------------------------------------------------------------------
     if (n_emis_files > 0) then
@@ -177,7 +177,7 @@ contains
     !-----------------------------------------------------------------------
     ! 	... setup the emission type array
     !-----------------------------------------------------------------------
-    do m=1,n_emis_files 
+    do m=1,n_emis_files
        emissions(m)%spc_ndx          = emis_indexes(indx(m))
        emissions(m)%units            = 'Tg/y'
        emissions(m)%species          = emis_species(indx(m))
@@ -192,7 +192,7 @@ contains
     spc_loop: do m = 1, n_emis_files
 
        emissions(m)%nsectors = 0
-       
+
        call getfil (emissions(m)%filename, locfn, 0)
        call cam_pio_openfile ( ncid, trim(locfn), PIO_NOWRITE)
        ierr = pio_inquire (ncid, nvariables=nvars)
@@ -234,7 +234,7 @@ contains
        deallocate(vndims)
 
        ! Global attribute 'input_method' overrides the srf_emis_type namelist setting on
-       ! a file-by-file basis.  If the emis file does not contain the 'input_method' 
+       ! a file-by-file basis.  If the emis file does not contain the 'input_method'
        ! attribute then the srf_emis_type namelist setting is used.
        call pio_seterrorhandling(ncid, PIO_BCAST_ERROR)
        ierr = pio_get_att(ncid, PIO_GLOBAL, 'input_method', file_interp_type)
@@ -263,9 +263,9 @@ contains
     c10h16_ndx = get_spc_ndx('C10H16')
     isop_ndx = get_spc_ndx('ISOP')
 
-#ifdef OSLO_AERO
+    ! OSLO_AERO begin
     dms_ndx = get_spc_ndx('DMS')
-#endif
+    ! OSLO_AERO end
 
   end subroutine srf_emissions_inti
 
@@ -281,7 +281,7 @@ contains
 
     implicit none
 
-    type(physics_state), intent(in):: state(begchunk:endchunk)                 
+    type(physics_state), intent(in):: state(begchunk:endchunk)
     type(physics_buffer_desc), pointer :: pbuf2d(:,:)
 
     !-----------------------------------------------------------------------
@@ -348,7 +348,7 @@ contains
                                                      "kg/m^2/sec  " /)
     character(len=12) :: units
 
-    real(r8), dimension(ncol) :: rlats, rlons 
+    real(r8), dimension(ncol) :: rlats, rlons
 
     sflx(:,:) = 0._r8
 
@@ -383,15 +383,15 @@ contains
     declination = dec_max * cos((doy_loc - 172._r8)*twopi/dayspy)
     tod = (calday - doy_loc) + .5_r8
 
-#ifdef OSLO_AERO
-    ! Remove DMS emissions if option is not "from file" 
+    ! OSLO_AERO begin
+    ! Remove DMS emissions if option is not "from file"
     ! Online emissions are treated in seasalt module
     if (.not. oslo_aero_dms_inq())  then ! Returns "True" if "emissions from file"
        if (dms_ndx .gt. 0)then
           sflx(:,dms_ndx) = 0.0_r8
        end if
     end if
-#endif
+    ! OSLO_AERO end
 
     do i = 1,ncol
        !

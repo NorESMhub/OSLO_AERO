@@ -10,7 +10,7 @@
 
       save
 
-      real(r8), parameter :: qext_so4(8,17) = reshape( (/  &                      ! m^2/gram (NH4)_2(SO4) 
+      real(r8), parameter :: qext_so4(8,17) = reshape( (/  &                      ! m^2/gram (NH4)_2(SO4)
             7.15_r8,  10.29_r8,  12.86_r8,  15.45_r8,  21.52_r8,  30.97_r8,  50.30_r8,  72.31_r8, &
             7.15_r8,  10.30_r8,  12.87_r8,  15.48_r8,  21.58_r8,  31.07_r8,  50.43_r8,  72.49_r8, &
             7.14_r8,  10.29_r8,  12.88_r8,  15.51_r8,  21.68_r8,  31.23_r8,  50.67_r8,  72.78_r8, &
@@ -57,7 +57,7 @@
       real(r8), parameter :: asm_so4(8,17) = reshape( (/ &
         0.67_r8,   0.68_r8,   0.68_r8,   0.68_r8,   0.69_r8,   0.70_r8,   0.71_r8,   0.73_r8, &
         0.67_r8,   0.68_r8,   0.68_r8,   0.68_r8,   0.69_r8,   0.70_r8,   0.72_r8,   0.73_r8, &
-        0.67_r8,   0.68_r8,   0.69_r8,   0.69_r8,   0.70_r8,   0.70_r8,   0.72_r8,   0.73_r8, & 
+        0.67_r8,   0.68_r8,   0.69_r8,   0.69_r8,   0.70_r8,   0.70_r8,   0.72_r8,   0.73_r8, &
         0.67_r8,   0.69_r8,   0.69_r8,   0.70_r8,   0.70_r8,   0.71_r8,   0.72_r8,   0.74_r8, &
         0.67_r8,   0.69_r8,   0.70_r8,   0.70_r8,   0.71_r8,   0.71_r8,   0.73_r8,   0.74_r8, &
         0.67_r8,   0.69_r8,   0.70_r8,   0.71_r8,   0.71_r8,   0.72_r8,   0.73_r8,   0.74_r8, &
@@ -95,7 +95,7 @@
          3.28_r8,   5.11_r8,   6.70_r8,   8.23_r8,  13.80_r8,  24.05_r8,  47.93_r8,  76.67_r8, &
          2.41_r8,   3.79_r8,   5.04_r8,   6.24_r8,  10.83_r8,  19.88_r8,  42.13_r8,  70.46_r8  &
             /),(/8,17/))
- 
+
       real(r8), parameter :: qext_dant(7,17) = qext_ant(2:8,:) - qext_ant(1:7,:)
 
       real(r8), parameter :: ssa_ant(8,17) = reshape( (/ &
@@ -119,7 +119,7 @@
             /),(/8,17/))
 
       real(r8), parameter :: ssa_dant(7,17) = ssa_ant(2:8,:) - ssa_ant(1:7,:)
- 
+
       real(r8), parameter :: asm_ant(8,17) = reshape( (/ &
         0.67_r8,   0.68_r8,   0.68_r8,   0.68_r8,   0.69_r8,   0.70_r8,   0.71_r8,   0.73_r8, &
         0.67_r8,   0.68_r8,   0.68_r8,   0.68_r8,   0.69_r8,   0.70_r8,   0.72_r8,   0.73_r8, &
@@ -206,7 +206,7 @@
 !--------------------------------------------------------------------
 ! black carbon
 !--------------------------------------------------------------------
-      real(r8), parameter :: qext_cbs(8,17) = reshape( (/ & 
+      real(r8), parameter :: qext_cbs(8,17) = reshape( (/ &
       26.47_r8,  26.47_r8,  26.47_r8,  68.55_r8,  54.51_r8,  68.55_r8,  93.69_r8, 128.49_r8, &
       26.35_r8,  26.35_r8,  26.35_r8,  67.19_r8,  53.53_r8,  67.19_r8,  91.62_r8, 125.62_r8, &
       26.15_r8,  26.15_r8,  26.15_r8,  65.24_r8,  52.13_r8,  65.24_r8,  88.62_r8, 121.44_r8, &
@@ -228,7 +228,7 @@
 
       real(r8), parameter :: qext_dcbs(7,17) = qext_cbs(2:8,:) - qext_cbs(1:7,:)
 
-      real(r8), parameter :: ssa_cbs(8,17) = reshape( (/ & 
+      real(r8), parameter :: ssa_cbs(8,17) = reshape( (/ &
       0.30538_r8,0.30538_r8,0.30538_r8,0.58171_r8,0.52858_r8,0.58171_r8,0.66772_r8,0.73300_r8, &
       0.30531_r8,0.30531_r8,0.30531_r8,0.57816_r8,0.52490_r8,0.57816_r8,0.66490_r8,0.73116_r8, &
       0.30524_r8,0.30524_r8,0.30524_r8,0.57281_r8,0.51947_r8,0.57281_r8,0.66041_r8,0.72800_r8, &
@@ -275,7 +275,7 @@
 !--------------------------------------------------------------------
 ! organic carbon
 !--------------------------------------------------------------------
-      real(r8), parameter :: qext_ocs(8,17) = reshape( (/ & 
+      real(r8), parameter :: qext_ocs(8,17) = reshape( (/ &
       5.38_r8,   8.22_r8,  11.03_r8,  13.09_r8,  14.66_r8,  18.31_r8,  25.39_r8,  28.27_r8, &
       5.37_r8,   8.20_r8,  11.00_r8,  13.06_r8,  14.63_r8,  18.29_r8,  25.39_r8,  28.28_r8, &
       5.35_r8,   8.16_r8,  10.95_r8,  13.02_r8,  14.59_r8,  18.26_r8,  25.39_r8,  28.29_r8, &
@@ -297,7 +297,7 @@
 
       real(r8), parameter :: qext_docs(7,17) = qext_ocs(2:8,:) - qext_ocs(1:7,:)
 
-      real(r8), parameter :: ssa_ocs(8,17) = reshape( (/ & 
+      real(r8), parameter :: ssa_ocs(8,17) = reshape( (/ &
       0.67508_r8,0.73829_r8,0.78690_r8,0.80446_r8,0.82190_r8,0.84991_r8,0.87960_r8,0.88715_r8, &
       0.67840_r8,0.74179_r8,0.79056_r8,0.80819_r8,0.82564_r8,0.85366_r8,0.88338_r8,0.89096_r8, &
       0.68373_r8,0.74715_r8,0.79586_r8,0.81346_r8,0.83078_r8,0.85852_r8,0.88777_r8,0.89520_r8, &
@@ -629,18 +629,18 @@
 !-----------------------------------------------------------------------------
 !   	... calculate aerosol optical depth
 !-----------------------------------------------------------------------------
-!   AEROSOL TYPES: 
+!   AEROSOL TYPES:
 !   ocs1, ocs2, cbs1, cbs2, ant, so4, ds1-ds4,soa, sal
 !   where 1=hydrophobic, 2=hydrophilic;
 !
-!   PARAMETERS:                                                              
+!   PARAMETERS:
 !   NZ      - INTEGER, number of specified altitude levels in the working
-!             grid                                                           
+!             grid
 !   Z       - REAL, specified altitude working grid (km)
 !   axxx     aerosoling mix ratio (where xxx is aerosol type)
 !
 !   dtxxx    REAL, optical depth (absorption)
-!   omxxx    REAL, single albedo             
+!   omxxx    REAL, single albedo
 !   gxxx   asysmetry factor
 !
 !-----------------------------------------------------------------------------
@@ -655,13 +655,10 @@
       use chem_mods,        only : adv_mass
       use mo_constants,     only : avogadro
       use mo_chem_utls,     only : get_spc_ndx
-#ifdef OSLO_AERO
+      ! OSLO_AERO begin
       use oslo_aero_dust,    only : dust_names
       use oslo_aero_seasalt, only : sslt_names=>seasalt_names
-#else
-      use dust_model,       only : dust_names
-      use seasalt_model,    only : sslt_names=>seasalt_names
-#endif
+      ! OSLO_AERO end
 
       implicit none
 
@@ -765,9 +762,9 @@
 !    729.00- 743.60
 !
 ! For aerosol types so4 and  ant data tabulated for CAM is used in wavelength bins for which it exists
-! This data has been created by  D. Fillmore in the file aerOptics.nc 
+! This data has been created by  D. Fillmore in the file aerOptics.nc
 ! Data is weighted by wavelength bin
-! 
+!
 ! Otherwise, tables have been recreated by P. Hess
 !
 ! Refractive indices and other DATA is mostly from OPAC dataset Hess et al., .....
@@ -778,7 +775,7 @@
 !              sigma = alog10(2.00)           ! standard deviation of distribution
 !              rmin = 0.005                   ! minimum radius microns
 !              rmax = 20.0                    ! maximum radius microns
-!              rho = 1.76                     ! grams / cm^3 
+!              rho = 1.76                     ! grams / cm^3
 !        PARAMETERS NEEDED FOR CALCULATING KOHLER CURVES for calculating growth with relative humidity
 !              nu_s = 3.0
 !              rho_u = rho
@@ -800,9 +797,9 @@
 !     1.48, 1.47, 1.47, 1.47, 1.46, 1.46, 1.45, 1.44, 1.42, $
 !     1.40, 1.33, 1.27, 1.39, 1.49, 1.48, 1.56, 1.61, 1.61, $
 !     1.60, 1.62, 1.63, 1.56, 1.53, 1.49, 1.48, 1.44]
-!  
+!
 !  IMAGINARY
-!    1.0e-7, 1.0e-7, 1.0e-7, 1.0e-7, 1.0e-7, 1.0e-7, 3.5e-7, 2.4e-6, 
+!    1.0e-7, 1.0e-7, 1.0e-7, 1.0e-7, 1.0e-7, 1.0e-7, 3.5e-7, 2.4e-6,
 !    9.5e-7, 3.4e-6, 1.7e-5, 1.1e-5, 3.4e-5, 2.1e-4, 1.9e-4, 9.0e-5, 7.6e-5, $
 !    1.5e-4, 1.0e-3, 1.5e-3, 3.4e-3, 1.7e-3, 7.7e-4, 4.5e-4, 3.5e-4, 9.0e-4, $
 !    5.0e-3, 5.0e-2, 2.3e-1, 3.3e-1, 2.7e-1, 2.4e-1, 2.7e-1, 2.4e-1, 1.7e-1, $
@@ -811,44 +808,44 @@
 !
 ! NH4NO3
 !
-! treated the same as sulphate except 
+! treated the same as sulphate except
 ! rho=1.73 (Lowenthal, 1999, Atmospheric Environment).
-! 
+!
 ! DUST
 !
 ! dust is treated as 4 size distributions
 ! 0.05 - 0.5; 0.5 - 1.25; 1.25 - 2.5; 2.5 - 5.0 microns
 ! each bin is part of a distribution with median number r_m = 2.524 * exp(- 3.0 * log(2.00)^2) / 2 [number median radius]
 ! r_m = 0.298, sigma = 2.00, rho = 2.650
-! 
+!
 ! note this treatment of dust is somewhat different than that made in CAM, where each size bin
 ! has a different number median radius
 !
-! dust is not assumed to take up water. 
+! dust is not assumed to take up water.
 !
 ! refractive indexes are as in CAM (Fillmore...)
 !
 ! ORGANIC CARBON
 !
-! In absence of data for organic aerosol 
-! refractive indexes are taken as for WASO: based on Fillmore (and OPAC). This is similar to 
-! the formulation used in Liao and Seinfeld, 2004, JGR. 
+! In absence of data for organic aerosol
+! refractive indexes are taken as for WASO: based on Fillmore (and OPAC). This is similar to
+! the formulation used in Liao and Seinfeld, 2004, JGR.
 ! The growth of organic carbon with relative humidity is assumed constant at all radii following
 ! hygrscopic growth given in Chen et al. : rel. hum: 0, 50, 70, 80, 90, 95, 98, 99
 ! multiplier for radius: 1,  1.2,  1.4,  1.5, 1.6, 1.8, 2.1 , 2.2
 !
-! SOA 
+! SOA
 !
 ! Treated the same as organic aerosol.
 !
 ! SOOT
 !
-! Refractive index are taken from Fillmore based on OPAC. 
+! Refractive index are taken from Fillmore based on OPAC.
 ! In a different formulation than that followed in CAM we let hydrophillic soot grow.
 !  The growth of organic carbon with relative humidity is assumed constant at all radii following
 ! hygrscopic growth given in Chen et al. : rel. hum: 0, 50, 70, 80, 90, 95, 98, 99
 ! multiplier for radius: (1,  1,  1,  1.2, 1.4,  1.5, 1.7, 1.9]
-! 
+!
 !
 ! SEA SALT
 !
@@ -887,10 +884,10 @@
 !-----------------------------------------------------------------------------
 !      	... so4
 !-----------------------------------------------------------------------------
-      ndx = get_spc_ndx('SO4') 
+      ndx = get_spc_ndx('SO4')
       if( ndx > 0 ) then
          mw = adv_mass( ndx )
-         gpm2(:) = s2as * dz(:) * aso4(:pver) * mw 
+         gpm2(:) = s2as * dz(:) * aso4(:pver) * mw
          do wn = 1,nw
             do k = 1,pver
                rh_l  = rh_ndx(k)
@@ -910,11 +907,11 @@
 
 !-----------------------------------------------------------------------------
 !   	... ant:  nh4no3
-!-----------------------------------------------------------------------------    
+!-----------------------------------------------------------------------------
       ndx = get_spc_ndx('NH4NO3')
       if( ndx > 0 ) then
          mw = adv_mass( ndx )
-         gpm2(:) = dz(:) * aant(:pver) * mw 
+         gpm2(:) = dz(:) * aant(:pver) * mw
          do wn = 1,nw
             do k = 1,pver
                rh_l  = rh_ndx(k)
@@ -938,10 +935,10 @@
        ndx = get_spc_ndx('CB1')
        if( ndx > 0 ) then
           mw = adv_mass( ndx )
-          gpm2(:) = dz(:) * acbs1(:pver) * mw 
+          gpm2(:) = dz(:) * acbs1(:pver) * mw
           do wn = 1,nw
              dtcbs1(:,wn) = gpm2(:)*qext_cbs(1,wn)
-             omcbs1(:,wn) = ssa_cbs(1,wn) 
+             omcbs1(:,wn) = ssa_cbs(1,wn)
              gcbs1(:,wn)  = asm_cbs(1,wn)
           end do
       else
@@ -954,7 +951,7 @@
 
        ndx = get_spc_ndx('CB2')
        if( ndx > 0 ) then
-          gpm2(:) = dz(:) * acbs2(:pver) * mw 
+          gpm2(:) = dz(:) * acbs2(:pver) * mw
           do wn = 1,nw
              do k = 1,pver
                rh_l  = rh_ndx(k)
@@ -978,10 +975,10 @@
        ndx = get_spc_ndx('OC1')
        if( ndx > 0 ) then
           mw = adv_mass( ndx )
-          gpm2(:) = dz(:) * aocs1(:pver) * mw 
+          gpm2(:) = dz(:) * aocs1(:pver) * mw
           do wn = 1,nw
              dtocs1(:,wn) =  gpm2(:)*qext_ocs(1,wn)
-             omocs1(:,wn) =  ssa_ocs(1,wn) 
+             omocs1(:,wn) =  ssa_ocs(1,wn)
              gocs1(:,wn)  =  asm_ocs(1,wn)
           end do
       else
@@ -991,10 +988,10 @@
             gocs1(:,wn)  = 0._r8
          end do
        end if
- 
+
        ndx = get_spc_ndx('OC2')
        if( ndx > 0 ) then
-          gpm2(:) = dz(:) * aocs2(:pver) * mw 
+          gpm2(:) = dz(:) * aocs2(:pver) * mw
           do wn = 1,nw
             do k = 1,pver
                rh_l  = rh_ndx(k)
@@ -1020,7 +1017,7 @@
           ndx = get_spc_ndx('OC2')
           if( ndx > 0 ) then
              mw = adv_mass( ndx )
-             gpm2(:) = dz(:) * asoa(:pver) * mw 
+             gpm2(:) = dz(:) * asoa(:pver) * mw
              do wn = 1,nw
                 do k = 1,pver
                    rh_l  = rh_ndx(k)
@@ -1041,10 +1038,10 @@
        ndx = get_spc_ndx(dust_names(1))
        if (ndx >0) then
           mw = adv_mass( ndx )
-          gpm2(:) = dz(:) * ads(1,:pver) * mw 
+          gpm2(:) = dz(:) * ads(1,:pver) * mw
           do wn = 1,nw
              dtds1(:,wn) = gpm2(:)*qext_ds1(wn)
-             omds1(:,wn) = ssa_ds1(wn) 
+             omds1(:,wn) = ssa_ds1(wn)
              gds1(:,wn)  = asm_ds1(wn)
           end do
        else
@@ -1057,10 +1054,10 @@
        ndx = get_spc_ndx(dust_names(2))
        if (ndx >0) then
           mw = adv_mass( ndx )
-          gpm2(:) = dz(:) * ads(2,:pver) * mw 
+          gpm2(:) = dz(:) * ads(2,:pver) * mw
           do wn = 1,nw
              dtds2(:,wn) = gpm2(:)*qext_ds2(wn)
-             omds2(:,wn) = ssa_ds2(wn) 
+             omds2(:,wn) = ssa_ds2(wn)
              gds2(:,wn)  = asm_ds2(wn)
           end do
        else
@@ -1073,10 +1070,10 @@
        ndx = get_spc_ndx(dust_names(3))
        if (ndx >0) then
           mw = adv_mass( ndx )
-          gpm2(:) = dz(:) * ads(3,:pver) * mw 
+          gpm2(:) = dz(:) * ads(3,:pver) * mw
           do wn = 1,nw
              dtds3(:,wn) = gpm2(:)*qext_ds3(wn)
-             omds3(:,wn) = ssa_ds3(wn) 
+             omds3(:,wn) = ssa_ds3(wn)
              gds3(:,wn)  = asm_ds3(wn)
           end do
        else
@@ -1089,10 +1086,10 @@
        ndx = get_spc_ndx(dust_names(4))
        if (ndx >0) then
           mw = adv_mass( ndx )
-          gpm2(:) = dz(:) * ads(4,:pver) * mw 
+          gpm2(:) = dz(:) * ads(4,:pver) * mw
           do wn = 1,nw
              dtds4(:,wn) = gpm2(:)*qext_ds4(wn)
-             omds4(:,wn) = ssa_ds4(wn) 
+             omds4(:,wn) = ssa_ds4(wn)
              gds4(:,wn)  = asm_ds4(wn)
           end do
        else
@@ -1107,10 +1104,10 @@
 !  	... sea salts
 !-----------------------------------------------------------------------------
        ndx = get_spc_ndx(sslt_names(1))
-   
+
        if( ndx > 0 ) then
           mw = adv_mass( ndx )
-          gpm2(:) = dz(:) * asal(:pver,1) * mw 
+          gpm2(:) = dz(:) * asal(:pver,1) * mw
           do wn = 1,nw
             do k = 1,pver
                rh_l  = rh_ndx(k)
@@ -1127,11 +1124,11 @@
             gsal(:,wn,1)  = 0._r8
          end do
        end if
- 
+
        ndx = get_spc_ndx(sslt_names(2))
        if( ndx > 0 ) then
           mw = adv_mass( ndx )
-          gpm2(:) = dz(:) * asal(:pver,2) * mw 
+          gpm2(:) = dz(:) * asal(:pver,2) * mw
           do wn = 1,nw
             do k = 1,pver
                rh_l  = rh_ndx(k)
@@ -1152,7 +1149,7 @@
        ndx = get_spc_ndx(sslt_names(3))
        if( ndx > 0 ) then
           mw = adv_mass( ndx )
-          gpm2(:) = dz(:) * asal(:pver,3) * mw 
+          gpm2(:) = dz(:) * asal(:pver,3) * mw
           do wn = 1,nw
             do k = 1,pver
                rh_l  = rh_ndx(k)
@@ -1173,7 +1170,7 @@
       ndx = get_spc_ndx(sslt_names(4))
       if( ndx > 0 ) then
           mw = adv_mass( ndx )
-          gpm2(:) = dz(:) * asal(:pver,4) * mw 
+          gpm2(:) = dz(:) * asal(:pver,4) * mw
           do wn = 1,nw
             do k = 1,pver
                rh_l  = rh_ndx(k)

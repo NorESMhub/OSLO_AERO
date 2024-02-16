@@ -3,9 +3,9 @@ module mo_usrrxt
   use shr_kind_mod,     only : r8 => shr_kind_r8
   use cam_logfile,      only : iulog
   use ppgrid,           only : pver, pcols
-#ifdef OSLO_AERO
-   use oslo_aero_share, only: nmodes_oslo=> nmodes
-#endif
+  ! OSLO_AERO begin
+  use oslo_aero_share,  only : nmodes_oslo=> nmodes
+  ! OSLO_AERO end
 
   implicit none
 
@@ -33,14 +33,14 @@ module mo_usrrxt
   integer :: usr_DMS_OH_ndx
   integer :: usr_HO2_aer_ndx
   integer :: usr_GLYOXAL_aer_ndx
-  
+
   integer :: tag_NO2_NO3_ndx
   integer :: tag_NO2_OH_ndx
   integer :: tag_NO2_HO2_ndx
   integer :: tag_C2H4_OH_ndx
   integer :: tag_C3H6_OH_ndx
   integer :: tag_CH3CO3_NO2_ndx
-  
+
 !lke-TS1
   integer :: usr_PBZNIT_M_ndx
   integer :: tag_ACBZO2_NO2_ndx
@@ -65,21 +65,21 @@ module mo_usrrxt
   integer :: usr_XPAN_M_ndx
   integer :: usr_XMPAN_M_ndx
   integer :: usr_MCO3_XNO2_ndx
-  
+
   integer :: usr_C2O3_NO2_ndx
   integer :: usr_C2H4_OH_ndx
   integer :: usr_XO2N_HO2_ndx
   integer :: usr_C2O3_XNO2_ndx
-  
+
   integer :: tag_XO2N_NO_ndx
   integer :: tag_XO2_HO2_ndx
   integer :: tag_XO2_NO_ndx
-  
+
   integer :: usr_O_O_ndx
   integer :: usr_CL2O2_M_ndx
   integer :: usr_SO3_H2O_ndx
   integer :: tag_CLO_CLO_M_ndx
-  
+
   integer :: ion1_ndx, ion2_ndx, ion3_ndx, ion11_ndx
   integer :: elec1_ndx, elec2_ndx, elec3_ndx
   integer :: elec4_ndx, elec5_ndx, elec6_ndx
@@ -94,7 +94,7 @@ module mo_usrrxt
   integer, parameter :: nedn = 2
   integer :: edn_ndx(nedn)
   integer, parameter :: nnir = 13
-  integer :: nir_ndx(nnir)  
+  integer :: nir_ndx(nnir)
   integer, parameter :: niira = 112
   integer :: iira_ndx(niira)
   integer, parameter :: niirb = 14
@@ -207,7 +207,7 @@ contains
     tag_NO2_HO2_ndx      = get_rxt_ndx( 'tag_NO2_HO2' )
     tag_C2H4_OH_ndx      = get_rxt_ndx( 'tag_C2H4_OH' )
     tag_C3H6_OH_ndx      = get_rxt_ndx( 'tag_C3H6_OH' )
-    tag_CH3CO3_NO2_ndx   = get_rxt_ndx( 'tag_CH3CO3_NO2' )     
+    tag_CH3CO3_NO2_ndx   = get_rxt_ndx( 'tag_CH3CO3_NO2' )
 !lke-TS1
     usr_PBZNIT_M_ndx     = get_rxt_ndx( 'usr_PBZNIT_M' )
     tag_ACBZO2_NO2_ndx   = get_rxt_ndx( 'tag_ACBZO2_NO2' )
@@ -251,7 +251,7 @@ contains
     usr_O_O_ndx          = get_rxt_ndx( 'usr_O_O' )
     usr_CL2O2_M_ndx      = get_rxt_ndx( 'usr_CL2O2_M' )
     usr_SO3_H2O_ndx      = get_rxt_ndx( 'usr_SO3_H2O' )
-!    
+!
     tag_CLO_CLO_M_ndx      = get_rxt_ndx( 'tag_CLO_CLO_M' )
     if (tag_CLO_CLO_M_ndx<0) then ! for backwards compatibility
        tag_CLO_CLO_M_ndx   = get_rxt_ndx( 'tag_CLO_CLO' )
@@ -287,7 +287,7 @@ contains
     het1_ndx             = get_rxt_ndx( 'het1' )
 !
 ! ion chemistry
-!   
+!
     ion1_ndx  = get_rxt_ndx( 'ion_Op_O2' )
     ion2_ndx  = get_rxt_ndx( 'ion_Op_N2' )
     ion3_ndx  = get_rxt_ndx( 'ion_N2p_Oa' )
@@ -369,7 +369,7 @@ contains
     usr_oh_dms_ndx  = get_rxt_ndx( 'usr_oh_dms' )
     aq_so2_h2o2_ndx  = get_rxt_ndx( 'aq_so2_h2o2' )
     aq_so2_o3_ndx  = get_rxt_ndx( 'aq_so2_o3' )
-    
+
 !lke++
 ! CO tags
 !
@@ -440,7 +440,7 @@ contains
 !-----------------------------------------------------------------
 !        ... set the user specified reaction rates
 !-----------------------------------------------------------------
-    
+
     use mo_constants,  only : pi, avo => avogadro, boltz_cgs, rgas
     use chem_mods,     only : nfs, rxntot, gas_pcnst, inv_m_ndx=>indexm
     use mo_setinv,     only : inv_o2_ndx=>o2_ndx, inv_h2o_ndx=>h2o_ndx
@@ -478,24 +478,24 @@ contains
 !-----------------------------------------------------------------
 !        ... local variables
 !-----------------------------------------------------------------
-    
+
     real(r8), parameter :: dg = 0.1_r8            ! mole diffusion =0.1 cm2/s (Dentener, 1993)
 
 !-----------------------------------------------------------------
 ! 	... reaction probabilities for heterogeneous reactions
 !-----------------------------------------------------------------
     real(r8), parameter :: gamma_n2o5 = 0.10_r8         ! from Jacob, Atm Env, 34, 2131, 2000
-    real(r8), parameter :: gamma_ho2  = 0.20_r8         ! 
-    real(r8), parameter :: gamma_no2  = 0.0001_r8       ! 
-    real(r8), parameter :: gamma_no3  = 0.001_r8        ! 
+    real(r8), parameter :: gamma_ho2  = 0.20_r8         !
+    real(r8), parameter :: gamma_no2  = 0.0001_r8       !
+    real(r8), parameter :: gamma_no3  = 0.001_r8        !
     real(r8), parameter :: gamma_glyoxal  = 2.0e-4_r8   !  Washenfelder et al, JGR, 2011
 !TS1 species
     real(r8), parameter :: gamma_isopnita  = 0.005_r8        ! from Fisher et al., ACP, 2016
-    real(r8), parameter :: gamma_isopnitb  = 0.005_r8        ! 
-    real(r8), parameter :: gamma_onitr     = 0.005_r8        ! 
-    real(r8), parameter :: gamma_honitr    = 0.005_r8        ! 
-    real(r8), parameter :: gamma_terpnit   = 0.01_r8         ! 
-    real(r8), parameter :: gamma_nterpooh  = 0.01_r8         ! 
+    real(r8), parameter :: gamma_isopnitb  = 0.005_r8        !
+    real(r8), parameter :: gamma_onitr     = 0.005_r8        !
+    real(r8), parameter :: gamma_honitr    = 0.005_r8        !
+    real(r8), parameter :: gamma_terpnit   = 0.01_r8         !
+    real(r8), parameter :: gamma_nterpooh  = 0.01_r8         !
     real(r8), parameter :: gamma_nc4cho    = 0.005_r8        !
     real(r8), parameter :: gamma_nc4ch2oh  = 0.005_r8        !
 
@@ -504,20 +504,20 @@ contains
     integer  ::  l
     real(r8) ::  tp(ncol)                       ! 300/t
     real(r8) ::  tinv(ncol)                     ! 1/t
-    real(r8) ::  ko(ncol)   
+    real(r8) ::  ko(ncol)
     real(r8) ::  term1(ncol)
     real(r8) ::  term2(ncol)
-    real(r8) ::  kinf(ncol)   
-    real(r8) ::  fc(ncol)   
-    real(r8) ::  xr(ncol)   
-    real(r8) ::  sur(ncol)   
+    real(r8) ::  kinf(ncol)
+    real(r8) ::  fc(ncol)
+    real(r8) ::  xr(ncol)
+    real(r8) ::  sur(ncol)
     real(r8) ::  sqrt_t(ncol)                   ! sqrt( temp )
     real(r8) ::  sqrt_t_58(ncol)                ! sqrt( temp / 58.)
     real(r8) ::  exp_fac(ncol)                  ! vector exponential
-    real(r8) ::  lwc(ncol)   
-    real(r8) ::  ko_m(ncol)   
-    real(r8) ::  k0(ncol)   
-    real(r8) ::  kinf_m(ncol)   
+    real(r8) ::  lwc(ncol)
+    real(r8) ::  ko_m(ncol)
+    real(r8) ::  k0(ncol)
+    real(r8) ::  kinf_m(ncol)
     real(r8) ::  o2(ncol)
     real(r8) ::  c_n2o5, c_ho2, c_no2, c_no3, c_glyoxal
 !TS1 species
@@ -533,7 +533,7 @@ contains
     real(r8), parameter :: den  = 1.15_r8                 ! each molecule of SO4(aer) density g/cm3
     !-------------------------------------------------
     ! 	... volume of sulfate particles
-    !           assuming mean rm 
+    !           assuming mean rm
     !           continient 0.05um  0.07um  0.09um
     !           ocean      0.09um  0.25um  0.37um
     !                      0.16um                  Blake JGR,7195, 1995
@@ -567,19 +567,16 @@ contains
     real(r8), parameter  :: ER2_AQ        =  5.28e+03_r8
 
     real(r8), parameter  :: pH            =  4.5e+00_r8
-    
+
     real(r8), pointer :: sfc(:), dm_aer(:)
     integer :: ntot_amode
 
     real(r8), pointer :: sfc_array(:,:,:), dm_array(:,:,:)
-    
-#ifdef OSLO_AERO
+
+    ! OSLO_AERO begin
     ntot_amode = nmodes_oslo
-#else
-    ! get info about the modal aerosols
-    ! get ntot_amode
-    call rad_cnst_get_info(0, nmodes=ntot_amode)
-#endif
+    ! OSLO_AERO end
+
     if (ntot_amode>0) then
        allocate(sfc_array(pcols,pver,ntot_amode), dm_array(pcols,pver,ntot_amode) )
     else
@@ -590,10 +587,10 @@ contains
     dm_array(:,:,:) = 0._r8
     sad_trop(:,:) = 0._r8
     reff_trop(:,:) = 0._r8
-        
+
     if( usr_NO2_aer_ndx > 0 .or. usr_NO3_aer_ndx > 0 .or. usr_N2O5_aer_ndx > 0 .or. usr_HO2_aer_ndx > 0 ) then
 
-! sad_trop should be set outside of usrrxt ?? 
+! sad_trop should be set outside of usrrxt ??
        if( carma_hetchem_feedback ) then
           sad_trop(:ncol,:pver)=strato_sad(:ncol,:pver)
        else
@@ -627,24 +624,24 @@ contains
        if ( usr_O_O_ndx > 0 ) then
           rxt(:,k,usr_O_O_ndx) = 2.76e-34_r8 * exp( 720.0_r8*tinv(:) )
        end if
-         
+
 !-----------------------------------------------------------------
 ! 	... cl2o2 + m -> 2*clo + m  (JPL15-10)
 !-----------------------------------------------------------------
        if ( usr_CL2O2_M_ndx > 0 ) then
           if ( tag_CLO_CLO_M_ndx > 0 ) then
              ko(:)            = 2.16e-27_r8 * exp( 8537.0_r8* tinv(:) )
-             rxt(:,k,usr_CL2O2_M_ndx) = rxt(:,k,tag_CLO_CLO_M_ndx)/ko(:)         
+             rxt(:,k,usr_CL2O2_M_ndx) = rxt(:,k,tag_CLO_CLO_M_ndx)/ko(:)
           else
              rxt(:,k,usr_CL2O2_M_ndx) = 0._r8
           end if
        end if
-       
+
 !-----------------------------------------------------------------
 !       ... so3 + 2*h2o --> h2so4 + h2o
 !       Note: this reaction proceeds by the 2 intermediate steps below
 !           so3 + h2o --> adduct
-!           adduct + h2o --> h2so4 + h2o  
+!           adduct + h2o --> h2so4 + h2o
 !               (Lovejoy et al., JCP, pp. 19911-19916, 1996)
 !	The first order rate constant used here is recommended by JPL 2011.
 !	This rate involves the water vapor number density.
@@ -659,7 +656,7 @@ contains
           end if
           rxt(:,k,usr_SO3_H2O_ndx) = 1.0e-20_r8 * fc(:)
        end if
-         
+
 !-----------------------------------------------------------------
 !	... n2o5 + m --> no2 + no3 + m (JPL15-10)
 !-----------------------------------------------------------------
@@ -859,7 +856,7 @@ contains
 !-----------------------------------------------------------------
        if( usr_SO2_OH_ndx > 0 ) then
           fc(:) = 3.0e-31_r8 *(300._r8*tinv(:))**3.3_r8
-          ko(:) = fc(:)*m(:,k)/(1._r8 + fc(:)*m(:,k)/1.5e-12_r8) 
+          ko(:) = fc(:)*m(:,k)/(1._r8 + fc(:)*m(:,k)/1.5e-12_r8)
           rxt(:,k,usr_SO2_OH_ndx) = ko(:)*.6_r8**(1._r8 + (log10(fc(:)*m(:,k)/1.5e-12_r8))**2._r8)**(-1._r8)
        end if
 !
@@ -883,10 +880,10 @@ contains
        if ( usr_XO2N_HO2_ndx > 0 ) then
           rxt(:,k,usr_XO2N_HO2_ndx) = rxt(:,k,tag_XO2N_NO_ndx)*rxt(:,k,tag_XO2_HO2_ndx)/(rxt(:,k,tag_XO2_NO_ndx)+1.e-36_r8)
        end if
-       
+
 !
 ! hydrolysis reactions on wetted aerosols
-!      
+!
        if( usr_NO2_aer_ndx > 0 .or. usr_NO3_aer_ndx > 0 .or. usr_N2O5_aer_ndx > 0 .or. usr_HO2_aer_ndx > 0 &
          .or. usr_GLYOXAL_aer_ndx > 0 ) then
 
@@ -902,7 +899,7 @@ contains
              c_glyoxal = 1.455e4_r8 * sqrt_t_58(i)  ! mean molecular speed of ho2
              c_isopnita = 1.20e3_r8 * sqrt_t(i)         ! mean molecular speed of isopnita
              c_isopnitb = 1.20e3_r8 * sqrt_t(i)         ! mean molecular speed of isopnitb
-             c_onitr    = 1.20e3_r8 * sqrt_t(i)         ! mean molecular speed of onitr 
+             c_onitr    = 1.20e3_r8 * sqrt_t(i)         ! mean molecular speed of onitr
              c_honitr   = 1.26e3_r8 * sqrt_t(i)         ! mean molecular speed of honitr
              c_terpnit  = 0.992e3_r8 * sqrt_t(i)        ! mean molecular speed of terpnit
              c_nterpooh = 0.957e3_r8 * sqrt_t(i)        ! mean molecular speed of nterpooh
@@ -951,7 +948,7 @@ contains
                 rxt(i,k,usr_HO2_aer_ndx) = hetrxtrate( sfc, dm_aer, dg, c_ho2, gamma_ho2 )
              end if
              !-------------------------------------------------------------------------
-             !  ... glyoxal ->  soag1  (on sulfate, nh4no3, oc2, soa)  
+             !  ... glyoxal ->  soag1  (on sulfate, nh4no3, oc2, soa)
              ! first order uptake, Fuchs and Sutugin, 1971,  dCg = 1/4 * gamma * ! A * |v_mol| * Cg * dt
              !-------------------------------------------------------------------------
              if( usr_GLYOXAL_aer_ndx > 0 ) then
@@ -1171,7 +1168,7 @@ contains
 
      endif
     end do level_loop
-    
+
 !-----------------------------------------------------------------
 ! 	... the ionic rates
 !-----------------------------------------------------------------
@@ -1204,7 +1201,7 @@ contains
      endif
 
      ! quenching of O+(2P) and O+(2D) by e to produce O+
-     ! See TABLE 1 of Roble (1995) 
+     ! See TABLE 1 of Roble (1995)
      ! drm 2015-07-27
      if (elec4_ndx > 0 .and. elec5_ndx > 0 .and. elec6_ndx > 0) then
          do k=1,pver
@@ -1212,7 +1209,7 @@ contains
             rxt(:,k,elec4_ndx) = 1.5e-7_r8 * tp(:)
             rxt(:,k,elec5_ndx) = 4.0e-8_r8 * tp(:)
             rxt(:,k,elec6_ndx) = 6.6e-8_r8 * tp(:)
-         end do 
+         end do
      endif
 
 !-----------------------------------------------------------------
@@ -1245,7 +1242,7 @@ contains
 !       where velo = sqrt[ 8*bk*T/pi/(w/av) ]
 !             bk = 1.381e-16
 !             av = 6.02e23
-!             w  = 108 (n2o5)  HO2(33)  CH2O (30)  NH3(15)  
+!             w  = 108 (n2o5)  HO2(33)  CH2O (30)  NH3(15)
 !
 !       so that velo = 1.40e3*sqrt(T)  (n2o5)   gama=0.1
 !       so that velo = 2.53e3*sqrt(T)  (HO2)    gama>0.2
@@ -1440,7 +1437,7 @@ contains
       real(r8), intent(in)    :: m(ncol,pver)                 ! total atm density (1/cm^3)
       real(r8), intent(in)    :: h2ovmr(ncol,pver)            ! water vapor (vmr)
       real(r8), intent(inout) :: rxt(ncol,pver,rxntot)        ! gas phase rates
-      
+
 !-----------------------------------------------------------------
 !        ... local variables
 !-----------------------------------------------------------------
@@ -1516,7 +1513,7 @@ contains
     real(r8), intent(out) :: x(:)
     real(r8), intent(in)  :: y(:)
     integer,  intent(in)  :: n
-    
+
 #ifdef IBM
     call vexp( x, y, n )
 #else
