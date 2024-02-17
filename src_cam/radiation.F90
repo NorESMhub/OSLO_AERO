@@ -1231,13 +1231,11 @@ contains
                 call outfld('FSNS_DRF',fsns(:)  ,pcols,lchnk)
                 call outfld('FSNTCDRF',rd%fsntc(:) ,pcols,lchnk)
                 call outfld('FSNSCDRF',rd%fsnsc(:) ,pcols,lchnk)
-#ifdef AEROCOM
                 call outfld('FSUTADRF',rd%fsutoa(:),pcols,lchnk)
                 call outfld('FSDS_DRF',fsds(:)  ,pcols,lchnk)
                 ftem_1d(1:ncol) = fsds(1:ncol)-fsns(1:ncol)
                 call outfld('FSUS_DRF',ftem_1d,pcols,lchnk)
                 call outfld('FSDSCDRF',rd%fsdsc(:) ,pcols,lchnk)
-#endif
                 idrf = .false.
                 call rad_rrtmg_sw( &
                      lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,          &
