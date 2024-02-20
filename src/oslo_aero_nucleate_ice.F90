@@ -39,7 +39,6 @@ module oslo_aero_nucleate_ice
   use tropopause,        only: tropopause_findChemTrop
   use cam_logfile,       only: iulog
   use cam_abortutils,    only: endrun
-  use time_manager,      only: is_first_step
   use nucleate_ice,      only: nucleati_init, nucleati  ! portable module
   !
   use oslo_aero_share,   only: l_dst_a2, l_dst_a3, MODE_IDX_DST_A2, MODE_IDX_DST_A3, rhopart, qqcw_get_field
@@ -163,13 +162,6 @@ contains
 
     mincld     = mincld_in
     bulk_scale = bulk_scale_in
-
-    ! TODO: IS this necessary?
-    ! if (is_first_step()) then
-    !    call pbuf_set_field(pbuf, naai_idx, 0.0_r8)
-    ! end if
-
-    ! Initialize naai.
 
     if( masterproc ) then
        write(iulog,*) 'nucleate_ice parameters:'
@@ -299,16 +291,14 @@ contains
     real(r8), pointer :: qi(:,:)             ! cloud ice mixing ratio (kg/kg)
     real(r8), pointer :: ni(:,:)             ! cloud ice number conc (1/kg)
     real(r8), pointer :: pmid(:,:)           ! pressure at layer midpoints (pa)
-
-    real(r8), pointer :: ast(:,:)
-    real(r8)          :: icecldf(pcols,pver) ! ice cloud fraction
-    real(r8), pointer :: qsatfac(:,:)        ! Subgrid cloud water saturation scaling factor.
-
     real(r8), pointer :: cld_dst_a2(:,:)     ! mmr cld dst a2
     real(r8), pointer :: cld_dst_a3(:,:)     ! mass m.r. of coarse dust
+    real(r8), pointer :: ast(:,:)
+    real(r8), pointer :: qsatfac(:,:)        ! Subgrid cloud water saturation scaling factor.
 
+
+    real(r8) :: icecldf(pcols,pver)          ! ice cloud fraction
     real(r8) :: rho(pcols,pver)              ! air density (kg m-3)
-
     real(r8) :: qs(pcols)                    ! liquid-ice weighted sat mixing rat (kg/kg)
     real(r8) :: es(pcols)                    ! liquid-ice weighted sat vapor press (pa)
     real(r8) :: gammas(pcols)                ! parameter for cond/evap of cloud water

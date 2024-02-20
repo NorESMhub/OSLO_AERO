@@ -31,7 +31,7 @@ contains
 !===============================================================================
 
   subroutine oslo_aero_optical_params_calc(lchnk, ncol, pint, pmid,                &
-       coszrs, state, t, cld, qm1, Nnatk,                                          &
+       coszrs, state, t, cld, qm1,                                                 &
        per_tau, per_tau_w, per_tau_w_g, per_tau_w_f, per_lw_abs,                   &
        volc_ext_sun, volc_omega_sun, volc_g_sun, volc_ext_earth, volc_omega_earth, &
        aodvis, absvis)
@@ -52,9 +52,6 @@ contains
     real(r8), intent(in) :: volc_omega_earth(pcols,pver,nlwbands) ! volcanic aerosol SSA for terrestrial bands, CMIP6
     type(physics_state), intent(in), target :: state
 
-    ! Input-output arguments
-    real(r8), intent(inout) :: Nnatk(pcols,pver,0:nmodes)         ! aerosol mode number concentration
-
     ! Output arguments
     ! AOD and absorptive AOD for visible wavelength closest to 0.55 um (0.442-0.625)
     ! Note that aodvis and absvis output should be divided by dayfoc to give physical (A)AOD values
@@ -69,13 +66,14 @@ contains
     ! Local variables
     integer  :: i, k, ib, icol, mplus10
     integer  :: iloop
-    logical  :: daylight(pcols)        ! SW calculations also at (polar) night in interpol* if daylight=.true.
-    real(r8) :: aodvisvolc(pcols)      ! AOD vis for CMIP6 volcanic aerosol
-    real(r8) :: absvisvolc(pcols)      ! AAOD vis for CMIP6 volcanic aerosol
-    real(r8) :: bevisvolc(pcols,pver)  ! Extinction in vis wavelength band for CMIP6 volcanic aerosol
-    real(r8) :: rhum(pcols,pver)       ! (trimmed) relative humidity for the aerosol calculations
-    real(r8) :: deltah_km(pcols,pver)  ! Layer thickness, unit km
-    real(r8) :: deltah, airmassl(pcols,pver), airmass(pcols) !akc6
+    real(r8) :: Nnatk(pcols,pver,0:nmodes) ! aerosol mode number concentration
+    logical  :: daylight(pcols)            ! SW calculations also at (polar) night in interpol* if daylight=.true.
+    real(r8) :: aodvisvolc(pcols)          ! AOD vis for CMIP6 volcanic aerosol
+    real(r8) :: absvisvolc(pcols)          ! AAOD vis for CMIP6 volcanic aerosol
+    real(r8) :: bevisvolc(pcols,pver)      ! Extinction in vis wavelength band for CMIP6 volcanic aerosol
+    real(r8) :: rhum(pcols,pver)           ! (trimmed) relative humidity for the aerosol calculations
+    real(r8) :: deltah_km(pcols,pver)      ! Layer thickness, unit km
+    real(r8) :: deltah, airmassl(pcols,pver), airmass(pcols)
     real(r8) :: Ca(pcols,pver), f_c(pcols,pver), f_bc(pcols,pver), f_aq(pcols,pver)
     real(r8) :: fnbc(pcols,pver), faitbc(pcols,pver), f_so4_cond(pcols,pver)
     real(r8) :: f_soa(pcols,pver),f_soana(pcols,pver)
@@ -419,7 +417,6 @@ contains
           per_tau_w_f(i,k,ib)=per_tau_w_g(i,k,ib)*asymtot(i,k,ib)
        end do
     end do  ! ncol
-    !------------------------------------------------------------------------------------------------
 
     ! LW Optical properties of total aerosol:
     do ib=1,nlwbands
@@ -521,7 +518,7 @@ contains
              ! Layer thickness, unit km, and layer airmass, unit kg/m2
              deltah=deltah_km(icol,k)
              airmassl(icol,k)=1.e3_r8*deltah*rhoda(icol,k)
-             airmass(icol)=airmass(icol)+airmassl(icol,k)  !akc6
+             airmass(icol)=airmass(icol)+airmassl(icol,k)
 
              ! Optical depths at ca. 550 nm (0.442-0.625um) all aerosols
              aodvis(icol)=aodvis(icol)+betotvis(icol,k)*deltah

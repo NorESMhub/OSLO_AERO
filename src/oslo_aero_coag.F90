@@ -99,7 +99,7 @@ module oslo_aero_coag
   real(r8), parameter :: temperatureLookupTables = 293.15_r8 !Temperature used in look up tables
   real(r8), parameter :: mfpAir = 63.3e-9_r8                 ![m] mean free path air
   real(r8), parameter :: viscosityAir = 1.983e-5_r8          ![Pa s] viscosity of air
-  real(r8), parameter :: rhoh2o = 1000._r8                   ! Density of water
+  real(r8), parameter :: rhoh2o = 1000._r8                   !Density of water
 
 !================================================================
 contains
@@ -202,14 +202,14 @@ contains
        call calculateCoagulationCoefficient(CoagulationCoefficient    & !O [m3/s] coagulation coefficient
             , rk(modeIndexCoagulator)                 & !I [m] radius of coagulator
             , rhob(modeIndexCoagulator)               & !I [kg/m3] density of coagulator
-            , rhob(modeIndexReceiver) )                 !I [kg/m3] density of receiver
+            , rhob(modeIndexReceiver) )                 !I [kg/m3] density of receiver
 
        !Save values
        CoagCoeffModeAdd(iReceiverMode,:) = CoagulationCoefficient(:)
 
     end do !receiver modes
 
-    ! Onl one receivermode for cloud coagulation (water)
+    ! Only one receivermode for cloud coagulation (water)
     do iCoagulatingMode = 1,numberOfCoagulatingModes
 
        !Index of the coagulating mode (0-14), see list above
@@ -221,7 +221,7 @@ contains
        call calculateCoagulationCoefficient(CoagulationCoefficient    & !O [m3/s] coagulation coefficient
             , rk(modeIndexCoagulator)                 & !I [m] radius of coagulator
             , rhob(modeIndexCoagulator)               & !I [kg/m3] density of coagulator
-            , rhoh2o )                 !I [kg/m3] density of receiver
+            , rhoh2o )                                  !I [kg/m3] density of receiver
 
        !Save values
        K12Cl(iCoagulatingMode,:) = CoagulationCoefficient(:)
@@ -361,8 +361,8 @@ contains
     real(r8) :: mfv1  ![m] mean free path particle
     real(r8) :: mfv2  ![m] mean free path particle
 
-    !     coagulation coefficient for SO4 (Brownian, Fuchs form)
-    !Loop through indexes in look-up table
+    ! coagulation coefficient for SO4 (Brownian, Fuchs form)
+    ! Loop through indexes in look-up table
     do i=1,nBinsTab
        c1=calculateThermalVelocity(rBinMidPoint(i), receiverDensity)     !receiving size
        c2=calculateThermalVelocity(modeRadius, modeDensity)    !coagulating aerosol
@@ -379,14 +379,13 @@ contains
 
        g12=sqrt(g1**2+g2**2)
 
-       !Coagulation coefficient of receiver size "i" with the coagulating
-       !mode "kcomp"
+       !Coagulation coefficient of receiver size "i" with the coagulating mode "kcomp"
        CoagulationCoefficient(i) =  &
             4.0_r8*pi*(rBinMidPoint(i)+modeRadius)*(diff1+diff2)          &
             /((rBinMidPoint(i)+modeRadius)/(rBinMidPoint(i)+modeRadius+g12)         &
             +(4.0_r8/c12)*(diff1+diff2)/(modeRadius+rBinMidPoint(i)))
 
-    enddo ! loop on imax
+    enddo
   end subroutine calculateCoagulationCoefficient
 
   !================================================================
@@ -495,9 +494,9 @@ contains
 
                 !process modes don't change mode except so4 condensate which becomes coagulate instead
                 !assumed to have same sink as MODE_IDX_OMBC_INTMIX_AIT
-                if( .NOT. is_process_mode(l_index_donor,.true.)   &
-                     .OR. ( (l_index_donor.eq.chemistryIndex(l_so4_a1)) &
-                     .AND. modeIndexCoagulator .eq. MODE_IDX_OMBC_INTMIX_COAT_AIT) ) then
+                if( .NOT. is_process_mode(l_index_donor,.true.) .or. &
+                     ( (l_index_donor == chemistryIndex(l_so4_a1)) .and. &
+                        modeIndexCoagulator == MODE_IDX_OMBC_INTMIX_COAT_AIT) ) then
 
                    !Done summing total loss of this coagulating specie
                    totalLoss(i,k,l_index_donor) = coagulationSink & !loss rate for a mode in [1/s] summed over all receivers
@@ -515,16 +514,16 @@ contains
     end do    ! k
 
 
-    !UPDATE THE TRACERS AND DO DIAGNOSTICS
+    ! UPDATE THE TRACERS AND DO DIAGNOSTICS
     do iCoagulator = 1, numberOfCoagulatingModes
        do ispecie = 1, getNumberOfTracersInMode(coagulatingMode(iCoagulator))
 
           l_index_donor = getTracerIndex(coagulatingMode(iCoagulator) , ispecie ,.true.)
 
           !so4_a1 is a process mode (condensate), but is still lost in coagulation
-          if( .NOT. is_process_mode(l_index_donor, .true.)          &
-              .OR. ( (l_index_donor.eq.chemistryIndex(l_so4_a1)) .AND. &
-                      coagulatingMode(iCoagulator) .eq. MODE_IDX_OMBC_INTMIX_COAT_AIT) ) then
+          if( .NOT. is_process_mode(l_index_donor, .true.) .or. &
+               ( (l_index_donor == chemistryIndex(l_so4_a1)) .and. &
+                  coagulatingMode(iCoagulator) == MODE_IDX_OMBC_INTMIX_COAT_AIT) ) then
 
              l_index_donor = getTracerIndex(coagulatingMode(iCoagulator) , ispecie,.true. )
 
@@ -639,13 +638,14 @@ contains
 
                    !process modes don't change mode except so4 condensate which becomes coagulate instead
                    !assumed to have same sink as MODE_IDX_OMBC_INTMIX_AIT
-                   if( .NOT. is_process_mode(l_index_donor,.true.)   &
-                        .OR. ( (l_index_donor.eq.chemistryIndex(l_so4_a1))  .AND. modeIndexCoagulator .eq. MODE_IDX_OMBC_INTMIX_COAT_AIT) ) then
+                   if( .NOT. is_process_mode(l_index_donor,.true.) .or.  &
+                        ( (l_index_donor == chemistryIndex(l_so4_a1)) .and. &
+                           modeIndexCoagulator == MODE_IDX_OMBC_INTMIX_COAT_AIT) ) then
 
                       !Done summing total loss of this coagulating specie
-                      cloudLoss(i,k,l_index_donor) = coagulationSink         &   !loss rate for a mode in [1/s] summed over all receivers
-                           * cldfrc(i,k)*q(i,k,l_index_donor)                     &   !* mixing ratio ==> MMR/s
-                           / delt_inverse                                 ! seconds ==> MMR
+                      cloudLoss(i,k,l_index_donor) = coagulationSink & !loss rate for a mode in [1/s] summed over all receivers
+                           * cldfrc(i,k)*q(i,k,l_index_donor)        & !* mixing ratio ==> MMR/s
+                           / delt_inverse                              !/ seconds ==> MMR
 
                       !Can not loose more than we have
                       ! At present day assumed lost within the cloud
@@ -659,15 +659,15 @@ contains
        end do ! i
     end do    ! k
 
-    !UPDATE THE TRACERS AND DO DIAGNOSTICS
+    ! UPDATE THE TRACERS AND DO DIAGNOSTICS
     do iCoagulator = 1, numberOfCoagulatingModes
        do ispecie = 1, getNumberOfTracersInMode(coagulatingMode(iCoagulator))
           l_index_donor = getTracerIndex(coagulatingMode(iCoagulator) , ispecie ,.true.)
 
           !so4_a1 is a process mode (condensate), but is still lost in coagulation
-          if( .NOT. is_process_mode(l_index_donor, .true.)          &
-              .OR. ( (l_index_donor.eq.chemistryIndex(l_so4_a1)) .AND. coagulatingMode(iCoagulator) &
-              .eq. MODE_IDX_OMBC_INTMIX_COAT_AIT) ) then
+          if( .NOT. is_process_mode(l_index_donor, .true.) .or. &
+               ( (l_index_donor == chemistryIndex(l_so4_a1)) .and. &
+                  coagulatingMode(iCoagulator) == MODE_IDX_OMBC_INTMIX_COAT_AIT) ) then
 
              l_index_donor = getTracerIndex(coagulatingMode(iCoagulator), ispecie, .true.)
 
