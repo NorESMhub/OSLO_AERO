@@ -51,6 +51,9 @@ module oslo_aero_share
   ! Public parameters
   !---------------------------
 
+  ! Logic for use with CAM-Nor-physics
+  logical use_oslo_aero = .true.
+
   ! Define lognormal size parameters for each size mode (dry, at point of emission/production)
   integer, parameter :: nmodes   = 14
   integer, parameter :: nbmodes  = 10
@@ -166,11 +169,11 @@ module oslo_aero_share
 
   ! Constants used in interpolation
   ! Internal mixtures of process-tagged mass
-  ! cate : total added mass (µg/m3 per particle per cm3) from condensation
+  ! cate : total added mass (Âµg/m3 per particle per cm3) from condensation
   !        and wet phase chemistry/cloud processing, for kcomp = 1-2.
   !        cate should be scaled up/down whenever the modal parameters (modal
   !        radius and width) are increased/decreased a lot.
-  ! cat  : total added mass (µg/m3 per particle per cm-3) from coagulation, condensation
+  ! cat  : total added mass (Âµg/m3 per particle per cm-3) from coagulation, condensation
   !        and wet phase chemistry/cloud processing, for kcomp = 5-10.
   !        cat should be scaled up/down whenever the modal parameters (modal
   !        radius and width) are increased/decreased a lot.
@@ -210,7 +213,7 @@ module oslo_aero_share
   ! BC      : Does not really matter as long as soluble mass fraction is small
   !           However, numbers below reproduces values from MIRAGE paper
   !           New mass density (October 2016) is based on Bond and Bergstrom (2007): Light Absorption
-  !           by Carbonaceous Particles: An Investigative Review, Aerosol Science and Technology, 40:27���67.
+  !           by Carbonaceous Particles: An Investigative Review, Aerosol Science and Technology, 40:27¡¹67.
   ! OM      : Soluble mass fraction tuned to give B of MIRAGE Paper
   ! DUST    : The numbers give B of ~ 0.07 (high end of Kohler, Kreidenweis et al, GRL, vol 36, 2009.
   !                                  (10% as soluble mass fraction seems reasonable)
