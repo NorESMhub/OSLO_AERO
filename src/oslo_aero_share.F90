@@ -52,7 +52,7 @@ module oslo_aero_share
   !---------------------------
 
   ! Logic for use with CAM-Nor-physics
-  logical use_oslo_aero = .true.
+  logical :: use_oslo_aero = .true.
 
   ! Define lognormal size parameters for each size mode (dry, at point of emission/production)
   integer, parameter :: nmodes   = 14
