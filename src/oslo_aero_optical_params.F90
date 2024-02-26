@@ -533,11 +533,11 @@ contains
     end do   ! icol
 
     ! Extinction and absorption for 0.55 um for the total aerosol, and AODs
-    call outfld('AOD_VIS ',aodvis ,pcols,lchnk)
+    call outfld('AODVIS  ',aodvis ,pcols,lchnk)
     call outfld('ABSVIS  ',absvis ,pcols,lchnk)
     call outfld('AODVVOLC',aodvisvolc ,pcols,lchnk)
     call outfld('ABSVVOLC',absvisvolc ,pcols,lchnk)
-    call outfld('BVISVOLC',bevisvolc ,pcols,lchnk)
+    call outfld('BVISVOLC',bevisvolc  ,pcols,lchnk)
 
 #ifdef AEROCOM
     ! Extinction and absorption for 0.55 um for the total aerosol, and AODs
