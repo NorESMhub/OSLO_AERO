@@ -19,9 +19,6 @@ module mo_chm_diags
   use oslo_aero_share, only : getCloudTracerIndexDirect, getCloudTracerName
   use oslo_aero_share, only : aerosol_type_name, aerosolType, isAerosol, N_AEROSOL_TYPES
   ! OSLO_AERO end
-  !
-  use spmd_utils,   only : masterproc
-  use cam_logfile,  only : iulog
 
   implicit none
   private
@@ -466,9 +463,6 @@ contains
           call addfld( spc_name, (/ 'lev' /), 'A', 'mol/mol', trim(attr)//' concentration')
           call addfld( trim(spc_name)//'_SRF', horiz_only, 'A', 'mol/mol', trim(attr)//" in bottom layer")
        endif
-       if (masterproc) then
-          write(iulog,*)'DEBUG: adding '//trim(spc_name)//' to history'
-       end if
        ! OSLO_AERO end
 
        if ((m /= id_cly) .and. (m /= id_bry)) then
@@ -809,9 +803,6 @@ contains
           if ( any( aer_species == m ) .or. isAerosol(n) ) then
              call outfld( solsym(m), mmr(:ncol,:,m), ncol ,lchnk )
              call outfld( trim(solsym(m))//'_SRF', mmr(:ncol,pver,m), ncol ,lchnk )
-             if (masterproc) then
-                write(iulog,*)'DEBUG: calling outfld for cnst_name = '//trim(solsym(m))
-             end if
           else
              call outfld( solsym(m), vmr(:ncol,:,m), ncol ,lchnk )
              call outfld( trim(solsym(m))//'_SRF', vmr(:ncol,pver,m), ncol ,lchnk )
