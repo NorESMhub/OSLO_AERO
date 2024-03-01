@@ -152,7 +152,6 @@ integer :: flnt_idx     = 0
 integer :: cldfsnow_idx = 0
 integer :: cld_idx      = 0
 integer :: cldfgrau_idx = 0
-integer :: volc_idx     = 0
 
 character(len=4) :: diag(0:N_DIAG) =(/'    ','_d1 ','_d2 ','_d3 ','_d4 ','_d5 ','_d6 ','_d7 ','_d8 ','_d9 ','_d10'/)
 
@@ -779,8 +778,6 @@ subroutine radiation_tend( &
    type(rad_out_t), target, optional, intent(out) :: rd_out
 
    ! Local variables
-   real(r8)                 :: volc_fraction_coarse ! Fraction of volcanic aerosols going to coarse mode
-   real(r8), pointer        :: rvolcmmr(:,:)        ! stratospheric volcanoes aerosol mmr
    integer                  :: band
    logical                  :: idrf
    type(rad_out_t), pointer :: rd  ! allow rd_out to be optional by allocating a local object
@@ -1247,12 +1244,6 @@ subroutine radiation_tend( &
       if (dosw) then
 
          qdirind(:ncol,:,:) = state%q(:ncol,:,:)
-         if (has_prescribed_volcaero) then
-            call oslo_aero_getopts(volc_fraction_coarse_out = volc_fraction_coarse)
-            call pbuf_get_field(pbuf, volc_idx,  rvolcmmr, start=(/1,1,itim_old/), kount=(/pcols,pver,1/) )
-            qdirind(:ncol,:,l_so4_pr) = qdirind(:ncol,:,l_so4_pr) + (1.0_r8 - volc_fraction_coarse)*rvolcmmr(:ncol,:)
-            qdirind(:ncol,:,l_ss_a3) = qdirind(:ncol,:,l_ss_a3) + volc_fraction_coarse*rvolcmmr(:ncol,:)
-         end if
 
          ! Volcanic optics for solar (SW) bands
          do band=1,nswbands
