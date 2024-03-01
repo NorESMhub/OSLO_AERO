@@ -1245,14 +1245,7 @@ subroutine radiation_tend( &
 
       ! OSLO_AERO begin
       if (dosw) then
-
          qdirind(:ncol,:,:) = state%q(:ncol,:,:)
-         if (has_prescribed_volcaero) then
-            call oslo_aero_getopts(volc_fraction_coarse_out = volc_fraction_coarse)
-            call pbuf_get_field(pbuf, volc_idx,  rvolcmmr, start=(/1,1,itim_old/), kount=(/pcols,pver,1/) )
-            qdirind(:ncol,:,l_so4_pr) = qdirind(:ncol,:,l_so4_pr) + (1.0_r8 - volc_fraction_coarse)*rvolcmmr(:ncol,:)
-            qdirind(:ncol,:,l_ss_a3) = qdirind(:ncol,:,l_ss_a3) + volc_fraction_coarse*rvolcmmr(:ncol,:)
-         end if
 
          ! Volcanic optics for solar (SW) bands
          do band=1,nswbands
