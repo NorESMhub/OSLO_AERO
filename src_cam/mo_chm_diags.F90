@@ -558,13 +558,14 @@ contains
             'mmr_'//trim(aerosol_type_name(n))//' mmr of aerosol type')
        call add_default('mmr_'//trim(aerosol_type_name(n)), 1, ' ')
     end do
+    ! OSLO_AERO end
+
     call addfld('sum_SO4'  , (/ 'lev' /), 'A', 'kg/kg ', 'sum of SO4 concentrations')
     call addfld('sum_BC'   , (/ 'lev' /), 'A', 'kg/kg ', 'sum of BC concentrations')
     call addfld('sum_OM'   , (/ 'lev' /), 'A', 'kg/kg ', 'sum of OM concentrations')
     call addfld('sum_DST'  , (/ 'lev' /), 'A', 'kg/kg ', 'sum of DST concentrations')
     call addfld('sum_SS'   , (/ 'lev' /), 'A', 'kg/kg ', 'sum of SS concentrations')
     call addfld('sum_SOA'  , (/ 'lev' /), 'A', 'kg/kg ', 'sum of SOA concentrations')
-    call addfld('sum_GASES', (/ 'lev' /), 'A', 'kg/kg ', 'sum of GASES concentrations')
 
     call add_default('sum_SO4'  , 1, ' ')
     call add_default('sum_BC'   , 1, ' ')
@@ -572,8 +573,6 @@ contains
     call add_default('sum_DST'  , 1, ' ')
     call add_default('sum_SS'   , 1, ' ')
     call add_default('sum_SOA'  , 1, ' ')
-    call add_default('sum_GASES', 1, ' ')
-    ! OSLO_AERO end
 
     call addfld( 'dry_deposition_NOy_as_N', horiz_only, 'I', 'kg/m2/s', 'NOy dry deposition flux ' )
     call addfld( 'DF_SOX', horiz_only, 'I', 'kg/m2/s', 'SOx dry deposition flux ' )
@@ -668,7 +667,6 @@ contains
     real(r8) :: sum_dst(ncol,pver)
     real(r8) :: sum_ss(ncol,pver)
     real(r8) :: sum_soa(ncol,pver)
-    real(r8) :: sum_gases(ncol,pver)
 
     real(r8) :: area(ncol), mass(ncol,pver)
     real(r8) :: wgt
@@ -923,7 +921,9 @@ contains
     sum_dst(:,:) = 0._r8
     sum_ss(:,:) = 0._r8
     sum_soa(:,:) = 0._r8
-    sum_gases(:,:) = 0._r8
+
+    ! add all the nums in one variable for mam
+
 
     do m = 1,gas_pcnst
        spc_name = trim(solsym(m))
@@ -939,16 +939,6 @@ contains
           sum_ss(:ncol,:) = sum_ss(:ncol,:) + mmr(:ncol,:,m)
        else if (spc_name(1:4) == 'SOA_') then
           sum_soa(:ncol,:) = sum_soa(:ncol,:) + mmr(:ncol,:,m)
-       else if (trim(spc_name) == 'H2SO4') then
-          sum_gases(:ncol,:) = sum_gases(:ncol,:) + mmr(:ncol,:,m)
-       else if (trim(spc_name) == 'SOA_LV') then
-          sum_gases(:ncol,:) = sum_gases(:ncol,:) + mmr(:ncol,:,m)
-       else if (trim(spc_name) == 'SOA_SV') then
-          sum_gases(:ncol,:) = sum_gases(:ncol,:) + mmr(:ncol,:,m)
-       else if (trim(spc_name) == 'monoterp') then
-          sum_gases(:ncol,:) = sum_gases(:ncol,:) + mmr(:ncol,:,m)
-       else if (trim(spc_name) == 'isoprene') then
-          sum_gases(:ncol,:) = sum_gases(:ncol,:) + mmr(:ncol,:,m)
        end if
     end do
     call outfld( 'sum_SO4'   , sum_so4(:ncol,:)   , ncol ,lchnk )
@@ -957,7 +947,6 @@ contains
     call outfld( 'sum_DST'   , sum_dst(:ncol,:)   , ncol ,lchnk )
     call outfld( 'sum_SS'    , sum_ss(:ncol,:)    , ncol ,lchnk )
     call outfld( 'sum_SOA'   , sum_soa(:ncol,:)   , ncol ,lchnk )
-    call outfld( 'sum_GASES' , sum_gases(:ncol,:) , ncol ,lchnk )
 
     ! OSLO_AERO begin
     do n=1,N_AEROSOL_TYPES
