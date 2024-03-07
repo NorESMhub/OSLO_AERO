@@ -20,7 +20,6 @@ module oslo_aero_ocean
   use cam_abortutils, only : endrun
   use cam_logfile,    only : iulog
   use cam_history,    only : addfld, add_default, horiz_only, outfld
-  use camsrfexch,     only : cam_in_t
   use physics_types,  only : physics_state
   use physics_buffer, only : physics_buffer_desc
   use tracer_data,    only : trfld, trfile, trcdata_init, advance_trcdata
