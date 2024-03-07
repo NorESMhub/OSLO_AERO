@@ -323,7 +323,7 @@ subroutine vertical_diffusion_init(pbuf2d)
   ! prog_modal_aero determines whether prognostic modal aerosols are present in the run.
   call phys_getopts(prog_modal_aero_out=prog_modal_aero)
 
-! OSLO_AERO begin
+  ! OSLO_AERO begin
   prog_modal_aero = .TRUE.
   pmam_ncnst = getNumberOfAerosolTracers()
   allocate(pmam_cnst_idx(pmam_ncnst))
