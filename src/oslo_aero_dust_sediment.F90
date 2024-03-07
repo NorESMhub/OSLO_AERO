@@ -60,7 +60,7 @@ contains
           vfall(i) = vland*landfrac(i) + vocean*(1._r8-landfrac(i))
 
           ! fall velocity (assume positive downward)
-          pvdust(i,k+1) = vfall(i)     
+          pvdust(i,k+1) = vfall(i)
        end do
     end do
   end subroutine oslo_aero_dust_sediment_vel
@@ -70,7 +70,7 @@ contains
        dustmr, pvdust, dusttend, sfdust, dusttend_to_ll_out )
 
     !----------------------------------------------------------------------
-    !  Apply Particle Gravitational Sedimentation 
+    !  Apply Particle Gravitational Sedimentation
     ! -> note that pvel is at the interfaces (loss from cell is based on pvel(k+1))
     !----------------------------------------------------------------------
 
@@ -123,7 +123,7 @@ contains
        end do
     end do
 
-    ! Now calculate the tendencies 
+    ! Now calculate the tendencies
     do k = 1,pver
        do i = 1,ncol
           ! net flux into cloud changes cloud dust/ice (all flux is out of cloud)
@@ -208,7 +208,7 @@ contains
     integer   , intent(in)  :: ncol                      ! number of colums to process
     real (r8) , intent(in)  :: x(pcols, pverp)
     real (r8) , intent(in)  :: f(pcols, pverp)
-    real (r8) , intent(out) :: fdot(pcols, pverp)
+    real (r8) , intent(inout) :: fdot(pcols, pverp)
     real (r8) , intent(in)  :: xin(pcols)
     real (r8) , intent(out) :: fxdot(pcols)
     real (r8) , intent(out) :: fxdd(pcols)
@@ -228,9 +228,9 @@ contains
     real (r8) :: cfint
     real (r8) :: cfnew
     real (r8) :: xins(pcols)
-    real (r8) :: a, b, c ! the minmod function 
-    real (r8) :: minmod ! the minmod function 
-    real (r8) :: medan ! the minmod function 
+    real (r8) :: a, b, c ! the minmod function
+    real (r8) :: minmod ! the minmod function
+    real (r8) :: medan ! the minmod function
 
     minmod(a,b) = 0.5_r8*(sign(1._r8,a) + sign(1._r8,b))*min(abs(a),abs(b))
     medan(a,b,c) = a + minmod(b-a,c-a)
@@ -240,7 +240,7 @@ contains
        intz(i) = 0
     end do
 
-    ! first find the interval 
+    ! first find the interval
     do k =  1,pverp-1
        do i = 1,ncol
           if ((xins(i)-x(i,k))*(x(i,k+1)-xins(i)).ge.0._r8) then
@@ -335,8 +335,8 @@ contains
     real(r8) :: tmin
     real(r8) :: tmax
     real(r8) :: delxh(pcols,pverp)
-    real(r8) :: minmod           ! the minmod function 
-    real(r8) :: medan            ! the minmod function 
+    real(r8) :: minmod           ! the minmod function
+    real(r8) :: medan            ! the minmod function
 
     minmod(a,b) = 0.5_r8*(sign(1._r8,a) + sign(1._r8,b))*min(abs(a),abs(b))
     medan(a,b,c) = a + minmod(b-a,c-a)
@@ -391,14 +391,14 @@ contains
     do k = 3,pver-1
        do i = 1,ncol
           ! p prime at k-0.5
-          ppl(i,k)=sh(i,k-1) + dh(i,k-1)*delxh(i,k-1)  
+          ppl(i,k)=sh(i,k-1) + dh(i,k-1)*delxh(i,k-1)
 
           ! p prime at k+0.5
           ppr(i,k)=sh(i,k)   - dh(i,k)  *delxh(i,k)
           t = minmod(ppl(i,k),ppr(i,k))
 
           ! derivate from parabola thru f(i,k-1), f(i,k), and f(i,k+1)
-          pp = sh(i,k-1) + d(i,k)*delxh(i,k-1) 
+          pp = sh(i,k-1) + d(i,k)*delxh(i,k-1)
 
           ! quartic estimate of fdot
           fdot(i,k) = pp - delxh(i,k-1)*delxh(i,k)*(eh(i,k-1)*(x(i,k+2)-x(i,k)) &

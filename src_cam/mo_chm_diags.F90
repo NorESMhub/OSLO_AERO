@@ -15,10 +15,10 @@ module mo_chm_diags
   use ppgrid,          only : pcols                                               ! OSLO_AERO
   use physics_buffer,  only : pbuf_get_field, pbuf_get_index, physics_buffer_desc ! OSLO_AERO
   use constituents,    only : cnst_get_ind                                        ! OSLO_AERO
-#ifdef OSLO_AERO
+  ! OSLO_AERO begin
   use oslo_aero_share, only : getCloudTracerIndexDirect, getCloudTracerName
   use oslo_aero_share, only : aerosol_type_name, aerosolType, isAerosol, N_AEROSOL_TYPES
-#endif
+  ! OSLO_AERO end
 
   implicit none
   private
@@ -432,27 +432,25 @@ contains
           call addfld( wtrate_name(m), (/ 'lev' /), 'A',   '/s', spc_name//' wet deposition rate' )
        endif
 
-#ifdef OSLO_AERO
-       wetdep_name_area(m)='WD_A_'//trim(spc_name)
-       call addfld( wetdep_name_area(m), horiz_only, 'A', 'kg/m2/s ', spc_name//' wet deposition' )
-
-       !Needed for budget term of gases! Aerosols have their own budget terms
-       if(n.gt.0) then
-          if(.NOT. isAerosol(n))then
-             if(history_chemistry)then
-                call add_default( wetdep_name_area(m), 1, ' ')
-             end if
-          endif
-       end if
-#endif
-
        if (spc_name(1:3) == 'num') then
           unit_basename = ' 1'
        else
           unit_basename = 'kg'
        endif
 
-#ifdef OSLO_AERO
+       ! OSLO_AERO begin
+       wetdep_name_area(m)='WD_A_'//trim(spc_name)
+       call addfld( wetdep_name_area(m), horiz_only, 'A', 'kg/m2/s ', spc_name//' wet deposition' )
+
+       if(n.gt.0) then
+          if(.NOT. isAerosol(n))then
+             if(history_chemistry)then
+                ! Needed for budget term of gases! Aerosols have their own budget terms
+                call add_default( wetdep_name_area(m), 1, ' ')
+             end if
+          endif
+       end if
+
        if (n.gt.0) then
           if ( any( aer_species == m ) .or. isAerosol(n) ) then
              call addfld( spc_name,   (/ 'lev' /), 'A', unit_basename//'/kg ', trim(attr)//' concentration')
@@ -465,15 +463,8 @@ contains
           call addfld( spc_name, (/ 'lev' /), 'A', 'mol/mol', trim(attr)//' concentration')
           call addfld( trim(spc_name)//'_SRF', horiz_only, 'A', 'mol/mol', trim(attr)//" in bottom layer")
        endif
-#else
-       if ( any( aer_species == m ) ) then
-          call addfld( spc_name,   (/ 'lev' /), 'A', unit_basename//'/kg ', trim(attr)//' concentration')
-          call addfld( trim(spc_name)//'_SRF', horiz_only, 'A', unit_basename//'/kg', trim(attr)//" in bottom layer")
-       else
-          call addfld( spc_name, (/ 'lev' /), 'A', 'mol/mol', trim(attr)//' concentration')
-          call addfld( trim(spc_name)//'_SRF', horiz_only, 'A', 'mol/mol', trim(attr)//" in bottom layer")
-       endif
-#endif
+       ! OSLO_AERO end
+
        if ((m /= id_cly) .and. (m /= id_bry)) then
           if (history_aerosol.or.history_chemistry) then
              call add_default( spc_name, 1, ' ' )
@@ -514,7 +505,7 @@ contains
           if (m==id_cfc12 ) call add_default( spc_name, 1, ' ')
        endif
 
-#ifdef OSLO_AERO
+       ! OSLO_AERO begin
        call add_default( spc_name, 1, ' ' )
 
        ! output 3d-field of aersol tracer in cloud water
@@ -551,16 +542,13 @@ contains
              endif
           endif
        end if
-#else
-
-       if (history_dust .and. (index(spc_name,'dst_') > 0))  call add_default( spc_name, 1, ' ')
-
-#endif
+       ! OSLO_AERO end
     enddo
 
     call addfld( 'MASS', (/ 'lev' /), 'A', 'kg', 'mass of grid box' )
     call addfld( 'AREA', horiz_only,  'A', 'm2', 'area of grid box' )
-#ifdef OSLO_AERO
+
+    ! OSLO_AERO begin
     do n=1,N_AEROSOL_TYPES
        call addfld('cb_'//trim(aerosol_type_name(n)),horiz_only, 'A', 'kg/m2',&
             'cb_'//trim(aerosol_type_name(n))//' column of aerosol type')
@@ -570,7 +558,22 @@ contains
             'mmr_'//trim(aerosol_type_name(n))//' mmr of aerosol type')
        call add_default('mmr_'//trim(aerosol_type_name(n)), 1, ' ')
     end do
-#endif
+    ! OSLO_AERO end
+
+    call addfld('sum_SO4'  , (/ 'lev' /), 'A', 'kg/kg ', 'sum of SO4 concentrations')
+    call addfld('sum_BC'   , (/ 'lev' /), 'A', 'kg/kg ', 'sum of BC concentrations')
+    call addfld('sum_OM'   , (/ 'lev' /), 'A', 'kg/kg ', 'sum of OM concentrations')
+    call addfld('sum_DST'  , (/ 'lev' /), 'A', 'kg/kg ', 'sum of DST concentrations')
+    call addfld('sum_SS'   , (/ 'lev' /), 'A', 'kg/kg ', 'sum of SS concentrations')
+    call addfld('sum_SOA'  , (/ 'lev' /), 'A', 'kg/kg ', 'sum of SOA concentrations')
+
+    call add_default('sum_SO4'  , 1, ' ')
+    call add_default('sum_BC'   , 1, ' ')
+    call add_default('sum_OM'   , 1, ' ')
+    call add_default('sum_DST'  , 1, ' ')
+    call add_default('sum_SS'   , 1, ' ')
+    call add_default('sum_SOA'  , 1, ' ')
+
     call addfld( 'dry_deposition_NOy_as_N', horiz_only, 'I', 'kg/m2/s', 'NOy dry deposition flux ' )
     call addfld( 'DF_SOX', horiz_only, 'I', 'kg/m2/s', 'SOx dry deposition flux ' )
     call addfld( 'dry_deposition_NHx_as_N', horiz_only, 'I', 'kg/m2/s', 'NHx dry deposition flux ' )
@@ -593,13 +596,11 @@ contains
 
   end subroutine chm_diags_inti
 
-#ifdef OSLO_AERO
+  ! OSLO_AERO begin
   subroutine chm_diags( lchnk, ncol, vmr, mmr, rxt_rates, invariants, depvel, depflx, mmr_tend, pdel, pmid, ltrop, &
                         wetdepflx, nhx_nitrogen_flx, noy_nitrogen_flx, pbuf)
-#else
-  subroutine chm_diags( lchnk, ncol, vmr, mmr, rxt_rates, invariants, depvel, depflx, mmr_tend, pdel, pmid, ltrop, &
-                        wetdepflx, nhx_nitrogen_flx, noy_nitrogen_flx )
-#endif
+  ! OSLO_AERO end
+
     !--------------------------------------------------------------------
     !	... utility routine to output chemistry diagnostic variables
     !--------------------------------------------------------------------
@@ -630,14 +631,14 @@ contains
     real(r8), intent(in)  :: wetdepflx(ncol, gas_pcnst)
     real(r8), intent(out) :: nhx_nitrogen_flx(ncol) ! kgN/m2/sec
     real(r8), intent(out) :: noy_nitrogen_flx(ncol) ! kgN/m2/sec
-#ifdef OSLO_AERO
+    ! OSLO_AERO begin
     type(physics_buffer_desc), pointer :: pbuf(:)
-#endif
+    ! OSLO_AERO end
 
     !--------------------------------------------------------------------
     !	... local variables
     !--------------------------------------------------------------------
-#ifdef OSLO_AERO
+    ! OSLO_AERO begin
     real(r8), pointer :: cloudTracerField(:,:)
     integer           :: cloudTracerIndex
     character(len=20) :: cloudTracerName
@@ -646,7 +647,7 @@ contains
     real(r8)          :: cb_aerosol_type(pcols,N_AEROSOL_TYPES)         !column burden aerosol types
     real(r8)          :: mmr_aerosol_type(pcols,pver,N_AEROSOL_TYPES)   !concentration aerosol types
     character(len=16) :: spc_name
-#endif
+    ! OSLO_AERO end
     integer     :: i, k, m, n
     real(r8)    :: wrk(ncol,pver)
     !      real(r8)    :: tmp(ncol,pver)
@@ -659,6 +660,13 @@ contains
     real(r8), dimension(ncol)      :: df_noy, df_sox, df_nhx, do3chm_trp, do3chm_lms
     real(r8), dimension(ncol)      :: wd_noy, wd_nhx
     real(r8), dimension(ncol,pver) :: vmr_hox
+
+    real(r8) :: sum_so4(ncol,pver)
+    real(r8) :: sum_bc(ncol,pver)
+    real(r8) :: sum_om(ncol,pver)
+    real(r8) :: sum_dst(ncol,pver)
+    real(r8) :: sum_ss(ncol,pver)
+    real(r8) :: sum_soa(ncol,pver)
 
     real(r8) :: area(ncol), mass(ncol,pver)
     real(r8) :: wgt
@@ -698,10 +706,10 @@ contains
     call outfld( 'AREA', area(:ncol),   ncol, lchnk )
     call outfld( 'MASS', mass(:ncol,:), ncol, lchnk )
 
-#ifdef OSLO_AERO
+    ! OSLO_AERO begin
     cb_aerosol_type(:,:) = 0.0_r8
     mmr_aerosol_type(:,:,:) = 0.0_r8
-#endif
+    ! OSLO_AERO end
 
     do m = 1,gas_pcnst
 
@@ -785,7 +793,7 @@ contains
           vmr_hox(:ncol,:) = vmr_hox(:ncol,:) +  wgt * vmr(:ncol,:,m)
        endif
 
-#ifdef OSLO_AERO
+       ! OSLO_AERO begin
        spc_name = trim(solsym(m))
        call cnst_get_ind(spc_name, n, abort=.false.)
 
@@ -827,15 +835,7 @@ contains
              mmr_aerosol_type(:ncol,:,aerosolType(n)) = mmr_aerosol_type(:ncol,:,aerosolType(n)) + mmr(:ncol,:,m)
           endif
        end if !Check if this is a chemistry tracer
-#else
-       if ( any( aer_species == m ) ) then
-          call outfld( solsym(m), mmr(:ncol,:,m), ncol ,lchnk )
-          call outfld( trim(solsym(m))//'_SRF', mmr(:ncol,pver,m), ncol ,lchnk )
-       else
-          call outfld( solsym(m), vmr(:ncol,:,m), ncol ,lchnk )
-          call outfld( trim(solsym(m))//'_SRF', vmr(:ncol,pver,m), ncol ,lchnk )
-       endif
-#endif
+       ! OSLO_AERO end
 
        if (has_drydep(solsym(m))) then
           call outfld( depvel_name(m), depvel(:ncol,m), ncol ,lchnk )
@@ -902,13 +902,58 @@ contains
           call outfld('DO3CHM_LMS',do3chm_lms(:ncol), ncol, lchnk )
        end if
 !
-    enddo
-#ifdef OSLO_AERO
+    enddo ! end loop from m=1,gas_pcnst
+
+
+    ! Generate compund sum
+
+    ! SO4_NA, SO4_A1, SO4_A2    SO4_AC, SO4_PR
+    ! BC_N, BC_AX, BC_NI, BC_A, BC_AI ,BC_AC
+    ! OM_NI, OM_AI, OM_AC
+    ! DST_A2, DST_A3
+    ! SS_A1, SS_A2, SS_A3
+    ! SOA_NA, SOA_A1
+    ! H2SO4, SOA_LV,SOA_SV, monoterp, isoprene
+
+    sum_so4(:,:) = 0._r8
+    sum_bc(:,:) = 0._r8
+    sum_om(:,:) = 0._r8
+    sum_dst(:,:) = 0._r8
+    sum_ss(:,:) = 0._r8
+    sum_soa(:,:) = 0._r8
+
+    ! add all the nums in one variable for mam
+
+
+    do m = 1,gas_pcnst
+       spc_name = trim(solsym(m))
+       if (spc_name(1:4) == 'SO4_') then
+          sum_so4(:ncol,:) = sum_so4(:ncol,:) + mmr(:ncol,:,m)
+       else if (spc_name(1:3) == 'BC_') then
+          sum_bc(:ncol,:) = sum_bc(:ncol,:) + mmr(:ncol,:,m)
+       else if (spc_name(1:3) == 'OM_') then
+          sum_om(:ncol,:) = sum_om(:ncol,:) + mmr(:ncol,:,m)
+       else if (spc_name(1:4) == 'DST_') then
+          sum_dst(:ncol,:) = sum_dst(:ncol,:) + mmr(:ncol,:,m)
+       else if (spc_name(1:3) == 'SS_') then
+          sum_ss(:ncol,:) = sum_ss(:ncol,:) + mmr(:ncol,:,m)
+       else if (spc_name(1:4) == 'SOA_') then
+          sum_soa(:ncol,:) = sum_soa(:ncol,:) + mmr(:ncol,:,m)
+       end if
+    end do
+    call outfld( 'sum_SO4'   , sum_so4(:ncol,:)   , ncol ,lchnk )
+    call outfld( 'sum_BC'    , sum_bc(:ncol,:)    , ncol ,lchnk )
+    call outfld( 'sum_OM'    , sum_om(:ncol,:)    , ncol ,lchnk )
+    call outfld( 'sum_DST'   , sum_dst(:ncol,:)   , ncol ,lchnk )
+    call outfld( 'sum_SS'    , sum_ss(:ncol,:)    , ncol ,lchnk )
+    call outfld( 'sum_SOA'   , sum_soa(:ncol,:)   , ncol ,lchnk )
+
+    ! OSLO_AERO begin
     do n=1,N_AEROSOL_TYPES
        call outfld("mmr_"//trim(aerosol_type_name(n)), mmr_aerosol_type(:ncol,:,n), ncol,lchnk)
        call outfld("cb_"//trim(aerosol_type_name(n)) , cb_aerosol_type(:ncol,n)   , ncol,lchnk)
     enddo
-#endif
+    ! OSLO_AERO end
     call outfld( 'NOX',  vmr_nox  (:ncol,:), ncol, lchnk )
     call outfld( 'NOY',  vmr_noy  (:ncol,:), ncol, lchnk )
     call outfld( 'HOX',  vmr_hox  (:ncol,:), ncol, lchnk )
@@ -1038,11 +1083,9 @@ contains
   subroutine het_diags( het_rates, mmr, pdel, lchnk, ncol )
 
     use cam_history,  only : outfld
-#ifdef OSLO_AERO
+    ! OSLO_AERO begin
     use phys_grid,    only : get_wght_all_p, get_area_all_p
-#else
-    use phys_grid,    only : get_wght_all_p
-#endif
+    ! OSLO_AERO end
 
     integer,  intent(in)  :: lchnk
     integer,  intent(in)  :: ncol
@@ -1051,9 +1094,10 @@ contains
     real(r8), intent(in)  :: pdel(ncol,pver)
 
     real(r8), dimension(ncol) :: noy_wk, sox_wk, nhx_wk, wrk_wd
-#ifdef OSLO_AERO
+    ! OSLO_AERO begin
     real(r8), dimension(ncol) :: area
-#endif
+    ! OSLO_AERO end
+
     integer :: m, k
     real(r8) :: wght(ncol)
     !
@@ -1063,10 +1107,10 @@ contains
     sox_wk(:) = 0._r8
     nhx_wk(:) = 0._r8
 
-#ifdef OSLO_AERO
+    ! OSLO_AERO begin
     call get_area_all_p(lchnk, ncol, area)
     area = area * rearth**2
-#endif
+    ! OSLO_AERO end
     call get_wght_all_p(lchnk, ncol, wght)
 
     do m = 1,gas_pcnst
@@ -1082,9 +1126,9 @@ contains
        !
        if (gas_wetdep_method=='MOZ') then
           call outfld( wetdep_name(m), wrk_wd(:ncol), ncol, lchnk )
-#ifdef OSLO_AERO
+          ! OSLO_AERO begin
           call outfld( wetdep_name_area(m), wrk_wd(:ncol)/area(:ncol)  ,ncol, lchnk )
-#endif
+          ! OSLO_AERO end
           call outfld( wtrate_name(m), het_rates(:ncol,:,m), ncol, lchnk )
 
           if ( any(noy_species == m ) ) then

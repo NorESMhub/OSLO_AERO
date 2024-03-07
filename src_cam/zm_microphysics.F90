@@ -627,6 +627,10 @@ subroutine zm_mphy(su,    qu,   mu,   du,   eu,    cmel,  cmei,  zf,   pm,   te,
 ! initialization
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
+  ! OSLO_AERO begin
+  call endrun('zm_microphysics not supported in oslo-aero')
+  ! OSLO_AERO end
+
   if (aero%scheme == 'modal') then
 
      allocate(vaerosol(aero%nmodes), hygro(aero%nmodes), naermod(aero%nmodes), &
@@ -1475,13 +1479,11 @@ subroutine zm_mphy(su,    qu,   mu,   du,   eu,    cmel,  cmei,  zf,   pm,   te,
 
                     end if
 
-#ifndef OSLO_AERO
                     call activate_aerosol(  &
                        wu(i,k), wmix, wdiab, wmin, wmax,                 &
                        t(i,k), rho(i,k), naermod, aero%nmodes, vaerosol, &
                        hygro, aero_props_obj, fn, fm,                  &
                        fluxn, fluxm, flux_fullact, in_cloud_in=in_cloud, smax_f=smax_f)
-#endif
 
                     do m = 1, aero%nmodes
                        nlsrc = nlsrc + fn(m)*naermod(m)  !  number nucleated
