@@ -8,6 +8,7 @@ module mo_gas_phase_chemdr
   use chem_mods,        only : rxt_tag_cnt, rxt_tag_lst, rxt_tag_map, extcnt, num_rnts
   ! OSLO_AERO begin
   use oslo_aero_dust,   only : dust_names, ndust => dust_nbin
+  use phys_control,     only : history_aerosol_forcing
   ! OSLO_AERO end
   use ppgrid,           only : pcols, pver
   use phys_control,     only : phys_getopts
@@ -238,12 +239,14 @@ contains
        call addfld ('HO2_aft   ',  (/ 'lev' /), 'A','molecules cm-3', 'HO2 invariants after adding diurnal variations'           )
        call addfld ('NO3_aft   ',  (/ 'lev' /), 'A','molecules cm-3', 'NO3 invariants after adding diurnal variations'           )
 
-       call add_default ('OH_bef       ', 1, ' ')
-       call add_default ('HO2_bef      ', 1, ' ')
-       call add_default ('NO3_bef      ', 1, ' ')
-       call add_default ('OH_aft       ', 1, ' ')
-       call add_default ('HO2_aft      ', 1, ' ')
-       call add_default ('NO3_aft      ', 1, ' ')
+       if ( history_aerosol_forcing ) then
+         call add_default ('OH_bef       ', 1, ' ')
+         call add_default ('HO2_bef      ', 1, ' ')
+         call add_default ('NO3_bef      ', 1, ' ')
+         call add_default ('OH_aft       ', 1, ' ')
+         call add_default ('HO2_aft      ', 1, ' ')
+         call add_default ('NO3_aft      ', 1, ' ')
+       endif
     endif
     ! OSLO_AERO end
 
@@ -676,7 +679,7 @@ contains
     !-----------------------------------------------------------------------
     !        ... Set the "day/night cycle for prescribed oxidants"
     !-----------------------------------------------------------------------
-    if (.not.modal_strat_sulfate) then 
+    if (.not.modal_strat_sulfate) then
        call outfld('OH_bef',    invariants(:,:,id_oh),  ncol, lchnk)
        call outfld('HO2_bef',   invariants(:,:,id_ho2), ncol, lchnk)
        call outfld('NO3_bef',   invariants(:,:,id_no3), ncol, lchnk)
@@ -957,7 +960,7 @@ contains
                     cmfdqr, prain, nevapr, delt, invariants(:,:,indexm), &
                     vmr, ncol, lchnk )
        if (.not. convproc_do_aer) then
-          call het_diags( het_rates(:ncol,:,:), mmr(:ncol,:,:), pdel(:ncol,:), lchnk, ncol )
+          call het_diags( het_rates(:ncol,:,:), mmr(:ncol,:,:), pdel(:ncol,:), lchnk, ncol, pbuf )
        endif
     else
        het_rates = 0._r8
@@ -1021,7 +1024,7 @@ contains
        call vmr2mmr( vmr(:ncol,:,:), mmr_new(:ncol,:,:), mbar(:ncol,:), ncol )
        ! mmr_new = average of mmr values before and after imp_sol
        mmr_new(:ncol,:,:) = 0.5_r8*( mmr(:ncol,:,:) + mmr_new(:ncol,:,:) )
-       call het_diags( het_rates(:ncol,:,:), mmr_new(:ncol,:,:), pdel(:ncol,:), lchnk, ncol )
+       call het_diags( het_rates(:ncol,:,:), mmr_new(:ncol,:,:), pdel(:ncol,:), lchnk, ncol, pbuf )
     endif
 
     ! save h2so4 change by gas phase chem (for later new particle nucleation)

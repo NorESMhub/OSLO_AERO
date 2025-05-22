@@ -423,11 +423,8 @@ contains
     character(128)    :: long_name                       ![-] needed for diagnostics
     real(r8)          :: coltend(pcols, gas_pcnst)
     real(r8)          :: tracer_coltend(pcols)
-    logical           :: history_aerosol
 
     totalLoss(:,:,:)=0.0_r8
-
-    call phys_getopts(history_aerosol_out = history_aerosol)
 
     do k=1,pver
        do i=1,ncol
@@ -541,26 +538,24 @@ contains
     end do
 
     !Output for diagnostics
-    if(history_aerosol)then
-       coltend(:ncol,:) = 0.0_r8
-       do i=1,gas_pcnst
-          !Check if species contributes to coagulation
-          if(lifeCycleReceiver(i) .gt. 0)then
-             !Loss from the donor specie
-             tracer_coltend(:ncol) = sum(totalLoss(:ncol, :,i)*pdel(:ncol,:),2)/gravit*delt_inverse
-             coltend(:ncol,i) = coltend(:ncol,i) - tracer_coltend(:ncol) !negative, loss for donor
-             coltend(:ncol,lifeCycleReceiver(i)) = coltend(:ncol,lifeCycleReceiver(i)) + tracer_coltend(:ncol)
-          endif
-       end do
-       do i=1,gas_pcnst
-          if(lifeCycleReceiver(i) .gt. 0)then
-             long_name= trim(solsym(i))//"coagTend"
-             call outfld(long_name, coltend(:ncol,i), ncol, lchnk)
-             long_name= trim(solsym(lifeCycleReceiver(i)))//"coagTend"
-             call outfld(long_name, coltend(:ncol,lifeCycleReceiver(i)),ncol,lchnk)
-          end if
-       end do
-    endif
+   coltend(:ncol,:) = 0.0_r8
+   do i=1,gas_pcnst
+      !Check if species contributes to coagulation
+      if(lifeCycleReceiver(i) .gt. 0)then
+         !Loss from the donor specie
+         tracer_coltend(:ncol) = sum(totalLoss(:ncol, :,i)*pdel(:ncol,:),2)/gravit*delt_inverse
+         coltend(:ncol,i) = coltend(:ncol,i) - tracer_coltend(:ncol) !negative, loss for donor
+         coltend(:ncol,lifeCycleReceiver(i)) = coltend(:ncol,lifeCycleReceiver(i)) + tracer_coltend(:ncol)
+      endif
+   end do
+   do i=1,gas_pcnst
+      if(lifeCycleReceiver(i) .gt. 0)then
+         long_name= trim(solsym(i))//"coagTend"
+         call outfld(long_name, coltend(:ncol,i), ncol, lchnk)
+         long_name= trim(solsym(lifeCycleReceiver(i)))//"coagTend"
+         call outfld(long_name, coltend(:ncol,lifeCycleReceiver(i)),ncol,lchnk)
+      end if
+   end do
   end subroutine coagtend
 
   !================================================================
@@ -602,9 +597,6 @@ contains
     real(r8), pointer :: fldcw(:,:)
     real(r8)          :: coltend(pcols, gas_pcnst)
     real(r8)          :: tracer_coltend(pcols)
-    logical           :: history_aerosol
-
-    call phys_getopts(history_aerosol_out = history_aerosol)
 
     cloudLoss(:,:,:)=0.0_r8
     do k=1,pver
@@ -687,28 +679,27 @@ contains
        end do
     end do
 
-    !Output for diagnostics
-    if(history_aerosol)then
-       coltend(:ncol,:) = 0.0_r8
-       do i=1,gas_pcnst
-          !Check if species contributes to coagulation
-          if(CloudAerReceiver(i) .gt. 0)then
-             !Loss from the donor specie
-             tracer_coltend(:ncol) = sum(cloudLoss(:ncol, :,i)*pdel(:ncol,:),2)/gravit*delt_inverse
+   !Output for diagnostics
+   coltend(:ncol,:) = 0.0_r8
+   do i=1,gas_pcnst
+      !Check if species contributes to coagulation
+      if(CloudAerReceiver(i) .gt. 0)then
+         !Loss from the donor specie
+         tracer_coltend(:ncol) = sum(cloudLoss(:ncol, :,i)*pdel(:ncol,:),2)/gravit*delt_inverse
 
-             coltend(:ncol,i) = coltend(:ncol,i) - tracer_coltend(:ncol) !negative, loss for donor
-             coltend(:ncol,CloudAerReceiver(i)) = coltend(:ncol,CloudAerReceiver(i)) + tracer_coltend(:ncol)
-          endif
-       end do
-       do i=1,gas_pcnst
-          if(CloudAerReceiver(i) .gt. 0)then
-             long_name= trim(solsym(i))//"clcoagTend"
-             call outfld(long_name, coltend(:ncol,i), ncol, lchnk)
-             long_name= trim(solsym(CloudAerReceiver(i)))//"_OCWclcoagTend"
-             call outfld(long_name, coltend(:ncol,CloudAerReceiver(i)),ncol,lchnk)
-          end if
-       end do
-    endif
+         coltend(:ncol,i) = coltend(:ncol,i) - tracer_coltend(:ncol) !negative, loss for donor
+         coltend(:ncol,CloudAerReceiver(i)) = coltend(:ncol,CloudAerReceiver(i)) + tracer_coltend(:ncol)
+      endif
+   end do
+   do i=1,gas_pcnst
+      if(CloudAerReceiver(i) .gt. 0)then
+         long_name= trim(solsym(i))//"clcoagTend"
+         call outfld(long_name, coltend(:ncol,i), ncol, lchnk)
+         long_name= trim(solsym(CloudAerReceiver(i)))//"_OCWclcoagTend"
+         call outfld(long_name, coltend(:ncol,CloudAerReceiver(i)),ncol,lchnk)
+      end if
+   end do
+
   end subroutine clcoag
 
   !================================================================
