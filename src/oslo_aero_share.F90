@@ -156,8 +156,8 @@ module oslo_aero_share
   real(r8), parameter :: eps=1.0e-30_r8
 
   ! Names of aerosol tracer fields
-  character(len=6), parameter :: aerosol_names(21) = (/                      &
-       "SO4_NA", "SO4_A1", "SO4_A2", "SO4_AC", "SO4_PR", "BC_N  ", "BC_AX ", &
+  character(len=6), parameter :: aerosol_names(20) = (/                      &
+       "SO4_NA", "SO4_A1", "SO4_A2", "SO4_AC", "SO4_PR", "BC_N  ", &
        "BC_NI ", "BC_A  ", "BC_AI ", "BC_AC ", "OM_NI ", "OM_AI ", "OM_AC ", &
        "DST_A2", "DST_A3", "SS_A1 ", "SS_A2 ", "SS_A3 ", "SOA_NA", "SOA_A1" /)
 
