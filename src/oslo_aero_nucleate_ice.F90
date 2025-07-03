@@ -42,7 +42,7 @@ module oslo_aero_nucleate_ice
   use nucleate_ice,      only: nucleati_init, nucleati  ! portable module
   !
   use oslo_aero_share,   only: l_dst_a2, l_dst_a3, MODE_IDX_DST_A2, MODE_IDX_DST_A3, rhopart, qqcw_get_field
-  use oslo_aero_share,   only: MODE_IDX_DST_A2, MODE_IDX_DST_A3, MODE_IDX_SO4_AC,MODE_IDX_OMBC_INTMIX_COAT_AIT
+  use oslo_aero_share,   only: MODE_IDX_DST_A2, MODE_IDX_DST_A3, MODE_IDX_SO4_AC,MODE_IDX_OMBC_INTMIX_COAT_AIT,MODE_IDX_SO4SOA_AIT 
   use oslo_aero_share,   only: volumeToNumber
   use oslo_aero_share,   only: nmodes
 
@@ -452,7 +452,7 @@ contains
              ! dust = coarse mode
              ! since modal has internal mixtures.
              ! Oslo aerosols have two modes.. Need mode-fractions
-             so4_num = (numberConcentration(icol,ilev,MODE_IDX_SO4_AC))*1.0e-6_r8
+             so4_num = (numberConcentration(icol,ilev,MODE_IDX_SO4_AC)+numberConcentration(icol,ilev,MODE_IDX_SO4SOA_AIT))*1.0e-6_r8
              dst_num = (numberConcentration(icol,ilev,MODE_IDX_DST_A2) + numberConcentration(icol,ilev,MODE_IDX_DST_A3))*1.0e-6_r8
              !soot_num =  numberConcentration(icol,ilev,MODE_IDX_OMBC_INTMIX_COAT_AIT)*1.0e-6_r8
              dust_coarse_fraction = numberConcentration(icol,ilev,MODE_IDX_DST_A3)*1.e-6_r8 / (dst_num+1.e-100_r8)

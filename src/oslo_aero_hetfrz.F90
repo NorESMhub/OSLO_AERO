@@ -1106,14 +1106,7 @@ contains
     rgimm_dust_a1 = rgimm
     rgimm_dust_a3 = rgimm
 
-    ! if aw*Si<=1, the freezing point depression is strong enough to prevent freezing
-
-    if (aw(id_bc)*supersatice > 1._r8 ) then
-       do_bc   = .true.
-       rgimm_bc = 2*vwice*sigma_iw/(kboltz*t*LOG(aw(id_bc)*supersatice))
-    else
-       do_bc = .false.
-    end if
+    do_bc = .false.
 
     if (aw(id_dst1)*supersatice > 1._r8 ) then
        do_dst1 = .true.
