@@ -77,17 +77,12 @@ module physpkg
   integer ::  totliqini_idx      = 0
   integer ::  toticeini_idx      = 0
 
-!+pel
   integer ::  enthalpy_prec_bc_idx = 0
   integer ::  enthalpy_prec_ac_idx = 0
- !integer ::  enthalpy_evap_idx    = 0 !!tht
-!-pel
-!+tht
   integer ::  enthalpy_evop_idx    = 0
   integer ::  qcsedten_idx=0, qrsedten_idx=0
   integer ::  qisedten_idx=0, qssedten_idx=0, qgsedten_idx=0
   integer ::  qrain_mg_idx=0, qsnow_mg_idx=0
-!-tht
 
   integer ::  prec_str_idx       = 0
   integer ::  snow_str_idx       = 0
@@ -170,8 +165,7 @@ contains
     use hemco_interface,    only: HCOI_Chunk_Init
     use surface_emissions_mod, only: surface_emissions_reg
     use elevated_emissions_mod, only: elevated_emissions_reg
-
-    use air_composition,    only: compute_enthalpy_flux, num_enthalpy_vars !+pel
+    use air_composition,    only: compute_enthalpy_flux, num_enthalpy_vars
 
     !---------------------------Local variables-----------------------------
     !
@@ -224,17 +218,13 @@ contains
     call pbuf_add_field('TOTLIQINI', 'physpkg', dtype_r8, (/pcols,pver/), totliqini_idx)
     call pbuf_add_field('TOTICEINI', 'physpkg', dtype_r8, (/pcols,pver/), toticeini_idx)
 
-!+pel 
     if (compute_enthalpy_flux) then
        call pbuf_add_field('ENTHALPY_PREC_BC','physpkg', dtype_r8, (/pcols,num_enthalpy_vars/), enthalpy_prec_bc_idx)
        call pbuf_add_field('ENTHALPY_PREC_AC','global' , dtype_r8, (/pcols,num_enthalpy_vars/), enthalpy_prec_ac_idx)
- !+tht
        call pbuf_add_field('ENTHALPY_EVOP'   ,'global' , dtype_r8, (/pcols/),                   enthalpy_evop_idx)
        call pbuf_add_field('qrain_mg'       , 'physpkg', dtype_r8, (/pcols,pver/), qrain_mg_idx)
        call pbuf_add_field('qsnow_mg'       , 'physpkg', dtype_r8, (/pcols,pver/), qsnow_mg_idx)
- !-tht
     end if
-!-pel
 
     ! check energy package
     call check_energy_register
@@ -1408,7 +1398,7 @@ contains
     use physconst,          only: rhoh2o
     use aero_model,         only: aero_model_drydep
     use check_energy,       only: check_energy_timestep_init, check_energy_cam_chng
-    use check_energy,       only: tot_energy_phys, enthalpy_adjustment !+pel/tht
+    use check_energy,       only: tot_energy_phys, enthalpy_adjustment
     use check_energy,       only: check_tracers_data, check_tracers_init, check_tracers_chng
     use time_manager,       only: get_nstep
     use cam_abortutils,     only: endrun
@@ -1459,11 +1449,9 @@ contains
     use cam_budget,         only: thermo_budget_history
     use dyn_tests_utils,    only: vc_dycore, vc_height, vc_dry_pressure
     use air_composition,    only: cpairv, cp_or_cv_dycore
-!+pel/tht
     use air_composition,    only: compute_enthalpy_flux
     use air_composition,    only: thermodynamic_active_species_liq_num,thermodynamic_active_species_liq_idx
     use air_composition,    only: thermodynamic_active_species_ice_num,thermodynamic_active_species_ice_idx
-!-pel/tht
     !
     ! Arguments
     !
@@ -1570,14 +1558,13 @@ contains
     real(r8), pointer, dimension(:,:) :: dvcore
     real(r8), pointer, dimension(:,:) :: ast     ! relative humidity cloud fraction
 
-!+tht variables for dme_energy_adjust 
+    ! variables for dme_energy_adjust
     real(r8), pointer, dimension(:,:) :: qcsedten, qrsedten, qisedten, qssedten, qgsedten
     real(r8), pointer, dimension(:,:) :: qrain_mg          , qsnow_mg
     real(r8), dimension(pcols,pver)   :: qrain_mg_macmic   , qsnow_mg_macmic
     integer :: m_cnst
     real(r8):: hflx_iref(pcols)
     character(50) :: physparname !(and a little extra log info)
-!-tht
 
     !-----------------------------------------------------------------------
     lchnk = state%lchnk
@@ -1688,10 +1675,10 @@ contains
     ! Check if latent heat flux exceeds the total moisture content of the
     ! lowest model layer, thereby creating negative moisture.
 
-    hflx_iref(:ncol) = cam_in%shf(:ncol)        !+tht
-    call qneg4('TPHYSAC', lchnk, ncol, ztodt ,                                &
-         state%q(1,pver,1), state%rpdel(1,pver),                              &
-         hflx_iref, &                           !+tht
+    hflx_iref(:ncol) = cam_in%shf(:ncol)
+    call qneg4('TPHYSAC', lchnk, ncol, ztodt ,   &
+         state%q(1,pver,1), state%rpdel(1,pver), &
+         hflx_iref,                              &
          cam_in%shf, cam_in%lhf, cam_in%cflx)
 
     call t_stopf('tphysac_init')
@@ -1750,12 +1737,12 @@ contains
        snow_sed_macmic = 0._r8
        prec_pcw_macmic = 0._r8
        snow_pcw_macmic = 0._r8
-!+tht
+
        if (compute_enthalpy_flux) then
         qrain_mg_macmic(:ncol,:) = 0._r8
         qsnow_mg_macmic(:ncol,:) = 0._r8
        endif
-!-tht
+
        ! contrail parameterization
        ! see Chen et al., 2012: Global contrail coverage simulated
        !                        by CAM5 with the inventory of 2006 global aircraft emissions, JAMES
@@ -1791,10 +1778,8 @@ contains
              ! Since we "added" the reserved liquid back in this routine, we need
              ! to account for it in the energy checker
              flx_cnd(:ncol) = -1._r8*rliq(:ncol)
-!+tht
-            !flx_heat(:ncol) = cam_in%shf(:ncol) + det_s(:ncol)
-             flx_heat(:ncol) = hflx_iref(:ncol) + det_s(:ncol) 
-!-tht
+             flx_heat(:ncol) = hflx_iref(:ncol) + det_s(:ncol)
+
              ! Unfortunately, physics_update does not know what time period
              ! "tend" is supposed to cover, and therefore can't update it
              ! with substeps correctly. For now, work around this by scaling
@@ -1817,12 +1802,11 @@ contains
              end if
 
              ! Use actual qflux (not lhf/latvap) for consistency with surface fluxes and revised code
-!+tht (a little extra log info)
-            !call check_energy_cam_chng(state, tend, "clubb_tend", nstep, ztodt, &
+             ! a little extra log info
+             !call check_energy_cam_chng(state, tend, "clubb_tend", nstep, ztodt, &
              write(physparname,"(i3)") macmic_it
              physparname="clubb_tend "//trim(physparname)
              call check_energy_cam_chng(state, tend, physparname, nstep, ztodt, &
-!-tht
                 cam_in%cflx(:ncol,1)/cld_macmic_num_steps, &
                 flx_cnd(:ncol)/cld_macmic_num_steps, &
                 det_ice(:ncol)/cld_macmic_num_steps, &
@@ -1954,12 +1938,11 @@ contains
              call cam_snapshot_all_outfld_tphysac(cam_snapshot_after_num, state, tend, cam_in, cam_out, pbuf, &
                   fh2o, surfric, obklen, flx_heat, cmfmc, dlf, det_s, det_ice, net_flx)
           end if
-!+tht (a little extra log info)
-         !call check_energy_cam_chng(state, tend, "microp_tend", nstep, ztodt, &
+          !a little extra log info
+          !call check_energy_cam_chng(state, tend, "microp_tend", nstep, ztodt, &
           write(physparname,"(i3)") macmic_it
           physparname="microp_tend "//trim(physparname)
           call check_energy_cam_chng(state, tend, physparname, nstep, ztodt, &
-!-tht
                zero, prec_str(:ncol)/cld_macmic_num_steps, &
                snow_str(:ncol)/cld_macmic_num_steps, zero)
 
@@ -1969,37 +1952,37 @@ contains
           snow_sed_macmic(:ncol) = snow_sed_macmic(:ncol) + snow_sed(:ncol)
           prec_pcw_macmic(:ncol) = prec_pcw_macmic(:ncol) + prec_pcw(:ncol)
           snow_pcw_macmic(:ncol) = snow_pcw_macmic(:ncol) + snow_pcw(:ncol)
-!+tht
+
           if (compute_enthalpy_flux) then
-           if(macmic_it.eq.1) then
-            qcsedten_idx = pbuf_get_index('QCSEDTEN'     , errcode=i)
-            qrsedten_idx = pbuf_get_index('QRSEDTEN'     , errcode=i)
-            qisedten_idx = pbuf_get_index('QISEDTEN'     , errcode=i)
-            qssedten_idx = pbuf_get_index('QSSEDTEN'     , errcode=i)
-            qgsedten_idx = pbuf_get_index('QGSEDTEN'     , errcode=i)
-           endif
-           if (qcsedten_idx.gt.0) then
-            call pbuf_get_field(pbuf, qcsedten_idx, qcsedten)
-            qrain_mg_macmic(:ncol,:) = qrain_mg_macmic(:ncol,:)-qcsedten(:ncol,:)
-           endif
-           if (qrsedten_idx.gt.0) then
-            call pbuf_get_field(pbuf, qrsedten_idx, qrsedten)
-            qrain_mg_macmic(:ncol,:) = qrain_mg_macmic(:ncol,:)-qrsedten(:ncol,:)
-           endif
-           if (qisedten_idx.gt.0) then
-            call pbuf_get_field(pbuf, qisedten_idx, qisedten)
-            qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:)-qisedten(:ncol,:)
-           endif
-           if (qssedten_idx.gt.0) then
-            call pbuf_get_field(pbuf, qssedten_idx, qssedten)
-            qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:)-qssedten(:ncol,:)
-           endif
-           if (qgsedten_idx.gt.0) then
-            call pbuf_get_field(pbuf, qgsedten_idx, qgsedten)
-            qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:)-qgsedten(:ncol,:)
-           endif
+             if(macmic_it.eq.1) then
+                qcsedten_idx = pbuf_get_index('QCSEDTEN'     , errcode=i)
+                qrsedten_idx = pbuf_get_index('QRSEDTEN'     , errcode=i)
+                qisedten_idx = pbuf_get_index('QISEDTEN'     , errcode=i)
+                qssedten_idx = pbuf_get_index('QSSEDTEN'     , errcode=i)
+                qgsedten_idx = pbuf_get_index('QGSEDTEN'     , errcode=i)
+             endif
+             if (qcsedten_idx.gt.0) then
+                call pbuf_get_field(pbuf, qcsedten_idx, qcsedten)
+                qrain_mg_macmic(:ncol,:) = qrain_mg_macmic(:ncol,:)-qcsedten(:ncol,:)
+             endif
+             if (qrsedten_idx.gt.0) then
+                call pbuf_get_field(pbuf, qrsedten_idx, qrsedten)
+                qrain_mg_macmic(:ncol,:) = qrain_mg_macmic(:ncol,:)-qrsedten(:ncol,:)
+             endif
+             if (qisedten_idx.gt.0) then
+                call pbuf_get_field(pbuf, qisedten_idx, qisedten)
+                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:)-qisedten(:ncol,:)
+             endif
+             if (qssedten_idx.gt.0) then
+                call pbuf_get_field(pbuf, qssedten_idx, qssedten)
+                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:)-qssedten(:ncol,:)
+             endif
+             if (qgsedten_idx.gt.0) then
+                call pbuf_get_field(pbuf, qgsedten_idx, qgsedten)
+                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:)-qgsedten(:ncol,:)
+             endif
           endif
-!-tht
+
        end do ! end substepping over macrophysics/microphysics
 
        call outfld( 'UTEND_MACROP', ptend_macp_all%u, pcols, lchnk)
@@ -2012,16 +1995,16 @@ contains
        snow_pcw(:ncol) = snow_pcw_macmic(:ncol)/cld_macmic_num_steps
        prec_str(:ncol) = prec_pcw(:ncol) + prec_sed(:ncol)
        snow_str(:ncol) = snow_pcw(:ncol) + snow_sed(:ncol)
-!+tht
+
        if (compute_enthalpy_flux) then
-        qrain_mg_idx = pbuf_get_index('qrain_mg'     , errcode=i)
-        qsnow_mg_idx = pbuf_get_index('qsnow_mg'     , errcode=i)
-        call pbuf_get_field(pbuf, qrain_mg_idx, qrain_mg)
-        call pbuf_get_field(pbuf, qsnow_mg_idx, qsnow_mg)
-        qrain_mg(:ncol,:) = qrain_mg_macmic(:ncol,:)/cld_macmic_num_steps
-        qsnow_mg(:ncol,:) = qsnow_mg_macmic(:ncol,:)/cld_macmic_num_steps
+          qrain_mg_idx = pbuf_get_index('qrain_mg'     , errcode=i)
+          qsnow_mg_idx = pbuf_get_index('qsnow_mg'     , errcode=i)
+          call pbuf_get_field(pbuf, qrain_mg_idx, qrain_mg)
+          call pbuf_get_field(pbuf, qsnow_mg_idx, qsnow_mg)
+          qrain_mg(:ncol,:) = qrain_mg_macmic(:ncol,:)/cld_macmic_num_steps
+          qsnow_mg(:ncol,:) = qsnow_mg_macmic(:ncol,:)/cld_macmic_num_steps
        endif
-!-tht
+
     endif
 
     ! Add the precipitation from CARMA to the precipitation from stratiform.
@@ -2488,16 +2471,16 @@ contains
     endif
 
     if (compute_enthalpy_flux) then
-!+tht
-    ! conserve energy
-     if (.not.dycore_is('SE')) then
-        call endrun("Explicit enthalpy flux functionality only supported for SE dycore")
-     end if
-     call enthalpy_adjustment(ncol,lchnk,state,cam_in,cam_out,pbuf,ztodt,itim_old,&
-                              qini(:,:),totliqini(:,:),toticeini(:,:),tend)
+
+       ! conserve energy
+       if (.not.dycore_is('SE')) then
+          call endrun("Explicit enthalpy flux functionality only supported for SE dycore")
+       end if
+       call enthalpy_adjustment(ncol,lchnk,state,cam_in,cam_out,pbuf,ztodt,itim_old,&
+            qini(:,:),totliqini(:,:),toticeini(:,:),tend)
     else
-   ! standard CAM (violate energy conservation)
-!-tht
+       ! standard CAM (violate energy conservation)
+
        !-------------- Energy budget checks vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
        ! Save total energy for global fixer in next timestep
        !
@@ -2643,10 +2626,8 @@ contains
     use constituents,    only: qmin
     use air_composition, only: thermodynamic_active_species_liq_num,thermodynamic_active_species_liq_idx
     use air_composition, only: thermodynamic_active_species_ice_num,thermodynamic_active_species_ice_idx
-!+tht
     use air_composition, only: compute_enthalpy_flux, num_enthalpy_vars, cp_or_cv_dycore
     use physics_buffer,  only: pbuf_set_field
-!-tht
     use convect_deep,    only: convect_deep_tend
     use time_manager,    only: is_first_step, get_nstep
     use convect_diagnostics,only: convect_diagnostics_calc
@@ -2666,10 +2647,9 @@ contains
     use dyn_tests_utils, only: vc_dycore
     use surface_emissions_mod,only: surface_emissions_set
     use elevated_emissions_mod,only: elevated_emissions_set
-!+pel
-    use air_composition, only: te_init,cpairv,compute_enthalpy_flux !xxx 
-    use cam_thermo,      only: get_hydrostatic_energy               !xxx 
-!-pel
+    use air_composition, only: te_init,cpairv,compute_enthalpy_flux
+    use cam_thermo,      only: get_hydrostatic_energy
+
     ! Arguments
 
     real(r8), intent(in) :: ztodt                          ! 2 delta t (model time increment)
@@ -2845,8 +2825,8 @@ contains
       m = thermodynamic_active_species_ice_idx(m_cnst)
       toticeini(:ncol,:pver) = toticeini(:ncol,:pver)+state%q(:ncol,:pver,m)
     end do
-!+pel
-   ! compute energy variables for state at the beginning of physics - xxx
+
+    ! compute energy variables for state at the beginning of physics - xxx
     if (compute_enthalpy_flux) then
       call get_hydrostatic_energy(state%q(1:ncol,1:pver,1:pcnst),.true.,          &
            state%pdel(1:ncol,1:pver), cp_or_cv_dycore(:ncol,:,lchnk),             &
@@ -2854,9 +2834,8 @@ contains
            vc_dycore, ptop=state%pintdry(1:ncol,1), phis = state%phis(1:ncol),    &
            te = te_init(:ncol,1,lchnk), se=te_init(:ncol,2,lchnk), po=te_init(:ncol,3,lchnk), ke=te_init(:ncol,4,lchnk))
     endif
-!-pel
 
-!+tht (postponed call to fixer)
+    ! (postponed call to fixer)
     !===================================================
     ! Global mean total energy fixer
     !===================================================
@@ -2877,7 +2856,6 @@ contains
     call tot_energy_phys(state, 'dyBP',vc=vc_dycore)
     ! Save state for convective tendency calculations.
     call diag_conv_tend_ini(state, pbuf)
-!-tht
 
     call outfld('TEOUT', teout       , pcols, lchnk   )
     call outfld('TEINP', state%te_ini(:,dyn_te_idx), pcols, lchnk   )
@@ -3027,13 +3005,11 @@ contains
       prec_str = 0._r8
       snow_str = 0._r8
 
-!+pel
       ! In first time-step tphysac variables need to be zero'd out
       if (compute_enthalpy_flux) then
         ifld = pbuf_get_index('ENTHALPY_PREC_AC', errcode=i)
         if (ifld>0) call pbuf_set_field(pbuf, ifld, 0._r8)
       end if
-!-pel
 
       if (is_subcol_on()) then
         prec_str_sc = 0._r8
