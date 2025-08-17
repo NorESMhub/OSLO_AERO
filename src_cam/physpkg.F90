@@ -1678,8 +1678,8 @@ contains
     hflx_iref(:ncol) = cam_in%shf(:ncol)
     call qneg4('TPHYSAC', lchnk, ncol, ztodt ,   &
          state%q(1,pver,1), state%rpdel(1,pver), &
-         hflx_iref,                              &
-         cam_in%shf, cam_in%lhf, cam_in%cflx)
+         cam_in%shf, cam_in%lhf, cam_in%cflx,    &
+         seflx=hflx_iref)
 
     call t_stopf('tphysac_init')
 
