@@ -8,6 +8,7 @@ module mo_gas_phase_chemdr
   use chem_mods,        only : rxt_tag_cnt, rxt_tag_lst, rxt_tag_map, extcnt, num_rnts
   use ppgrid,           only : pcols, pver
   use phys_control,     only : phys_getopts
+  use phys_control,     only : history_aerosol_forcing ! OSLO_AERO
   use carma_flags_mod,  only : carma_hetchem_feedback
   use chem_prod_loss_diags, only: chem_prod_loss_diags_init, chem_prod_loss_diags_out
 
@@ -222,12 +223,14 @@ contains
     call addfld ('HO2_aft   ',  (/ 'lev' /), 'A','unit', 'HO2 invariants after adding diurnal variations'           )
     call addfld ('NO3_aft   ',  (/ 'lev' /), 'A','unit', 'NO3 invariants after adding diurnal variations'           )
 
-    call add_default ('OH_bef       ', 1, ' ')
-    call add_default ('HO2_bef      ', 1, ' ')
-    call add_default ('NO3_bef      ', 1, ' ')
-    call add_default ('OH_aft       ', 1, ' ')
-    call add_default ('HO2_aft      ', 1, ' ')
-    call add_default ('NO3_aft      ', 1, ' ')
+    if ( history_aerosol_forcing ) then
+      call add_default ('OH_bef       ', 1, ' ')
+      call add_default ('HO2_bef      ', 1, ' ')
+      call add_default ('NO3_bef      ', 1, ' ')
+      call add_default ('OH_aft       ', 1, ' ')
+      call add_default ('HO2_aft      ', 1, ' ')
+      call add_default ('NO3_aft      ', 1, ' ')
+    endif
     ! OSLO_AERO end
 
     if (het1_ndx>0) then

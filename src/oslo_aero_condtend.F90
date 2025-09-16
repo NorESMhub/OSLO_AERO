@@ -310,7 +310,6 @@ contains
     ! Volume of added  material from condensate;  surface area of core particle;
     real(r8)            :: volume_shell, area_core,vol_monolayer
     real (r8)           :: frac_transfer               ! Fraction of hydrophobic material converted to an internally mixed mode
-    logical             :: history_aerosol
     character(128)      :: long_name                   ! [-] needed for diagnostics
 
     ! needed for h2so4 and soa nucleation treatment
@@ -549,71 +548,66 @@ contains
        end do !physical index ilev
     end do    !physical index icol
 
-    !Output for diagnostics
-    call phys_getopts(history_aerosol_out = history_aerosol)
+   !Output for diagnostics
+   coltend(:ncol,:) = 0.0_r8
+   do icol=1,gas_pcnst
+      !Check if species contributes to condensation
+      if(lifeCycleReceiver(icol) > 0)then
+         !Loss from the donor specie
+         tracer_coltend(:ncol) = sum(totalLoss(:ncol, :,icol)*pdel(:ncol,:),2)/gravit/dt
+         coltend(:ncol,icol) = coltend(:ncol,icol) - tracer_coltend(:ncol) !negative (loss for donor)
+         coltend(:ncol,lifeCycleReceiver(icol)) = coltend(:ncol,lifeCycleReceiver(icol)) + tracer_coltend(:ncol)
+      endif
+   end do
 
-    if(history_aerosol)then
-       coltend(:ncol,:) = 0.0_r8
-       do icol=1,gas_pcnst
-          !Check if species contributes to condensation
-          if(lifeCycleReceiver(icol) > 0)then
-             !Loss from the donor specie
-             tracer_coltend(:ncol) = sum(totalLoss(:ncol, :,icol)*pdel(:ncol,:),2)/gravit/dt
-             coltend(:ncol,icol) = coltend(:ncol,icol) - tracer_coltend(:ncol) !negative (loss for donor)
-             coltend(:ncol,lifeCycleReceiver(icol)) = coltend(:ncol,lifeCycleReceiver(icol)) + tracer_coltend(:ncol)
-          endif
-       end do
+   ! Remove so4_n ---> directly into so4_na
+   coltend(:ncol,chemistryIndex(l_so4_na)) = coltend(:ncol,chemistryIndex(l_so4_na)) + &
+      sum(                                         &
+      gasLost(:ncol,:,COND_VAP_H2SO4)           &
+      *fracNucl(:ncol,:,COND_VAP_H2SO4)*pdel(:ncol,:) , 2 &
+      )/gravit/dt
 
-       ! Remove so4_n ---> directly into so4_na
-       coltend(:ncol,chemistryIndex(l_so4_na)) = coltend(:ncol,chemistryIndex(l_so4_na)) + &
-            sum(                                         &
-            gasLost(:ncol,:,COND_VAP_H2SO4)           &
-            *fracNucl(:ncol,:,COND_VAP_H2SO4)*pdel(:ncol,:) , 2 &
-            )/gravit/dt
+   !Take into account H2SO4 (gas) condensed in budget
+   coltend(:ncol,chemistryIndex(l_so4_a1)) = coltend(:ncol,chemistryIndex(l_so4_a1)) + &
+      sum(                                         &
+      gasLost(:ncol,:,COND_VAP_H2SO4)           &
+      *(1.0_r8 - fracNucl(:ncol,:,COND_VAP_H2SO4))*pdel(:ncol,:) , 2 &
+      )/gravit/dt
 
-       !Take into account H2SO4 (gas) condensed in budget
-       coltend(:ncol,chemistryIndex(l_so4_a1)) = coltend(:ncol,chemistryIndex(l_so4_a1)) + &
-            sum(                                         &
-            gasLost(:ncol,:,COND_VAP_H2SO4)           &
-            *(1.0_r8 - fracNucl(:ncol,:,COND_VAP_H2SO4))*pdel(:ncol,:) , 2 &
-            )/gravit/dt
+   !Take into account soa_lv (gas) nucleated in budget
+   coltend(:ncol,chemistryIndex(l_soa_na)) = coltend(:ncol,chemistryIndex(l_soa_na)) + &
+      sum(                                         &
+      gasLost(:ncol,:,COND_VAP_ORG_LV)              &
+      *fracNucl(:ncol,:,COND_VAP_ORG_LV)*pdel(:ncol,:) , 2 &
+      )/gravit/dt
 
-       !Take into account soa_lv (gas) nucleated in budget
-       coltend(:ncol,chemistryIndex(l_soa_na)) = coltend(:ncol,chemistryIndex(l_soa_na)) + &
-            sum(                                         &
-            gasLost(:ncol,:,COND_VAP_ORG_LV)              &
-            *fracNucl(:ncol,:,COND_VAP_ORG_LV)*pdel(:ncol,:) , 2 &
-            )/gravit/dt
+   !Take into account soa gas condensed in the budget (both LV and SV)
+   coltend(:ncol,chemistryIndex(l_soa_a1)) = coltend(:ncol,chemistryIndex(l_soa_a1)) + &
+      sum(                                         &
+      gasLost(:ncol,:,COND_VAP_ORG_LV)           &
+      *(1.0_r8 - fracNucl(:ncol,:,COND_VAP_ORG_LV))*pdel(:ncol,:) , 2 &
+      )/gravit/dt                        &
+      +                                  &
+      sum(                                         &
+      gasLost(:ncol,:,COND_VAP_ORG_SV)*pdel(:ncol,:) , 2 &
+      )/gravit/dt
 
-       !Take into account soa gas condensed in the budget (both LV and SV)
-       coltend(:ncol,chemistryIndex(l_soa_a1)) = coltend(:ncol,chemistryIndex(l_soa_a1)) + &
-            sum(                                         &
-            gasLost(:ncol,:,COND_VAP_ORG_LV)           &
-            *(1.0_r8 - fracNucl(:ncol,:,COND_VAP_ORG_LV))*pdel(:ncol,:) , 2 &
-            )/gravit/dt                        &
-            +                                  &
-            sum(                                         &
-            gasLost(:ncol,:,COND_VAP_ORG_SV)*pdel(:ncol,:) , 2 &
-            )/gravit/dt
-
-       do icol=1,gas_pcnst
-          if(lifeCycleReceiver(icol) > 0 )then
-             long_name= trim(solsym(icol))//"condTend"
-             call outfld(long_name, coltend(:,icol), pcols, lchnk)
-             long_name= trim(solsym(lifeCycleReceiver(icol)))//"condTend"
-             call outfld(long_name, coltend(:,lifeCycleReceiver(icol)),pcols,lchnk)
-          end if
-       end do
-       long_name=trim(solsym(chemistryIndex(l_so4_a1)))//"condTend"
-       call outfld(long_name, coltend(:,chemistryIndex(l_so4_a1)),pcols,lchnk)
-       long_name=trim(solsym(chemistryIndex(l_soa_a1)))//"condTend"
-       call outfld(long_name, coltend(:,chemistryIndex(l_soa_a1)),pcols,lchnk)
-       long_name=trim(solsym(chemistryIndex(l_so4_na)))//"condTend"
-       call outfld(long_name, coltend(:,chemistryIndex(l_so4_na)),pcols,lchnk)
-       long_name=trim(solsym(chemistryIndex(l_soa_na)))//"condTend"
-       call outfld(long_name, coltend(:,chemistryIndex(l_soa_na)),pcols,lchnk)
-
-    endif
+   do icol=1,gas_pcnst
+      if(lifeCycleReceiver(icol) > 0 )then
+         long_name= trim(solsym(icol))//"condTend"
+         call outfld(long_name, coltend(:,icol), pcols, lchnk)
+         long_name= trim(solsym(lifeCycleReceiver(icol)))//"condTend"
+         call outfld(long_name, coltend(:,lifeCycleReceiver(icol)),pcols,lchnk)
+      end if
+   end do
+   long_name=trim(solsym(chemistryIndex(l_so4_a1)))//"condTend"
+   call outfld(long_name, coltend(:,chemistryIndex(l_so4_a1)),pcols,lchnk)
+   long_name=trim(solsym(chemistryIndex(l_soa_a1)))//"condTend"
+   call outfld(long_name, coltend(:,chemistryIndex(l_soa_a1)),pcols,lchnk)
+   long_name=trim(solsym(chemistryIndex(l_so4_na)))//"condTend"
+   call outfld(long_name, coltend(:,chemistryIndex(l_so4_na)),pcols,lchnk)
+   long_name=trim(solsym(chemistryIndex(l_soa_na)))//"condTend"
+   call outfld(long_name, coltend(:,chemistryIndex(l_soa_na)),pcols,lchnk)
 
   end subroutine condtend
 

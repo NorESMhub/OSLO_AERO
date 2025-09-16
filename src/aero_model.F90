@@ -10,8 +10,9 @@ module aero_model
   use spmd_utils,               only: mpi_logical, mpi_real8, mpi_character, mpi_integer,  mpi_success
   use namelist_utils,           only: find_group_name
   use constituents,             only: pcnst, cnst_name, cnst_get_ind
-  use ppgrid,                   only: pcols, pver, pverp
+  use ppgrid,                   only: pcols, pver, pverp, begchunk, endchunk
   use phys_control,             only: phys_getopts, cam_physpkg_is
+  use phys_control,             only: history_aerosol_base
   use cam_abortutils,           only: endrun
   use cam_logfile,              only: iulog
   use perf_mod,                 only: t_startf, t_stopf
@@ -41,8 +42,10 @@ module aero_model
   use oslo_aero_share,          only: chemistryIndex, physicsIndex
   use oslo_aero_share,          only: qqcw_get_field, numberOfProcessModeTracers
   use oslo_aero_share,          only: lifeCycleNumberMedianRadius, rhopart, lifeCycleSigma
-  use oslo_aero_share,          only: l_so4_a2, l_bc_n, l_bc_ax
+  use oslo_aero_share,          only: l_so4_a2, l_bc_n, l_bc_ax, l_dms, l_isoprene, l_monoterp
   use oslo_aero_share,          only: MODE_IDX_BC_NUC, MODE_IDX_BC_EXT_AC
+  use oslo_aero_share,          only: getNumberofTracersInMode, getCloudTracerIndexDirect, getCloudTracerName
+  use oslo_aero_share,          only: getTracerIndex
   use oslo_aero_control,        only: oslo_aero_ctl_readnl, use_aerocom
   use oslo_aero_depos,          only: oslo_aero_depos_init
   use oslo_aero_depos,          only: oslo_aero_depos_dry, oslo_aero_depos_wet, oslo_aero_wetdep_init
@@ -52,8 +55,6 @@ module aero_model
   use oslo_aero_seasalt,        only: oslo_aero_seasalt_init, oslo_aero_seasalt_emis, seasalt_active
   use oslo_aero_dust,           only: oslo_aero_dust_init, oslo_aero_dust_emis
   use oslo_aero_ocean,          only: oslo_aero_ocean_init, oslo_aero_dms_emis
-  use oslo_aero_share,          only: getNumberofTracersInMode, getCloudTracerIndexDirect, getCloudTracerName
-  use oslo_aero_share,          only: getCloudTracerName, getTracerIndex, aero_register
   use oslo_aero_sox_cldaero,    only: sox_cldaero_init
   use oslo_aero_microp,         only: oslo_aero_microp_readnl
   use oslo_aero_sw_tables,      only: initopt
@@ -75,6 +76,22 @@ module aero_model
   public :: aero_model_strat_surfarea ! stratospheric aerosol wet surface area for chemistry
 
   private :: aero_model_constants
+
+  ! GS and AQ arrays used for source fields summed in oslo_aero_share.F90-summation_fields_writeout()
+  ! GS_SOA = GS_SOA_LV + GS_SOA_SV, we use l_soa_lv and l_soa_sv for logic
+  ! GS_H2SO4 and AQ_H2SO4, we use l_h2so4 for logic
+  ! AQ_SO4_A2_OCW, we use l_so4_a2 for logic inside cloud tracer loop
+  ! GS_DMS, we use l_dms for logic
+  ! GS_SO2 and AQ_SO2, we us e l_so2 for logic
+  real(r8), public, protected, allocatable   :: GS_SOA(:,:)
+  real(r8), public, protected, allocatable   :: GS_H2SO4(:,:)
+  real(r8), public, protected, allocatable   :: GS_DMS(:,:)
+  real(r8), public, protected, allocatable   :: GS_SO2(:,:)
+  real(r8), public, protected, allocatable   :: GS_isoprene(:,:)
+  real(r8), public, protected, allocatable   :: GS_monoterp(:,:)
+  real(r8), public, protected, allocatable   :: AQ_H2SO4(:,:)
+  real(r8), public, protected, allocatable   :: AQ_SO4_A2_OCW(:,:)
+  real(r8), public, protected, allocatable   :: AQ_SO2(:,:)
 
   ! Misc private data
   integer :: pblh_idx= 0
@@ -137,23 +154,84 @@ contains
 
   !=============================================================================
   subroutine aero_model_register()
+      use oslo_aero_share, only: aero_register,                   &
+                                 sulfur_mass_fraction_register,   &
+                                 soa_yield_register
+      use oslo_aero_depos, only: oslo_aero_depos_register
 
-    call aero_register()
+      call aero_register()
+
+      call oslo_aero_depos_register()
+
+      call sulfur_mass_fraction_register()
+
+      call soa_yield_register()
 
   end subroutine aero_model_register
 
   !=============================================================================
   subroutine aero_model_init( pbuf2d )
-     use mo_setsox, only: sox_inti
 
-    ! args
-    type(physics_buffer_desc), pointer :: pbuf2d(:,:)
+   use string_utils, only: int2str
+   use mo_setsox,    only: sox_inti
 
-    ! local vars
-    integer           :: icnst,id
-    character(len=20) :: dummy
-    logical           :: history_aerosol ! Output MAM or SECT aerosol tendencies
-    character(len=2)  :: unit_basename  ! Units 'kg' or '1'
+   ! args
+   type(physics_buffer_desc), pointer :: pbuf2d(:,:)
+
+   ! local vars
+   integer           :: icnst,id
+   integer           :: l_aero
+   character(len=20) :: dummy
+   logical           :: history_aerosol ! Output MAM or SECT aerosol tendencies
+   character(len=2)  :: unit_basename  ! Units 'kg' or '1'
+   integer :: astat
+   !------------------------------------
+   ! allocate module variables
+   allocate( GS_SOA(pcols, begchunk:endchunk), stat=astat )
+   if( astat/= 0 ) then
+      call endrun('aero_model_init: failed to allocate GS_SOA array; error = '//int2str(astat))
+   end if
+   GS_SOA(:,:) = 0.0_r8
+   allocate( GS_H2SO4(pcols, begchunk:endchunk), stat=astat )
+   if( astat/= 0 ) then
+      call endrun('aero_model_init: failed to allocate GS_H2SO4 array; error = '//int2str(astat))
+   end if
+   GS_H2SO4(:,:) = 0.0_r8
+   allocate( GS_DMS(pcols, begchunk:endchunk), stat=astat )
+   if( astat/= 0 ) then
+      call endrun('aero_model_init: failed to allocate GS_DMS array; error = '//int2str(astat))
+   end if
+   GS_DMS(:,:) = 0.0_r8
+   allocate( GS_SO2(pcols, begchunk:endchunk), stat=astat )
+   if( astat/= 0 ) then
+      call endrun('aero_model_init: failed to allocate GS_SO2 array; error = '//int2str(astat))
+   end if
+   GS_SO2(:,:) = 0.0_r8
+   allocate( GS_isoprene(pcols, begchunk:endchunk), stat=astat )
+   if( astat/= 0 ) then
+      call endrun('aero_model_init: failed to allocate GS_isoprene array; error = '//int2str(astat))
+   end if
+   GS_isoprene(:,:) = 0.0_r8
+   allocate( GS_monoterp(pcols, begchunk:endchunk), stat=astat )
+   if( astat/= 0 ) then
+      call endrun('aero_model_init: failed to allocate GS_monoterp array; error = '//int2str(astat))
+   end if
+   GS_monoterp(:,:) = 0.0_r8
+   allocate( AQ_H2SO4(pcols, begchunk:endchunk), stat=astat )
+   if( astat/= 0 ) then
+      call endrun('aero_model_init: failed to allocate AQ_H2SO4 array; error = '//int2str(astat))
+   end if
+   AQ_H2SO4(:,:) = 0.0_r8
+   allocate( AQ_SO4_A2_OCW(pcols, begchunk:endchunk), stat=astat )
+   if( astat/= 0 ) then
+      call endrun('aero_model_init: failed to allocate AQ_SO4_A2_OCW array; error = '//int2str(astat))
+   end if
+   AQ_SO4_A2_OCW(:,:) = 0.0_r8
+   allocate( AQ_SO2(pcols, begchunk:endchunk), stat=astat )
+   if( astat/= 0 ) then
+      call endrun('aero_model_init: failed to allocate AQ_SO2 array; error = '//int2str(astat))
+   end if
+   AQ_SO2(:,:) = 0.0_r8
     !------------------------------------
 
     call phys_getopts(history_aerosol_out=history_aerosol, convproc_do_aer_out=convproc_do_aer)
@@ -223,6 +301,22 @@ contains
              end if
           end if
        endif
+
+      call cnst_get_ind(solsym(icnst), l_aero, abort=.false. )
+      if ( l_aero == l_dms .or. l_aero == l_isoprene .or. l_aero == l_monoterp ) then
+         call addfld( 'sink_'//trim(solsym(icnst)),horiz_only, 'A', unit_basename//'/m2/s ', &
+            trim(solsym(icnst))//' sink')
+         if ( l_aero == l_dms ) then
+            call addfld( 'sink_'//trim(solsym(icnst))//'_S',horiz_only, 'A', 'kg*S/m2/s ', &
+               trim(solsym(icnst))//' sink, sulfur mass only')
+         endif
+         if ( history_aerosol_base ) then
+            call add_default( 'sink_'//trim(solsym(icnst)), 1, ' ')
+            if ( l_aero == l_dms ) then
+               call add_default( 'sink_'//trim(solsym(icnst))//'_S', 1, ' ')
+            endif
+         endif
+      endif
     enddo
 
     call addfld ('NUCLRATE',(/'lev'/), 'A','#/cm3/s','Nucleation rate')
@@ -403,6 +497,10 @@ contains
        delt, reaction_rates, tfld, pmid, pdel, mbar, relhum, zm,  qh2o, cwat, &
        cldfr, cldnum, airdens, invariants, del_h2so4_gasprod, vmr0, vmr, pbuf )
 
+    ! use
+    use oslo_aero_share,    only : sulfurMassFraction
+    use oslo_aero_share,    only : l_soa_lv, l_soa_sv, l_h2so4, l_so4_a2, l_dms, l_isoprene, l_monoterp, l_so2
+
     ! arguments
     type(physics_state), intent(in) :: state        ! Physics state variables
     integer,  intent(in)    :: loffset                ! offset applied to modal aero "pointers"
@@ -431,6 +529,7 @@ contains
     ! local vars
     integer, parameter :: nmodes_aq_chem = 1
     integer  :: icol,ilev
+    integer  :: l_aero
     integer  :: imode,icnst,itrac
     integer  :: nstep
     real(r8) :: wrk(ncol)
@@ -460,6 +559,15 @@ contains
     nstep = get_nstep()
 
     delt_inverse = 1.0_r8 / delt
+    GS_SOA(:ncol,lchnk) = 0._r8
+    GS_H2SO4(:ncol,lchnk) = 0._r8
+    GS_DMS(:ncol,lchnk) = 0._r8
+    GS_SO2(:ncol,lchnk) = 0._r8
+    GS_isoprene(:ncol,lchnk) = 0._r8
+    GS_monoterp(:ncol,lchnk) = 0._r8
+    AQ_H2SO4(:ncol,lchnk) = 0._r8
+    AQ_SO4_A2_OCW(:ncol,lchnk) = 0._r8
+    AQ_SO2(:ncol,lchnk) = 0._r8
 
     ! Get height of boundary layer (needed for boundary layer nucleation)
     call pbuf_get_field(pbuf, pblh_idx, pblh)
@@ -471,8 +579,31 @@ contains
        do ilev = 1,pver
           wrk(:ncol) = wrk(:ncol) + dvmrdt(:ncol,ilev,icnst)*adv_mass(icnst)/mbar(:ncol,ilev)*pdel(:ncol,ilev)/gravit
        end do
+
+       call cnst_get_ind(trim(solsym(icnst)), l_aero, abort=.false.)
+       if ( l_aero == l_soa_lv .or. l_aero == l_soa_sv ) then
+          GS_SOA(:ncol,lchnk) = GS_SOA(:ncol,lchnk) + wrk(:ncol)
+       else if ( l_aero == l_h2so4 ) then
+          GS_H2SO4(:ncol,lchnk) = GS_H2SO4(:ncol,lchnk) + wrk(:ncol)
+       else if ( l_aero == l_dms ) then
+          GS_DMS(:ncol, lchnk) = GS_DMS(:ncol,lchnk) + wrk(:ncol)
+       else if ( l_aero == l_so2) then
+          GS_SO2(:ncol, lchnk) = GS_SO2(:ncol,lchnk) + wrk(:ncol)
+       else if ( l_aero == l_isoprene ) then
+          GS_isoprene(:ncol, lchnk) = GS_isoprene(:ncol,lchnk) + wrk(:ncol)
+       else if ( l_aero == l_monoterp ) then
+          GS_monoterp(:ncol, lchnk) = GS_monoterp(:ncol,lchnk) + wrk(:ncol)
+       endif
+
        name = 'GS_'//trim(solsym(icnst))
        call outfld( name, wrk(:ncol), ncol, lchnk )
+
+       if ( l_aero == l_dms .or. l_aero == l_isoprene .or. l_aero == l_monoterp) then
+         call outfld( 'sink_'//trim(solsym(icnst)), wrk(:ncol), ncol, lchnk )
+         if ( l_aero == l_dms ) then
+            call outfld( 'sink_'//trim(solsym(icnst))//'_S', ( wrk(:ncol) * sulfurMassFraction(l_aero) ) , ncol, lchnk )
+         endif
+      endif
     enddo
 
     ! Get mass mixing ratios at start of time step
@@ -523,6 +654,14 @@ contains
        do ilev = 1,pver
           wrk(:ncol) = wrk(:ncol) + dvmrdt_sv1(:ncol,ilev,icnst)*adv_mass(icnst)/mbar(:ncol,ilev)*pdel(:ncol,ilev)/gravit
        end do
+
+       call cnst_get_ind(trim(solsym(icnst)), l_aero, abort=.false.)
+       if ( l_aero == l_h2so4) then
+          AQ_H2SO4(:ncol,lchnk) = AQ_H2SO4(:ncol,lchnk) + wrk(:ncol)
+       else if ( l_aero == l_so2 ) then
+          AQ_SO2(:ncol,lchnk) = AQ_SO2(:ncol,lchnk) + wrk(:ncol)
+       endif
+
        name = 'AQ_'//trim(solsym(icnst))
        call outfld( name, wrk(:ncol), ncol, lchnk )
 
@@ -536,6 +675,10 @@ contains
              do ilev=1,pver
                 wrk(:ncol) = wrk(:ncol) + dvmrcwdt_sv1(:ncol,ilev,icnst)*adv_mass(icnst)/mbar(:ncol,ilev)*pdel(:ncol,ilev)/gravit
              end do
+
+             if ( l_aero == l_so4_a2 ) then
+               AQ_SO4_A2_OCW(:ncol,lchnk) = AQ_SO4_A2_OCW(:ncol,lchnk) + wrk(:ncol)
+             endif
              call outfld( name, wrk(:ncol), ncol, lchnk )
           end if
        end if
@@ -804,9 +947,12 @@ contains
   subroutine calcaersize_sub( ncol, t, h2ommr, pmid, pdel,wetnumberMedianDiameter,wetrho,   &
        wetNumberMedianDiameter_processmode, wetrho_processmode)
 
-    ! Seland Calculates mean volume size and hygroscopic growth for use in  dry deposition
+     use oslo_aero_share, only: max_tracers_per_mode, rhtab, rdivr0
+     use oslo_aero_share, only: getNumberOfBackgroundTracersInMode
+     use oslo_aero_share, only: getDryDensity, tracerInProcessMode
+     use oslo_aero_share, only: processModeNumberMedianRadius, processModeSigma
 
-    use oslo_aero_share
+    ! Seland Calculates mean volume size and hygroscopic growth for use in  dry deposition
 
     integer,  intent(in)  :: ncol               ! number of columns
     real(r8), intent(in)  :: t(pcols,pver)      ! layer temperatures (K)

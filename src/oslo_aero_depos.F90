@@ -10,6 +10,9 @@ module oslo_aero_depos
   use ppgrid,                  only: pcols, pver, pverp, begchunk, endchunk
   use constituents,            only: pcnst, cnst_name, cnst_get_ind
   use phys_control,            only: phys_getopts, cam_physpkg_is
+  use phys_control,            only: history_aerosol_base,        &
+                                     history_aerosol_decomposed,  &
+                                     history_aerosol_debug_output
   use cam_abortutils,          only: endrun
   use cam_logfile,             only: iulog
   use camsrfexch,              only: cam_out_t
@@ -28,15 +31,17 @@ module oslo_aero_depos
   use oslo_aero_share,         only: is_process_mode, processModeMap, processModeSigma, lifeCycleSigma
   use oslo_aero_share,         only: belowCloudScavengingCoefficientProcessModes, belowCloudScavengingCoefficient
   use oslo_aero_share,         only: getCloudTracerIndex, GetCloudTracerIndexDirect, getCloudTracerName, qqcw_get_field
+  use oslo_aero_share,         only: aerosol_type_name, N_AEROSOL_TYPES, aerosolType, AEROSOL_TYPE_SULFATE
   use oslo_aero_share,         only: l_bc_ax, l_bc_ni, l_bc_ai, l_bc_a, l_bc_ac
   use oslo_aero_share,         only: l_bc_n, l_om_ni, l_om_ai, l_om_ac, l_dst_a2, l_dst_a3
-  use oslo_aero_share,         only: l_ss_a2, l_ss_a3, l_so4_a2  
+  use oslo_aero_share,         only: l_ss_a2, l_ss_a3, l_so4_a2
   use oslo_aero_dust_sediment, only: oslo_aero_dust_sediment_tend, oslo_aero_dust_sediment_vel
 
   implicit none
   private          ! Make default type private to the module
 
   ! Public interfaces
+  public :: oslo_aero_depos_register
   public :: oslo_aero_depos_init
   public :: oslo_aero_depos_dry ! dry deposition
   public :: oslo_aero_depos_wet ! wet deposition
@@ -92,6 +97,7 @@ module oslo_aero_depos
   integer :: nevapr_dpcu_idx = 0
   integer :: ixcldice, ixcldliq
 
+  integer :: idx_wd_a_h2so4 = -1
   integer :: tracer_index(0:nmodes, max_tracers_per_mode)
   integer :: num_tracers_in_mode(0:nmodes)
 
@@ -99,7 +105,17 @@ module oslo_aero_depos
 contains
 !===============================================================================
 
+   subroutine oslo_aero_depos_register()
+      use physics_buffer,  only: pbuf_add_field, dtype_r8
+      use ppgrid,          only: pcols
+
+      ! Register a pbuf field for
+      call pbuf_add_field('WD_A_H2SO4', 'global', dtype_r8, (/pcols/), idx_wd_a_h2so4)
+   end subroutine oslo_aero_depos_register
+
   subroutine oslo_aero_depos_init( pbuf2d )
+    use time_manager,   only: is_first_step
+    use physics_buffer, only: pbuf_set_field
 
     ! Set oslo aeroslo deposition history output
 
@@ -109,6 +125,7 @@ contains
     ! local variables
     integer            :: imode, itrac
     integer            :: lchnk
+    integer            :: l_atype
     integer            :: tracerIndex
     integer            :: astat, id
     real(r8), pointer  :: qqcw(:,:)
@@ -123,6 +140,9 @@ contains
     nevapr_shcu_idx = pbuf_get_index('NEVAPR_SHCU')
 
     call phys_getopts( history_aerosol_out = history_aerosol )
+    if (is_first_step()) then
+       call pbuf_set_field(pbuf2d, idx_wd_a_h2so4, 0.0_r8)
+    end if
 
     is_in_output(:) =.false.
     drydep_lq(:) =.false.
@@ -172,12 +192,15 @@ contains
 
           ! Extra wd ouptut
           if ( history_aerosol ) then
-             call add_default (trim(aName)//'SFWET', 1, ' ')
              call add_default (trim(aName)//'SFSIC', 1, ' ')
              call add_default (trim(aName)//'SFSIS', 1, ' ')
              call add_default (trim(aName)//'SFSBC', 1, ' ')
              call add_default (trim(aName)//'SFSBS', 1, ' ')
           endif
+
+         if ( history_aerosol .or. history_aerosol_decomposed ) then
+            call add_default (trim(aName)//'SFWET', 1, ' ')
+         endif
 
           ! Dry deposition fluxes and velocity
           call addfld (trim(aName)//'DDF',horiz_only, 'A', unit_basename//'/m2/s ', &
@@ -193,10 +216,13 @@ contains
 
           ! extra drydep output
           if ( history_aerosol ) then
-             call add_default (trim(aName)//'DDF', 1, ' ')
              call add_default (trim(aName)//'TBF', 1, ' ')
              call add_default (trim(aName)//'GVF', 1, ' ')
              !call add_default (trim(aName)//'DDV', 1, ' ')
+          endif
+
+          if ( history_aerosol .or. history_aerosol_decomposed ) then
+            call add_default (trim(aName)//'DDF', 1, ' ')
           endif
 
           ! some tracers are not in cloud water
@@ -231,6 +257,39 @@ contains
        end do !tracers
     enddo    !modes
 
+    do l_atype=1,N_AEROSOL_TYPES
+
+      call addfld( 'dry_'//trim(aerosol_type_name(l_atype)), horiz_only, 'A', unit_basename//'/m2/s ',  &
+         trim(aerosol_type_name(l_atype))//' dry deposition flux at bottom (grav + turb)')
+      call addfld('wet_'//trim(aerosol_type_name(l_atype)), horiz_only, 'A', unit_basename//'/m2/s', &
+         trim(aerosol_type_name(l_atype))//' wet deposition flux at surface')
+
+      if ( l_atype == AEROSOL_TYPE_SULFATE ) then
+         call addfld( 'dry_'//trim(aerosol_type_name(l_atype))//'_S', horiz_only, 'A', unit_basename//'*S/m2/s ',  &
+            trim(aerosol_type_name(l_atype))//' dry deposition flux at bottom (grav + turb), sulfur mass only')
+         call addfld('wet_'//trim(aerosol_type_name(l_atype))//'_S', horiz_only, 'A', unit_basename//'*S/m2/s', &
+            trim(aerosol_type_name(l_atype))//' wet deposition flux at surface, sulfur mass only')
+         call addfld('wd_a_h2so4_debug', horiz_only, 'A', unit_basename//'*S/m2/s', &
+            'wd_a_h2so4_debug - used to debug in-model summation of sulfur mass in aerosols')
+      endif
+
+      ! we require history_aerosol_base flag to add the fields to default output
+      if ( history_aerosol_base ) then
+
+         call add_default('dry_'//trim(aerosol_type_name(l_atype)), 1, ' ')
+         call add_default('wet_'//trim(aerosol_type_name(l_atype)), 1, ' ')
+
+         if ( l_atype == AEROSOL_TYPE_SULFATE ) then
+            call add_default('dry_'//trim(aerosol_type_name(l_atype))//'_S', 1, ' ')
+            call add_default('wet_'//trim(aerosol_type_name(l_atype))//'_S', 1, ' ')
+         endif
+
+      endif
+      if ( history_aerosol_debug_output .and. l_atype == AEROSOL_TYPE_SULFATE ) then
+         call add_default('wd_a_h2so4_debug', 1, ' ')
+      endif
+   end do
+
     !initialize cloud concentrations (initialize cloud bourne constituents in physics buffer)
     if (is_first_step()) then
        do itrac = 1, pcnst
@@ -252,6 +311,9 @@ contains
        pbuf, obklen, ustar, dt, &
        dgncur_awet, wetdens, dgncur_awet_processmode, wetdens_processmode, &
        cam_out, ptend)
+
+   ! use
+   use oslo_aero_share, only          : sulfurMassFraction
 
     ! Arguments:
     integer  ,           intent(in)    :: lchnk
@@ -289,10 +351,13 @@ contains
     integer :: imode                     ! aerosol mode index
     integer :: itrac                        ! tracer index
     integer :: icol
+    integer :: l_atype                   ! aerosol type index
 
     real(r8) :: tvs(pcols,pver)
     real(r8) :: rho(pcols,pver)          ! air density in kg/m3
     real(r8) :: sflx(pcols)              ! deposition flux
+    real(r8) :: sflx_DDF_arosol_type(pcols, N_AEROSOL_TYPES) ! deposition flux for the aerosol types, no weighted sums
+    real(r8) :: sflx_DDF_SULFATE_S(pcols) ! deposition flux for the sulfate aerosol type, sulfur mass only
     real(r8)::  dep_trb(pcols)           ! kg/m2/s
     real(r8)::  dep_grv(pcols)           ! kg/m2/s (total of grav and trb)
     real(r8) :: pvmzaer(pcols,pverp)     ! sedimentation velocity in Pa
@@ -319,6 +384,8 @@ contains
 
     aerdepdryis(:,:)=0._r8
     aerdepdrycw(:,:)=0._r8
+    sflx_DDF_arosol_type(:,:) = 0._r8
+    sflx_DDF_SULFATE_S(:) = 0._r8
 
     ! calc ram and fv over ocean and sea ice ...
     call calcram( ncol,landfrac, icefrac, ocnfrac, obklen, &
@@ -494,6 +561,14 @@ contains
 
              endif
 
+            ! accumulate the deposition flux for the aerosol type
+            ! All will have a version without weighted sum, that is ...DDF
+            ! sulfate will have a version with weighted sum, that is ...SDDF
+            sflx_DDF_arosol_type(:ncol, aerosolType(itrac)) = sflx_DDF_arosol_type(:ncol, aerosolType(itrac)) + sflx(:ncol)
+            if ( aerosolType(itrac) ==  AEROSOL_TYPE_SULFATE ) then
+               sflx_DDF_SULFATE_S(:ncol) = sflx_DDF_SULFATE_S(:ncol) + ( sflx(:ncol) * sulfurMassFraction(itrac) )
+            endif
+
           enddo   ! lspec = 0, nspec_amode(imode)+1
        enddo   ! lphase = 1, 2
     enddo   ! imode = 1, ntot_amode
@@ -507,11 +582,22 @@ contains
             cam_out%dstdry1, cam_out%dstdry2, cam_out%dstdry3, cam_out%dstdry4)
     endif
 
+   do l_atype=1,N_AEROSOL_TYPES
+      ! add the dry deposition rate of the compound aerosols to output
+      call outfld('dry_'//trim(aerosol_type_name(l_atype)), sflx_DDF_arosol_type(:ncol,l_atype), ncol, lchnk)
+      if ( l_atype == AEROSOL_TYPE_SULFATE ) then
+         call outfld('dry_'//trim(aerosol_type_name(l_atype))//'_S', sflx_DDF_SULFATE_S(:ncol), ncol, lchnk)
+      endif
+   end do
+
   end subroutine oslo_aero_depos_dry
 
   !===============================================================================
   subroutine oslo_aero_depos_wet ( lchnk, ncol, psetcols, pmid, pdel, q, t, &
        dt, dlf, cam_out, ptend, pbuf)
+
+   ! use
+   use oslo_aero_share, only          : sulfurMassFraction, l_h2so4
 
     integer ,            intent(in)    :: lchnk            ! chunk identifier
     integer ,            intent(in)    :: ncol             ! number of atmospheri columns
@@ -528,6 +614,7 @@ contains
 
     ! Local variables
     integer  :: imode                             ! tracer index
+    integer  :: l_atype                           ! aerosol type index
     integer  :: icol,ilev,itrac
     real(r8) :: iscavt(pcols, pver)
     real(r8) :: icscavt(pcols, pver)
@@ -537,6 +624,8 @@ contains
     real(r8) :: sol_factb, sol_facti
     real(r8) :: sol_factic(pcols,pver)
     real(r8) :: sflx(pcols)                   ! deposition flux
+    real(r8) :: sflx_SFWET_arosol_type(pcols, N_AEROSOL_TYPES) ! deposition flux for the aerosol types, aerosol mass
+    real(r8) :: sflx_SFWET_SULFATE_S(pcols)   ! deposition flux for sulfate, sulfur mass only
     real(r8) :: scavcoef(pcols,pver)          ! Dana and Hales coefficient (/mm) (0.1)
     integer  :: jnv                           ! index for scavcoefnv 3rd dimension
     integer  :: lphase                        ! index for interstitial / cloudborne aerosol
@@ -563,6 +652,7 @@ contains
     real(r8) :: zeroAerosolConcentration(pcols,pver)
     real(r8), pointer :: fldcw(:,:)
     real(r8), pointer :: fracis(:,:,:)   ! fraction of transported species that are insoluble
+    real(r8), pointer :: wd_a_h2so4(:)
     type(wetdep_inputs_t) :: dep_inputs
     !-----------------------------------------------------------------------
 
@@ -571,6 +661,8 @@ contains
     is_done(:,:) = .false.
 
     zeroAerosolConcentration(:,:)=0.0_r8
+    sflx_SFWET_arosol_type(:,:) = 0._r8
+    sflx_SFWET_SULFATE_S(:) = 0._r8
 
     ! Wet deposition of mozart aerosol species.
     ptend%name  = ptend%name//'+mz_aero_wetdep'
@@ -625,9 +717,6 @@ contains
           ! sol_factic is strictly a tuning factor
           !
           if (lphase == 1) then   ! interstial aerosol
-             !hygro_sum_old(:,:) = 0.0_r8
-             !hygro_sum_del(:,:) = 0.0_r8
-             !call modal_aero_bcscavcoef_get( m, ncol, isprx, dgncur_awet, scavcoefnv(:,:,1), scavcoefnv(:,:,2) )
 
              scavcoefnv(:,:,1) = 0.1_r8  !Used by MAM for number concentration
 
@@ -683,9 +772,9 @@ contains
 
              ! Increase scavenging efficiency for large soluble particles.
              if ((lphase==1).and.((itrac==l_ss_a2).or.(itrac==l_ss_a3).or.(itrac==l_so4_a2))) then
-                 sol_factic=1.0_r8 
-                 f_act_conv=1.0_r8 
-             end if     
+                 sol_factic=1.0_r8
+                 f_act_conv=1.0_r8
+             end if
 
              if ((lphase == 1) .and. (lspec <= num_tracers_in_mode(imode))) then
                 ptend%lq(itrac) = .TRUE.
@@ -843,9 +932,42 @@ contains
 
              endif
 
+            ! accumulate the deposition flux for the aerosol type
+            sflx(:ncol) = 0._r8
+            if ( lphase == 1 ) then
+               sflx(:ncol) = aerdepwetis(:ncol,itrac)
+            else ! lphase == 2
+               sflx(:ncol) = aerdepwetcw(:ncol,itrac)
+            endif
+
+            ! accumulate the deposition flux for the aerosol type, aerosol mass
+            ! if it is sulfate we accumulate in sflx_SFWET_SULFATE_S in addition
+            sflx_SFWET_arosol_type(:ncol, aerosolType(itrac)) = sflx_SFWET_arosol_type(:ncol, aerosolType(itrac)) + sflx(:ncol)
+            if ( aerosolType(itrac) == AEROSOL_TYPE_SULFATE ) then
+               sflx_SFWET_SULFATE_S(:ncol) = sflx_SFWET_SULFATE_S(:ncol) + ( sflx(:ncol) * sulfurMassFraction(itrac) )
+            endif
+
           enddo   ! lspec = 0, nspec_amode(imode)+1
        enddo   ! lphase = 1, 2
     enddo   ! imode = 1, ntot_amode
+
+   ! add the wet deposition rate of the compound aerosols except sulfur to output
+    do l_atype=1,N_AEROSOL_TYPES
+      if ( l_atype /= AEROSOL_TYPE_SULFATE ) then
+         call outfld('wet_'//trim(aerosol_type_name(l_atype)), -1.0_r8 * (sflx_SFWET_arosol_type(:ncol,l_atype)), ncol, lchnk)
+      else if ( l_atype == AEROSOL_TYPE_SULFATE ) then
+         ! Add in wd_a_h2so4
+         call pbuf_get_field(pbuf, idx_wd_a_h2so4, wd_a_h2so4)
+
+         call outfld('wet_'//trim(aerosol_type_name(l_atype)),                &
+         -1.0_r8 * ( sflx_SFWET_arosol_type(:ncol,l_atype) + wd_a_h2so4(:ncol) ),    &
+            ncol, lchnk)
+         call outfld('wet_'//trim(aerosol_type_name(l_atype))//'_S',                                        &
+            -1.0_r8 * ( sflx_SFWET_SULFATE_S(:ncol) + ( wd_a_h2so4(:ncol) * sulfurMassFraction(l_h2so4) )),     &
+            ncol, lchnk)
+         call outfld('wd_a_h2so4_debug', wd_a_h2so4(:ncol), ncol, lchnk)
+      endif
+   end do
 
     ! if the user has specified prescribed aerosol dep fluxes then
     ! do not set cam_out dep fluxes according to the prognostic aerosols

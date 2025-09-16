@@ -2,6 +2,7 @@ module oslo_aero_diagnostics
 
 use shr_kind_mod      , only: r8 => shr_kind_r8
 use cam_history       , only: addfld, add_default, horiz_only
+use phys_control      , only: history_aerosol_base, history_aerosol_radiation
 use oslo_aero_control , only: use_aerocom
 use oslo_aero_share   , only: nbmodes
 
@@ -18,9 +19,12 @@ contains
       character(len=20) :: varname
 
       call addfld ('AODVIS  ',horiz_only,  'A','unitless' ,'Aerosol optical depth at 0.442-0.625um') ! CAM4-Oslo: 0.35-0.64um
-      call addfld ('ABSVIS  ',horiz_only,  'A','unitless' ,'Aerosol absorptive optical depth at 0.442-0.625um') ! CAM4-Oslo: 0.35-0.64um
-      call addfld ('AODVVOLC ',horiz_only, 'A','unitless' ,'CMIP6 volcanic aerosol optical depth at 0.442-0.625um') ! CAM4-Oslo: 0.35-0.64um
-      call addfld ('ABSVVOLC ',horiz_only, 'A','unitless' ,'CMIP6 volcanic aerosol absorptive optical depth at 0.442-0.625um') ! CAM4-Oslo: 0.35-0.64um
+       ! value for ABSVIS in CAM4-Oslo: 0.35-0.64um
+      call addfld ('ABSVIS  ',horiz_only,  'A','unitless' ,'Aerosol absorptive optical depth at 0.442-0.625um')
+      ! value for AODVVOLC in CAM4-Oslo: 0.35-0.64um
+      call addfld ('AODVVOLC ',horiz_only, 'A','unitless' ,'CMIP6 volcanic aerosol optical depth at 0.442-0.625um')
+      ! valud or ABSVVOLC in CAM4-Oslo: 0.35-0.64um
+      call addfld ('ABSVVOLC ',horiz_only, 'A','unitless' ,'CMIP6 volcanic aerosol absorptive optical depth at 0.442-0.625um')
       call addfld ('CAODVIS ',horiz_only,  'A','unitless' ,'Clear air aerosol optical depth')
       call addfld ('CABSVIS ',horiz_only,  'A','unitless' ,'Clear air aerosol absorptive optical depth')
       call addfld ('CLDFREE ',horiz_only,  'A','unitless' ,'Cloud free fraction wrt CAODVIS and CABSVIS')
@@ -45,33 +49,37 @@ contains
       call addfld ('FSDSCDRF',horiz_only, 'A','W/m^2   ','SW downwelling clear sky flux at surface')
       call addfld ('FLUS    ',horiz_only, 'A','W/m^2   ','LW surface upwelling flux')
 
-      call add_default ('AODVIS  ', 1, ' ')
-      call add_default ('ABSVIS  ', 1, ' ')
-      call add_default ('AODVVOLC', 1, ' ')
-      call add_default ('ABSVVOLC', 1, ' ')
-      call add_default ('DAYFOC  ', 1, ' ')
-      call add_default ('CAODVIS ', 1, ' ')
-      call add_default ('CABSVIS ', 1, ' ')
-      call add_default ('CLDFREE ', 1, ' ')
-      call add_default ('N_AER   ', 1, ' ')
-     !call add_default ('N_AERORG', 1, ' ')
-      call add_default ('SSAVIS  ', 1, ' ')
-      call add_default ('ASYMMVIS', 1, ' ')
-      call add_default ('EXTVIS  ', 1, ' ')
-      call add_default ('BVISVOLC', 1, ' ')
-      call add_default ('FSNT_DRF', 1, ' ')
-      call add_default ('FSNTCDRF', 1, ' ')
-      call add_default ('FSNS_DRF', 1, ' ')
-      call add_default ('FSNSCDRF', 1, ' ')
-      call add_default ('QRS_DRF ', 1, ' ')
-      call add_default ('QRSC_DRF', 1, ' ')
-      call add_default ('FLNT_DRF', 1, ' ')
-      call add_default ('FLNTCDRF', 1, ' ')
-      call add_default ('FSUTADRF', 1, ' ')
-      call add_default ('FSDS_DRF', 1, ' ')
-      call add_default ('FSUS_DRF', 1, ' ')
-      call add_default ('FSDSCDRF', 1, ' ')
-      call add_default ('FLUS    ', 1, ' ')
+      if ( history_aerosol_base ) then
+        call add_default ('AODVIS  ', 1, ' ')
+        call add_default ('ABSVIS  ', 1, ' ')
+         call add_default ('N_AER   ', 1, ' ')
+         call add_default ('DAYFOC  ', 1, ' ')
+      endif
+
+      if ( history_aerosol_radiation ) then
+         call add_default ('AODVVOLC', 1, ' ')
+         call add_default ('ABSVVOLC', 1, ' ')
+         call add_default ('CAODVIS ', 1, ' ')
+         call add_default ('CABSVIS ', 1, ' ')
+         call add_default ('CLDFREE ', 1, ' ')
+         call add_default ('SSAVIS  ', 1, ' ')
+         call add_default ('ASYMMVIS', 1, ' ')
+         call add_default ('EXTVIS  ', 1, ' ')
+         call add_default ('BVISVOLC', 1, ' ')
+         call add_default ('FSNT_DRF', 1, ' ')
+         call add_default ('FSNTCDRF', 1, ' ')
+         call add_default ('FSNS_DRF', 1, ' ')
+         call add_default ('FSNSCDRF', 1, ' ')
+         call add_default ('QRS_DRF ', 1, ' ')
+         call add_default ('QRSC_DRF', 1, ' ')
+         call add_default ('FLNT_DRF', 1, ' ')
+         call add_default ('FLNTCDRF', 1, ' ')
+         call add_default ('FSUTADRF', 1, ' ')
+         call add_default ('FSDS_DRF', 1, ' ')
+         call add_default ('FSUS_DRF', 1, ' ')
+         call add_default ('FSDSCDRF', 1, ' ')
+         call add_default ('FLUS    ', 1, ' ')
+      endif
 
       if (use_aerocom) then
          call addfld ('AKCXS   ',horiz_only, 'A','mg/m2   ','Scheme excess aerosol mass burden')

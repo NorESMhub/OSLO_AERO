@@ -14,13 +14,15 @@ module oslo_aero_share
   use physconst,      only: pi
   !
   implicit none
-  public          ! Make default type private to the module
+  public          ! This is a public module with protected variables
 
   !---------------------------
   ! Public interfaces
   !---------------------------
 
   public :: aero_register           ! register consituents
+  public :: sulfur_mass_fraction_register
+  public :: soa_yield_register
   public :: is_process_mode         ! Check is an aerosol specie is a process mode
   public :: isAerosol               ! Check is specie is aerosol (i.e. gases get .FALSE. here)
   public :: getTracerIndex
@@ -49,9 +51,6 @@ module oslo_aero_share
   !---------------------------
   ! Public parameters
   !---------------------------
-
-  ! Logic for use with CAM-Nor-physics
-  logical :: use_oslo_aero = .true.
 
   ! Define lognormal size parameters for each size mode (dry, at point of emission/production)
   integer, parameter :: nmodes   = 14
@@ -162,15 +161,20 @@ module oslo_aero_share
        "DST_A2", "DST_A3", "SS_A1 ", "SS_A2 ", "SS_A3 ", "SOA_NA", "SOA_A1" /)
 
   !---------------------------
-  ! Public constants
+  ! Public variables
   !---------------------------
-
   real(r8) :: nk(0:nmodes,nbinsTab)     !dN/dlogr for modes
   real(r8) :: normnk(0:nmodes,nbinsTab) !dN for modes (sums to one over size range)
   real(r8) :: rBinEdge(nBinsTab+1)
   real(r8) :: rBinMidpoint(nBinsTab)
   real(r8) :: volumeToNumber(0:nmodes)  !m3 ==> #
   real(r8) :: numberToSurface(0:nmodes) !# ==> m2
+  real(r8) :: numberFractionAvailableAqChem(nbmodes)
+  real(r8) :: rhopart(pcnst)
+
+  !---------------------------
+  ! Public constants
+  !---------------------------
 
   ! Constants used in interpolation
   ! Internal mixtures of process-tagged mass
@@ -188,20 +192,20 @@ module oslo_aero_share
   ! faq  : mass fraction of sulfate which is produced in wet-phase, SO4aq/SO4.
   !        The remaining SO4 mass, SO4*(1-faq), is from condensation.
 
-  real(r8) :: rh(10)
-  real(r8) :: fombg(6), fbcbg(6), fac(6), fbc(6), faq(6)
-  real(r8) :: cate(4,16)
-  real(r8) :: cat(5:10,6)
+  real(r8), protected :: rh(10)
+  real(r8), protected :: fombg(6), fbcbg(6), fac(6), fbc(6), faq(6)
+  real(r8), protected :: cate(4,16)
+  real(r8), protected :: cat(5:10,6)
 
   ! relative humidity (RH, as integer for output variable names) for use in AeroCom code
-  integer  :: RF(6)
+  integer, protected  :: RF(6)
 
   ! AeroCom specific RH input variables for use in opticsAtConstRh.F90
-  integer  :: irhrf1(6)
-  real(r8) :: xrhrf(6)
+  integer, protected  :: irhrf1(6)
+  real(r8), protected :: xrhrf(6)
 
-  integer :: tracerInProcessMode(numberOfProcessModeTracers)
-  integer :: processModeMap(pcnst)
+  integer, protected :: tracerInProcessMode(numberOfProcessModeTracers)
+  integer, protected :: processModeMap(pcnst)
 
   ! NUMBERS BELOW ARE ESSENTIAL TO CALCULATE HYGROSCOPICITY AND THEREFORE INDIRECT EFFECT!
   ! These numbers define the "hygroscopicity parameter" Numbers are selected so that they give reasonable hygroscipity
@@ -227,68 +231,71 @@ module oslo_aero_share
   !           Koepke, Hess, Schult and Shettle: Max-Plack-Institut fur Meteorolgie, report No. 243 "GLOBAL AEROSOL DATA SET"
   !           These values give "B" of 1.20 instead of 1.16 in MIRAGE paper.
 
-  character(len=8) :: aerosol_type_name(N_AEROSOL_TYPES) = &
+  character(len=8), protected :: aerosol_type_name(N_AEROSOL_TYPES) = &
        (/"SULFATE ", "BC      ","OM      ", "DUST    ", "SALT    " /)
-  real(r8) :: aerosol_type_density(N_AEROSOL_TYPES) =               &
+  real(r8), protected :: aerosol_type_density(N_AEROSOL_TYPES) =               &
        (/1769.0_r8, 1800.0_r8,  1500.0_r8, 2600.0_r8,  2200.0_r8 /)   !kg/m3
-  real(r8) :: aerosol_type_molecular_weight(N_AEROSOL_TYPES) =      &
+  real(r8), protected :: aerosol_type_molecular_weight(N_AEROSOL_TYPES) =      &
        (/132.0_r8,  12.0_r8,    168.2_r8,  135.0_r8,   58.44_r8  /)   !kg/kmol
-  real(r8) :: aerosol_type_osmotic_coefficient(N_AEROSOL_TYPES) =   &
+  real(r8), protected :: aerosol_type_osmotic_coefficient(N_AEROSOL_TYPES) =   &
        (/0.7_r8,    1.111_r8,     1.0_r8,    1.0_r8,     1.0_r8    /) ![-]
-  real(r8) :: aerosol_type_soluble_mass_fraction(N_AEROSOL_TYPES) = &
+  real(r8), protected :: aerosol_type_soluble_mass_fraction(N_AEROSOL_TYPES) = &
        (/1.0_r8,    1.67e-7_r8, 0.8725_r8, 0.1_r8,     0.885_r8  /)   ![-]
-  real(r8) :: aerosol_type_number_of_ions(N_AEROSOL_TYPES) =        &
+  real(r8), protected :: aerosol_type_number_of_ions(N_AEROSOL_TYPES) =        &
        (/3.0_r8,    1.0_r8,     1.0_r8,    2.0_r8,     2.0_r8    /)   ![-]
 
-  real(r8) :: rhopart(pcnst)
-  real(r8) :: sgpart(pcnst)
-  real(r8) :: osmoticCoefficient(pcnst)
-  real(r8) :: numberOfIons(pcnst)
-  real(r8) :: solubleMassFraction(pcnst)
-  integer  :: aerosolType(pcnst)
-  real(r8) :: numberFractionAvailableAqChem(nbmodes)
-  real(r8) :: invrhopart(pcnst)
+  real(r8), protected :: sgpart(pcnst)
+  real(r8), protected :: osmoticCoefficient(pcnst)
+  real(r8), protected :: numberOfIons(pcnst)
+  real(r8), protected :: solubleMassFraction(pcnst)
+  real(r8), protected :: sulfurMassFraction(pcnst)
+  real(r8), protected :: sulfurMassFraction_MSA
+  real(r8), protected :: SOAyield_isoprene
+  real(r8), protected :: SOAyield_monoterp
+  integer, protected  :: aerosolType(pcnst)
+  real(r8), protected :: invrhopart(pcnst)
 
   !These tables describe how the tracers behave chemically
-  integer, dimension(numberOfExternallyMixedModes) :: externallyMixedMode = &
-       (/MODE_IDX_BC_EXT_AC,  &
-       MODE_IDX_SO4SOA_NUC, &
-       MODE_IDX_BC_NUC,     &
+  integer, protected :: externallyMixedMode(numberOfExternallyMixedModes) = &
+       (/MODE_IDX_BC_EXT_AC,                                                &
+       MODE_IDX_SO4SOA_NUC,                                                 &
+       MODE_IDX_BC_NUC,                                                     &
        MODE_IDX_OMBC_INTMIX_AIT /)
 
-  integer, dimension(numberOfInternallyMixedMOdes) :: internallyMixedMode = &
-       (/MODE_IDX_SO4SOA_AIT,           &
-       MODE_IDX_BC_AIT,               &
-       MODE_IDX_OMBC_INTMIX_COAT_AIT, &
-       MODE_IDX_SO4_AC,               &
-       MODE_IDX_DST_A2,               &
-       MODE_IDX_DST_A3,               &
-       MODE_IDX_SS_A1,                &
-       MODE_IDX_SS_A2,                &
+  integer, protected :: internallyMixedMode(numberOfInternallyMixedMOdes) = &
+       (/MODE_IDX_SO4SOA_AIT,                                               &
+       MODE_IDX_BC_AIT,                                                     &
+       MODE_IDX_OMBC_INTMIX_COAT_AIT,                                       &
+       MODE_IDX_SO4_AC,                                                     &
+       MODE_IDX_DST_A2,                                                     &
+       MODE_IDX_DST_A3,                                                     &
+       MODE_IDX_SS_A1,                                                      &
+       MODE_IDX_SS_A2,                                                      &
        MODE_IDX_SS_A3 /)
 
   ! species indices for individual camuio species
-  integer :: l_so4_na, l_so4_a1, l_so4_a2, l_so4_ac
-  integer :: l_bc_n, l_bc_ax, l_bc_ni, l_bc_a, l_bc_ai,l_bc_ac
-  integer :: l_om_ni, l_om_ai, l_om_ac
-  integer :: l_so4_pr
-  integer :: l_dst_a2, l_dst_a3
-  integer :: l_ss_a1, l_ss_a2, l_ss_a3, l_h2so4
-  integer :: l_soa_na, l_soa_a1, l_soa_lv, l_soa_sv
+  integer, protected :: l_so4_na, l_so4_a1, l_so4_a2, l_so4_ac
+  integer, protected :: l_bc_n, l_bc_ax, l_bc_ni, l_bc_a, l_bc_ai,l_bc_ac
+  integer, protected :: l_om_ni, l_om_ai, l_om_ac
+  integer, protected :: l_so4_pr
+  integer, protected :: l_dst_a2, l_dst_a3
+  integer, protected :: l_ss_a1, l_ss_a2, l_ss_a3, l_h2so4
+  integer, protected :: l_soa_na, l_soa_a1, l_soa_lv, l_soa_sv
+  integer, protected :: l_so2, l_dms, l_monoterp, l_isoprene
 
-  integer :: n_aerosol_tracers !number of aerosol tracers
-  integer :: imozart
+  integer, protected :: n_aerosol_tracers !number of aerosol tracers
+  integer, protected :: imozart
 
   ! Number of transported tracers in each mode
-  integer  :: tracer_in_mode(0:nmodes, max_tracers_per_mode)
+  integer, protected  :: tracer_in_mode(0:nmodes, max_tracers_per_mode)
 
   ! Growth of aerosols, duplicated in oslo_aero_sw_tables
-  real(r8) :: rdivr0(10,pcnst)
+  real(r8), protected :: rdivr0(10,pcnst)
 
-  real(r8) :: rhtab(10) = (/ 0.0_r8, 0.37_r8, 0.47_r8, 0.65_r8, 0.75_r8, 0.80_r8, 0.85_r8, 0.90_r8, 0.95_r8, 0.98_r8/)
+  real(r8), protected :: rhtab(10) = (/ 0.0_r8, 0.37_r8, 0.47_r8, 0.65_r8, 0.75_r8, 0.80_r8, 0.85_r8, 0.90_r8, 0.95_r8, 0.98_r8/)
 
-  integer  :: cloudTracerIndex(pcnst)
-  character(len=20) :: cloudTracerName(pcnst)
+  integer, protected  :: cloudTracerIndex(pcnst)
+  character(len=20), protected :: cloudTracerName(pcnst)
 
   integer, private :: qqcw(pcnst)=-1 ! Remaps modal_aero indices into pbuf
 
@@ -376,6 +383,12 @@ contains
 
     ! gas phase h2so4
     call cnst_get_ind('H2SO4'  ,l_h2so4, abort=.true.)
+
+    ! gas phase species
+    call cnst_get_ind('SO2'    ,l_so2,   abort=.true.) !sulfur dioxide
+    call cnst_get_ind('DMS'    ,l_dms,   abort=.true.) !dimethyl sulfide
+    call cnst_get_ind('monoterp'  ,l_monoterp, abort=.true.) !monoterpenes
+    call cnst_get_ind('isoprene'  ,l_isoprene, abort=.true.) !isoprene
 
     ! Register the tracers in modes
     call registerTracersInMode()
@@ -479,6 +492,54 @@ contains
     call inittabrh
 
   end subroutine aero_register
+
+   !===============================================================================
+
+   subroutine sulfur_mass_fraction_register
+      !-----------------------------------------------------------------------
+      ! Register the sulfur mass fraction for the different tracers
+      ! where sulfur is present. Both for the aerosol tracers and the
+      ! gas phase tracers.
+      !-----------------------------------------------------------------------
+
+      sulfurMassFraction(:) = 0.0_r8
+      ! DMS is CH3SCH3 so the sulfur mass fraction is assumed ~32/62=M_S/M_DMS
+      sulfurMassFraction(l_dms) = 32.0_r8/62.0_r8
+      ! for so2 the sulfur mass fraction is assumed ~1/1.998=M_S/M_SO2
+      sulfurMassFraction(l_so2) = 1.0_r8/1.998_r8
+      ! for sulfates the sulfur mass fraction is variable depending on the
+      ! sulfate compound. For sulfate produced by aqueous-phase chemistry
+      ! the sulfur mass fraction is assumed to come from partly naturalised sulfates
+      ! The sulfur mass fraction is therefor assumed ~1/3.59 since = M_S/M_NH4HSO4
+      sulfurMassFraction(l_so4_a2) = 1.0_r8/3.59_r8
+      ! for remaining sulfates the sulfur mass fraction is assumed ~1/3.06 = M_S / M_H2SO4
+      sulfurMassFraction(l_so4_na) = 1.0_r8/3.06_r8
+      sulfurMassFraction(l_so4_a1) = 1.0_r8/3.06_r8
+      sulfurMassFraction(l_so4_ac) = 1.0_r8/3.06_r8
+      sulfurMassFraction(l_so4_pr) = 1.0_r8/3.06_r8
+      ! for h2so4 the sulfur mass fraction is assumed ~1/3.06 = M_S / M_H2SO4
+      sulfurMassFraction(l_h2so4) = 1.0_r8/3.06_r8
+
+      ! for msa the sulfur mass fraction is assumed ~32/96 = M_S / M_CH3SO3H
+      sulfurMassFraction_MSA = 32.0_r8/96.0_r8
+
+   end subroutine sulfur_mass_fraction_register
+
+   !===============================================================================
+
+   subroutine soa_yield_register
+      !-----------------------------------------------------------------------
+      ! Register the SOA yield for the different tracers which
+      ! can produce SOA.
+      !-----------------------------------------------------------------------
+
+      ! SOA is given the proxy composition of C10H16O2  (so ~168g/mol)
+      ! Isoprene is C5H8 soa SOA mass fraction is assumed ~168/68=M_SOA/M_C5H8
+      SOAyield_isoprene = 168.0_r8/68.0_r8
+      ! Monoterpene is C10H16 so SOA mass fraction is assumed ~168/136=M_SOA / M_C10H16
+      SOAyield_monoterp = 168.0_r8/136.0_r8
+
+   end subroutine soa_yield_register
 
   !=============================================================================
   function getNumberOfAerosolTracers()RESULT(numberOfTracers)

@@ -125,6 +125,8 @@ contains
   !===============================================================================
   subroutine oslo_aero_ocean_init()
 
+   use phys_control,   only : history_aerosol_forcing
+
     ! local variables
     integer  :: astat
     integer  :: ispec
@@ -183,7 +185,9 @@ contains
             cycle_yr(ispec), fixed_ymd, fixed_tod, data_type(ispec) )
     enddo
     call addfld( 'odms', horiz_only,  'A',  'nmol/L', 'DMS upper ocean concentration' )
-    call add_default('odms', 1, ' ')
+   if ( history_aerosol_forcing ) then
+      call add_default('odms', 1, ' ')
+   endif
 
   endsubroutine oslo_aero_ocean_init
 

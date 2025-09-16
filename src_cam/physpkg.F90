@@ -1424,7 +1424,6 @@ contains
     use microp_aero,        only: microp_aero_run
     ! OSLO_AERO begin
     use oslo_aero_microp,   only: oslo_aero_microp_run
-    use oslo_aero_share
     ! OSLO_AERO end
     use clubb_intr,         only: clubb_tend_cam, clubb_emissions_cam
     use subcol,             only: subcol_gen, subcol_ptend_avg
@@ -2582,6 +2581,14 @@ contains
 
     call clybry_fam_set( ncol, lchnk, map2chm, state%q, pbuf )
 
+    ! output these here -- after updates by chem_timestep_tend or export_fields within the current time step
+    if (associated(cam_out%nhx_nitrogen_flx)) then
+       call outfld('a2x_NHXDEP', cam_out%nhx_nitrogen_flx, pcols, lchnk)
+    end if
+    if (associated(cam_out%noy_nitrogen_flx)) then
+       call outfld('a2x_NOYDEP', cam_out%noy_nitrogen_flx, pcols, lchnk)
+    end if
+
   end subroutine tphysac
 
   subroutine tphysbc (ztodt, state,  &
@@ -3044,14 +3051,6 @@ contains
     call t_startf('diag_export')
     call diag_export(cam_out)
     call t_stopf('diag_export')
-
-    ! output these here -- after updates by chem_timestep_tend or export_fields within the current time step
-    if (associated(cam_out%nhx_nitrogen_flx)) then
-       call outfld('a2x_NHXDEP', cam_out%nhx_nitrogen_flx, pcols, lchnk)
-    end if
-    if (associated(cam_out%noy_nitrogen_flx)) then
-       call outfld('a2x_NOYDEP', cam_out%noy_nitrogen_flx, pcols, lchnk)
-    end if
 
   end subroutine tphysbc
 

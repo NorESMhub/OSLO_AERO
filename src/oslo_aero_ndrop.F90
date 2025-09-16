@@ -106,7 +106,6 @@ contains
     character(len=32)  :: tmpname_cw
     character(len=128) :: long_name
     character(len=8)   :: unit
-    logical            :: history_amwg ! output the variables used by the AMWG diag package
     character(len=10)  :: modeString
     character(len=20)  :: varname
     !-------------------------------------------------------------------------------
@@ -192,7 +191,7 @@ contains
 
     ! Add dropmixnuc tendencies for all modal aerosol species
 
-    call phys_getopts(history_amwg_out=history_amwg, history_aerosol_out=history_aerosol)
+    call phys_getopts(history_aerosol_out=history_aerosol)
 
     n_aerosol_tracers = getNumberOfAerosolTracers()
     call fillAerosolTracerList(aerosolTracerList)
@@ -421,7 +420,7 @@ contains
 
     real(r8), allocatable :: coltend(:,:)       ! column tendency for diagnostic output
     real(r8), allocatable :: coltend_cw(:,:)    ! column tendency
-    real(r8)              :: ccn(pcols,pverp,psat) ! number conc of aerosols activated at supersat
+    real(r8)              :: ccn(pcols,pver,psat) ! number conc of aerosols activated at supersat
 
     !for gas species turbulent mixing
     real(r8), pointer     :: rgas(:, :, :)
@@ -598,6 +597,13 @@ contains
        end do
        zs(pver) = zs(pver-1)
 
+       do ilev = 1, pver
+          do imode = 1, ntot_amode
+             nact(ilev,imode) = 0._r8
+             mact(ilev,imode) = 0._r8
+          end do
+       end do
+
        ! load number nucleated into qcld on cloud boundaries
        do ilev = top_lev, pver
 
@@ -606,11 +612,6 @@ contains
           srcn(ilev)  = 0._r8
           cs(icol,ilev)  = pmid(icol,ilev)/(rair*temp(icol,ilev))        ! air density (kg/m3)
           dz(icol,ilev)  = 1._r8/(cs(icol,ilev)*gravit*rpdel(icol,ilev)) ! layer thickness in m
-
-          do imode = 1, ntot_amode
-             nact(ilev,imode) = 0._r8
-             mact(ilev,imode) = 0._r8
-          end do
 
           zn(ilev) = gravit*rpdel(icol,ilev)
 
@@ -744,6 +745,8 @@ contains
        do imode = 1, nmodes ! Number of modes
           !Get number concentration of this mode
           mm = mam_idx(imode,0)
+          raercol(1:top_lev-1,mm,nsav) = 0.0_r8
+          raercol_cw(1:top_lev-1,mm,nsav) = 0.0_r8
           do ilev= top_lev,pver
              raercol(ilev,mm,nsav) = numberConcentration(icol,ilev,imode)/cs(icol,ilev) !#/kg air
              !In oslo model, number concentrations are diagnostics, so
@@ -1462,13 +1465,11 @@ contains
     call outfld('NDROPMIX', ndropmix(:ncol,:), ncol, lchnk)
     call outfld('WTKE    ', wtke(:ncol,:),     ncol, lchnk)
 
-    if (history_aerosol) then
-       call ccncalc_oslo(state, pbuf, cs, hasAerosol, numberConcentration, volumeConcentration, &
-            hygroscopicity, lnSigma, ccn)
-       do isat = 1, psat
-          call outfld(ccn_name(isat), ccn(:,:,isat), pcols, lchnk)
-       enddo
-    end if
+   call ccncalc_oslo(state, pbuf, cs, hasAerosol, numberConcentration, volumeConcentration, &
+      hygroscopicity, lnSigma, ccn)
+   do isat = 1, psat
+      call outfld(ccn_name(isat), ccn(:ncol,:,isat), ncol, lchnk)
+   enddo
 
     tendencyCounted(:)=.FALSE.
     do imode = 1, ntot_amode

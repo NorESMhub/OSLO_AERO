@@ -254,7 +254,9 @@ contains
        enddo
     enddo
 
-    write(iulog,*)'nlog mode 5-10 ok'
+    if (masterproc) then
+       write(iulog,*)'nlog mode 5-10 ok'
+    end if
 
     do ifil=20,29
        close (ifil)
