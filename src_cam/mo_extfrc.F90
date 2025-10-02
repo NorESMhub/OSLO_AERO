@@ -442,6 +442,9 @@ contains
           !OSLO_AERO begin
           ! get the index of the forcing index that coresponds to the l_spc system
           call cnst_get_ind(trim(extfrc_lst(n)), l_aero, abort=.false.)
+          if (l_aero < 1) then
+             call endrun("extfrc_set: No constituent, '"//trim(extfrc_lst(n))//"'")
+          end if
           CMXF_fields(:ncol,l_aero,lchnk) = CMXF_fields(:ncol,l_aero,lchnk) + frcing_col_kg(:ncol)
           !OSLO_AERO end
 
