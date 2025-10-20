@@ -77,12 +77,16 @@ module physpkg
   integer ::  totliqini_idx      = 0
   integer ::  toticeini_idx      = 0
 
-  integer ::  enthalpy_prec_bc_idx = 0
-  integer ::  enthalpy_prec_ac_idx = 0
-  integer ::  enthalpy_evop_idx    = 0
-  integer ::  qcsedten_idx=0, qrsedten_idx=0
-  integer ::  qisedten_idx=0, qssedten_idx=0, qgsedten_idx=0
-  integer ::  qrain_mg_idx=0, qsnow_mg_idx=0
+  integer ::  enthalpy_prec_bc_idx = 0 ! only for compute_enthalpy_flux
+  integer ::  enthalpy_prec_ac_idx = 0 ! only for compute_enthalpy_flux
+  integer ::  enthalpy_evop_idx    = 0 ! only for compute_enthalpy_flux
+  integer ::  qcsedten_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qrsedten_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qisedten_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qssedten_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qgsedten_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qrain_mg_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qsnow_mg_idx         = 0 ! only for compute_enthalpy_flux
 
   integer ::  prec_str_idx       = 0
   integer ::  snow_str_idx       = 0
@@ -221,7 +225,7 @@ contains
     if (compute_enthalpy_flux) then
        call pbuf_add_field('ENTHALPY_PREC_BC','physpkg', dtype_r8, (/pcols,num_enthalpy_vars/), enthalpy_prec_bc_idx)
        call pbuf_add_field('ENTHALPY_PREC_AC','global' , dtype_r8, (/pcols,num_enthalpy_vars/), enthalpy_prec_ac_idx)
-       call pbuf_add_field('ENTHALPY_EVOP'   ,'global' , dtype_r8, (/pcols/),                   enthalpy_evop_idx)
+       call pbuf_add_field('ENTHALPY_EVOP'   ,'global' , dtype_r8, (/pcols/), enthalpy_evop_idx)
        call pbuf_add_field('qrain_mg'       , 'physpkg', dtype_r8, (/pcols,pver/), qrain_mg_idx)
        call pbuf_add_field('qsnow_mg'       , 'physpkg', dtype_r8, (/pcols,pver/), qsnow_mg_idx)
     end if
@@ -792,6 +796,7 @@ contains
     use elevated_emissions_mod, only: elevated_emissions_init
 
     use ccpp_constituent_prop_mod, only: ccpp_const_props_init
+    use air_composition,           only: compute_enthalpy_flux
 
     ! Input/output arguments
     type(physics_state), pointer       :: phys_state(:)
@@ -958,6 +963,14 @@ contains
 
     dlfzm_idx = pbuf_get_index('DLFZM', ierr)
     cmfmczm_idx = pbuf_get_index('CMFMC_DP', ierr)
+
+    if (compute_enthalpy_flux) then
+       qcsedten_idx = pbuf_get_index('QCSEDTEN', ierr)
+       qrsedten_idx = pbuf_get_index('QRSEDTEN', ierr)
+       qisedten_idx = pbuf_get_index('QISEDTEN', ierr)
+       qssedten_idx = pbuf_get_index('QSSEDTEN', ierr)
+       qgsedten_idx = pbuf_get_index('QGSEDTEN', ierr)
+    endif
 
     ! OSLO_AERO begin
     prog_modal_aero = .true.
@@ -1563,7 +1576,7 @@ contains
     real(r8), dimension(pcols,pver)   :: qrain_mg_macmic   , qsnow_mg_macmic
     integer :: m_cnst
     real(r8):: hflx_iref(pcols)
-    character(50) :: physparname !(and a little extra log info)
+    character(50) :: physparname
 
     !-----------------------------------------------------------------------
     lchnk = state%lchnk
@@ -1972,32 +1985,25 @@ contains
           snow_pcw_macmic(:ncol) = snow_pcw_macmic(:ncol) + snow_pcw(:ncol)
 
           if (compute_enthalpy_flux) then
-             if(macmic_it.eq.1) then
-                qcsedten_idx = pbuf_get_index('QCSEDTEN'     , errcode=i)
-                qrsedten_idx = pbuf_get_index('QRSEDTEN'     , errcode=i)
-                qisedten_idx = pbuf_get_index('QISEDTEN'     , errcode=i)
-                qssedten_idx = pbuf_get_index('QSSEDTEN'     , errcode=i)
-                qgsedten_idx = pbuf_get_index('QGSEDTEN'     , errcode=i)
-             endif
-             if (qcsedten_idx.gt.0) then
+             if (qcsedten_idx > 0) then
                 call pbuf_get_field(pbuf, qcsedten_idx, qcsedten)
-                qrain_mg_macmic(:ncol,:) = qrain_mg_macmic(:ncol,:)-qcsedten(:ncol,:)
+                qrain_mg_macmic(:ncol,:) = qrain_mg_macmic(:ncol,:) - qcsedten(:ncol,:)
              endif
-             if (qrsedten_idx.gt.0) then
+             if (qrsedten_idx > 0) then
                 call pbuf_get_field(pbuf, qrsedten_idx, qrsedten)
-                qrain_mg_macmic(:ncol,:) = qrain_mg_macmic(:ncol,:)-qrsedten(:ncol,:)
+                qrain_mg_macmic(:ncol,:) = qrain_mg_macmic(:ncol,:) - qrsedten(:ncol,:)
              endif
-             if (qisedten_idx.gt.0) then
+             if (qisedten_idx > 0) then
                 call pbuf_get_field(pbuf, qisedten_idx, qisedten)
-                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:)-qisedten(:ncol,:)
+                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:) - qisedten(:ncol,:)
              endif
-             if (qssedten_idx.gt.0) then
+             if (qssedten_idx > 0) then
                 call pbuf_get_field(pbuf, qssedten_idx, qssedten)
-                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:)-qssedten(:ncol,:)
+                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:) - qssedten(:ncol,:)
              endif
-             if (qgsedten_idx.gt.0) then
+             if (qgsedten_idx > 0) then
                 call pbuf_get_field(pbuf, qgsedten_idx, qgsedten)
-                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:)-qgsedten(:ncol,:)
+                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:) - qgsedten(:ncol,:)
              endif
           endif
 
@@ -2015,8 +2021,6 @@ contains
        snow_str(:ncol) = snow_pcw(:ncol) + snow_sed(:ncol)
 
        if (compute_enthalpy_flux) then
-          qrain_mg_idx = pbuf_get_index('qrain_mg'     , errcode=i)
-          qsnow_mg_idx = pbuf_get_index('qsnow_mg'     , errcode=i)
           call pbuf_get_field(pbuf, qrain_mg_idx, qrain_mg)
           call pbuf_get_field(pbuf, qsnow_mg_idx, qsnow_mg)
           qrain_mg(:ncol,:) = qrain_mg_macmic(:ncol,:)/cld_macmic_num_steps
@@ -2496,7 +2500,9 @@ contains
        end if
        call enthalpy_adjustment(ncol,lchnk,state,cam_in,cam_out,pbuf,ztodt,itim_old,&
             qini(:,:),totliqini(:,:),toticeini(:,:),tend)
+
     else
+
        !-------------- Energy budget checks vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
        ! Save total energy for global fixer in next timestep
        !
@@ -2658,7 +2664,7 @@ contains
     use constituents,    only: qmin
     use air_composition, only: thermodynamic_active_species_liq_num,thermodynamic_active_species_liq_idx
     use air_composition, only: thermodynamic_active_species_ice_num,thermodynamic_active_species_ice_idx
-    use air_composition, only: compute_enthalpy_flux, num_enthalpy_vars, cp_or_cv_dycore
+    use air_composition, only: compute_enthalpy_flux, num_enthalpy_vars, cp_or_cv_dycore, te_init,cpairv
     use physics_buffer,  only: pbuf_set_field
     use convect_deep,    only: convect_deep_tend
     use time_manager,    only: is_first_step, get_nstep
@@ -2679,7 +2685,6 @@ contains
     use dyn_tests_utils, only: vc_dycore
     use surface_emissions_mod,only: surface_emissions_set
     use elevated_emissions_mod,only: elevated_emissions_set
-    use air_composition, only: te_init,cpairv,compute_enthalpy_flux
     use cam_thermo,      only: get_hydrostatic_energy
 
     ! Arguments
@@ -2859,7 +2864,7 @@ contains
           toticeini(:ncol,:pver) = toticeini(:ncol,:pver)+state%q(:ncol,:pver,m)
        end do
 
-       ! compute energy variables for state at the beginning of physics - xxx
+       ! compute energy variables for state at the beginning of physics
       call get_hydrostatic_energy(state%q(1:ncol,1:pver,1:pcnst),.true.,          &
            state%pdel(1:ncol,1:pver), cp_or_cv_dycore(:ncol,:,lchnk),             &
            state%u(1:ncol,1:pver), state%v(1:ncol,1:pver), state%T(1:ncol,1:pver),&
@@ -2867,7 +2872,6 @@ contains
            te = te_init(:ncol,1,lchnk), se=te_init(:ncol,2,lchnk), po=te_init(:ncol,3,lchnk), ke=te_init(:ncol,4,lchnk))
     endif
 
-    ! (postponed call to fixer)
     !===================================================
     ! Global mean total energy fixer
     !===================================================
@@ -3059,10 +3063,7 @@ contains
 
       if (compute_enthalpy_flux) then
          ! In first time-step tphysac variables need to be zero'd out
-         if (compute_enthalpy_flux) then
-            ifld = pbuf_get_index('ENTHALPY_PREC_AC', errcode=i)
-            if (ifld>0) call pbuf_set_field(pbuf, ifld, 0._r8)
-         end if
+         call pbuf_set_field(pbuf, ifld, 0._r8)
       end if
 
       if (is_subcol_on()) then
