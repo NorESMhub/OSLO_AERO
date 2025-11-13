@@ -378,8 +378,20 @@ contains
       ! gas phase species
       call cnst_get_ind('SO2'    ,l_so2,   abort=.true.) !sulfur dioxide
       call cnst_get_ind('DMS'    ,l_dms,   abort=.true.) !dimethyl sulfide
-      call cnst_get_ind('monoterp'  ,l_monoterp, abort=.true.) !monoterpenes
-      call cnst_get_ind('isoprene'  ,l_isoprene, abort=.true.) !isoprene
+      call cnst_get_ind('monoterp'  ,l_monoterp, abort=.false.) !monoterpenes
+      if (l_monoterp < 0) then
+         call cnst_get_ind('MTERP'  ,l_monoterp, abort=.false.) !monoterpenes
+         if (l_monoterp < 0) then
+            call endrun("Neither 'monoterp' or 'MTERP' found in constituents")
+         end if
+      end if
+      call cnst_get_ind('isoprene'  ,l_isoprene, abort=.false.) !isoprene
+      if (l_isoprene < 0) then
+         call cnst_get_ind('ISOP'  ,l_isoprene, abort=.true.) !isoprene
+         if (l_isoprene < 0) then
+            call endrun("Neither 'isoprene' or 'ISOP' found in constituents")
+         end if
+      end if
 
       ! Register the tracers in modes
       call registerTracersInMode()

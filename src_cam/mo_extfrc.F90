@@ -370,9 +370,10 @@ contains
     !--------------------------------------------------------
     !	... form the external forcing
     !--------------------------------------------------------
-    use mo_chem_utls,  only : get_spc_ndx
+    use mo_chem_utls,    only : get_spc_ndx
     ! OSLO_AERO begin
     use constituents,    only : cnst_get_ind
+    use oslo_aero_share, only : l_bc_ax, l_bc_ni, l_bc_n, l_om_ni, l_so2, l_so4_pr
     ! OSLO_AERO end
 
     implicit none
@@ -442,10 +443,11 @@ contains
           !OSLO_AERO begin
           ! get the index of the forcing index that coresponds to the l_spc system
           call cnst_get_ind(trim(extfrc_lst(n)), l_aero, abort=.false.)
-          if (l_aero < 1) then
-             call endrun("extfrc_set: No constituent, '"//trim(extfrc_lst(n))//"'")
+          if ( l_aero == l_bc_ax .or. l_aero == l_bc_ni .or. l_aero == l_bc_n .or. &
+               l_aero == l_om_ni .or. l_aero == l_so2 .or. l_aero == l_so4_pr ) then
+             ! add the forcing to the CMXF_fields array
+             CMXF_fields(:ncol,l_aero,lchnk) = CMXF_fields(:ncol,l_aero,lchnk) + frcing_col_kg(:ncol)
           end if
-          CMXF_fields(:ncol,l_aero,lchnk) = CMXF_fields(:ncol,l_aero,lchnk) + frcing_col_kg(:ncol)
           !OSLO_AERO end
 
           xfcname = trim(extfrc_lst(n))//'_CLXF'
