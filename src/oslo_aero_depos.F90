@@ -16,7 +16,6 @@ module oslo_aero_depos
   use cam_abortutils,          only: endrun
   use cam_logfile,             only: iulog
   use camsrfexch,              only: cam_out_t
-  use time_manager,            only: is_first_step
   use aerodep_flx,             only: aerodep_flx_prescribed
   use mo_drydep,               only: n_land_type, fraction_landuse
   use physics_types,           only: physics_ptend, physics_ptend_init
@@ -108,10 +107,11 @@ contains
     use ppgrid,          only: pcols
 
     ! Register a pbuf field for
-    call pbuf_add_field('WD_A_H2SO4', 'physpkg', dtype_r8, (/pcols/), idx_wd_a_h2so4)
+    call pbuf_add_field('WD_A_H2SO4', 'global', dtype_r8, (/pcols/), idx_wd_a_h2so4)
   end subroutine oslo_aero_depos_register
 
   subroutine oslo_aero_depos_init( pbuf2d )
+    use time_manager,   only: is_first_step
     use physics_buffer, only: pbuf_set_field
 
     ! Set oslo aeroslo deposition history output
@@ -137,7 +137,9 @@ contains
 
     call phys_getopts( history_aerosol_out = history_aerosol )
 
-    call pbuf_set_field(pbuf2d, idx_wd_a_h2so4, 0.0_r8)
+    if (is_first_step()) then
+       call pbuf_set_field(pbuf2d, idx_wd_a_h2so4, 0.0_r8)
+    end if
 
     is_in_output(:) =.false.
     drydep_lq(:) =.false.
@@ -215,7 +217,7 @@ contains
           endif
 
           ! some tracers are not in cloud water
-          if(getCloudTracerIndexDirect(tracerIndex) .lt. 0)then
+          if(getCloudTracerIndexDirect(tracerIndex) < 0)then
              cycle
           endif
 
@@ -431,13 +433,13 @@ contains
 
              ! rad_aer = volume mean wet radius (m)
              ! dgncur_awet = geometric mean wet diameter for number distribution (m)
-             if(top_lev .gt. 1) then
+             if(top_lev > 1) then
                 rad_aer(1:ncol,:top_lev-1) = 0._r8
              end if
              rad_aer(1:ncol,top_lev:) = 0.5_r8*dgncur_awet(1:ncol,top_lev:,m)*exp(1.5_r8*(logSigma**2))
 
              ! dens_aer(1:ncol,:) = wet density (kg/m3)
-             if(top_lev.gt.1)then
+             if(top_lev > 1)then
                 dens_aer(1:ncol,:top_lev-1) = 0._r8
              end if
              dens_aer(1:ncol,top_lev:) = wetdens(1:ncol,top_lev:,m)
@@ -466,7 +468,7 @@ contains
                 if ( is_process_mode(mm, .false.) ) then
                    jvlc = 1
                    logSigma = log(processModeSigma(processModeMap(mm)))
-                   if(top_lev.gt.1)then
+                   if(top_lev > 1)then
                       rad_aer(1:ncol, top_lev-1) = 0.0_r8
                    end if
                    rad_aer(1:ncol,top_lev:) = &
@@ -527,7 +529,7 @@ contains
                 end if
 
                 !Do solution
-                where(lossRate(:ncol)*dt .gt. 1.e-2_r8)
+                where(lossRate(:ncol)*dt > 1.e-2_r8)
                    MMRNew(:ncol) = q(:ncol,pver,mm)*exp(-lossRate(:ncol)*dt)   &
                         + totalProd(:ncol)/lossRate(:ncol)*(1.0_r8 - exp(-lossRate(:ncol)*dt))
                 elsewhere
@@ -1118,7 +1120,7 @@ contains
 
     !------------------------------------------------------------------------
 
-    if(top_lev.gt.1) then
+    if(top_lev > 1) then
        vlc_grv(:ncol,:top_lev-1) = 0._r8
        vlc_dry(:ncol,:top_lev-1) = 0._r8
     endif
@@ -1357,14 +1359,14 @@ contains
        endif
        temp=z/zzocen
        if(icefrac(i) > 0.5_r8) then
-          if(obklen(i).gt.0) then
+          if(obklen(i) > 0) then
              psi0=min(max(zzsice/obklen(i),-1.0_r8),1.0_r8)
           else
              psi0=0.0_r8
           endif
           temp=z/zzsice
        endif
-       if(psi> 0._r8) then
+       if(psi > 0._r8) then
           ram=1/xkar/ustar(i)*(log(temp)+4.7_r8*(psi-psi0))
        else
           nu=(1.00_r8-15.000_r8*psi)**(.25_r8)
@@ -1579,11 +1581,11 @@ contains
           sumpppr_st(i) = sumpppr_st(i) + lprecp_st
 
           rain(i,k) = 0._r8
-          if(t(i,k) .gt. tmelt) then
+          if(t(i,k) > tmelt) then
              rho = pmid(i,k)/(rair*t(i,k))
              vfall = convfw/sqrt(rho)
              rain(i,k) = sumppr(i)/(rho*vfall)
-             if (rain(i,k).lt.1.e-14_r8) rain(i,k) = 0._r8
+             if (rain(i,k) < 1.e-14_r8) rain(i,k) = 0._r8
           endif
        end do
     end do
@@ -1878,7 +1880,7 @@ contains
           ! make sure we dont take out more than is there
           ! ratio of amount available to amount removed
           rat(i) = tracer(i,k)/max(deltat*(srcc(i)+srcs(i)),1.e-36_r8)
-          if (rat(i).lt.1._r8) then
+          if (rat(i) < 1._r8) then
              srcs(i) = srcs(i)*rat(i)
              srcc(i) = srcc(i)*rat(i)
           endif
@@ -1933,7 +1935,7 @@ contains
 
        if ( found ) then
           do i = 1,ncol
-             if (dblchek(i) .lt. 0._r8) then
+             if (dblchek(i) < 0._r8) then
                 write(iulog,*) ' wetdapa: negative value ', i, k, tracer(i,k), &
                      dblchek(i), scavt(i,k), srct(i), rat(i), fracev(i)
              endif
@@ -2106,7 +2108,7 @@ contains
           precxx = max (precxx,0.0_r8)
 
           ! flux of tracer by below cloud processes
-          if (tc.gt.0) then
+          if (tc > 0) then
              scavbc = precxx*mplb ! if liquid
           else
              precxx2=max(precxx,1.e-36_r8)
