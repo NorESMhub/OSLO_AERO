@@ -77,6 +77,17 @@ module physpkg
   integer ::  totliqini_idx      = 0
   integer ::  toticeini_idx      = 0
 
+  integer ::  enthalpy_prec_bc_idx = 0 ! only for compute_enthalpy_flux
+  integer ::  enthalpy_prec_ac_idx = 0 ! only for compute_enthalpy_flux
+  integer ::  enthalpy_evop_idx    = 0 ! only for compute_enthalpy_flux
+  integer ::  qcsedten_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qrsedten_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qisedten_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qssedten_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qgsedten_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qrain_mg_idx         = 0 ! only for compute_enthalpy_flux
+  integer ::  qsnow_mg_idx         = 0 ! only for compute_enthalpy_flux
+
   integer ::  prec_str_idx       = 0
   integer ::  snow_str_idx       = 0
   integer ::  prec_sed_idx       = 0
@@ -158,6 +169,7 @@ contains
     use hemco_interface,    only: HCOI_Chunk_Init
     use surface_emissions_mod, only: surface_emissions_reg
     use elevated_emissions_mod, only: elevated_emissions_reg
+    use air_composition,    only: compute_enthalpy_flux, num_enthalpy_vars
 
     !---------------------------Local variables-----------------------------
     !
@@ -209,6 +221,14 @@ contains
     call pbuf_add_field('CLDICEINI', 'physpkg', dtype_r8, (/pcols,pver/), cldiceini_idx)
     call pbuf_add_field('TOTLIQINI', 'physpkg', dtype_r8, (/pcols,pver/), totliqini_idx)
     call pbuf_add_field('TOTICEINI', 'physpkg', dtype_r8, (/pcols,pver/), toticeini_idx)
+
+    if (compute_enthalpy_flux) then
+       call pbuf_add_field('ENTHALPY_PREC_BC','physpkg', dtype_r8, (/pcols,num_enthalpy_vars/), enthalpy_prec_bc_idx)
+       call pbuf_add_field('ENTHALPY_PREC_AC','global' , dtype_r8, (/pcols,num_enthalpy_vars/), enthalpy_prec_ac_idx)
+       call pbuf_add_field('ENTHALPY_EVOP'   ,'global' , dtype_r8, (/pcols/), enthalpy_evop_idx)
+       call pbuf_add_field('qrain_mg'       , 'physpkg', dtype_r8, (/pcols,pver/), qrain_mg_idx)
+       call pbuf_add_field('qsnow_mg'       , 'physpkg', dtype_r8, (/pcols,pver/), qsnow_mg_idx)
+    end if
 
     ! check energy package
     call check_energy_register
@@ -776,6 +796,7 @@ contains
     use elevated_emissions_mod, only: elevated_emissions_init
 
     use ccpp_constituent_prop_mod, only: ccpp_const_props_init
+    use air_composition,           only: compute_enthalpy_flux
 
     ! Input/output arguments
     type(physics_state), pointer       :: phys_state(:)
@@ -942,6 +963,14 @@ contains
 
     dlfzm_idx = pbuf_get_index('DLFZM', ierr)
     cmfmczm_idx = pbuf_get_index('CMFMC_DP', ierr)
+
+    if (compute_enthalpy_flux) then
+       qcsedten_idx = pbuf_get_index('QCSEDTEN', ierr)
+       qrsedten_idx = pbuf_get_index('QRSEDTEN', ierr)
+       qisedten_idx = pbuf_get_index('QISEDTEN', ierr)
+       qssedten_idx = pbuf_get_index('QSSEDTEN', ierr)
+       qgsedten_idx = pbuf_get_index('QGSEDTEN', ierr)
+    endif
 
     ! OSLO_AERO begin
     prog_modal_aero = .true.
@@ -1382,7 +1411,7 @@ contains
     use physconst,          only: rhoh2o
     use aero_model,         only: aero_model_drydep
     use check_energy,       only: check_energy_timestep_init, check_energy_cam_chng
-    use check_energy,       only: tot_energy_phys
+    use check_energy,       only: tot_energy_phys, enthalpy_adjustment
     use check_energy,       only: check_tracers_data, check_tracers_init, check_tracers_chng
     use time_manager,       only: get_nstep
     use cam_abortutils,     only: endrun
@@ -1432,6 +1461,9 @@ contains
     use cam_budget,         only: thermo_budget_history
     use dyn_tests_utils,    only: vc_dycore, vc_height, vc_dry_pressure
     use air_composition,    only: cpairv, cp_or_cv_dycore
+    use air_composition,    only: compute_enthalpy_flux
+    use air_composition,    only: thermodynamic_active_species_liq_num,thermodynamic_active_species_liq_idx
+    use air_composition,    only: thermodynamic_active_species_ice_num,thermodynamic_active_species_ice_idx
     !
     ! Arguments
     !
@@ -1537,6 +1569,14 @@ contains
     real(r8), pointer, dimension(:,:) :: ducore
     real(r8), pointer, dimension(:,:) :: dvcore
     real(r8), pointer, dimension(:,:) :: ast     ! relative humidity cloud fraction
+
+    ! variables for dme_energy_adjust
+    real(r8), pointer, dimension(:,:) :: qcsedten, qrsedten, qisedten, qssedten, qgsedten
+    real(r8), pointer, dimension(:,:) :: qrain_mg          , qsnow_mg
+    real(r8), dimension(pcols,pver)   :: qrain_mg_macmic   , qsnow_mg_macmic
+    integer :: m_cnst
+    real(r8):: hflx_iref(pcols)
+    character(50) :: physparname
 
     !-----------------------------------------------------------------------
     lchnk = state%lchnk
@@ -1646,10 +1686,17 @@ contains
 
     ! Check if latent heat flux exceeds the total moisture content of the
     ! lowest model layer, thereby creating negative moisture.
-
-    call qneg4('TPHYSAC', lchnk, ncol, ztodt ,                                &
-         state%q(1,pver,1), state%rpdel(1,pver),                              &
-         cam_in%shf, cam_in%lhf, cam_in%cflx)
+    if (compute_enthalpy_flux) then
+       hflx_iref(:ncol) = cam_in%shf(:ncol)
+       call qneg4('TPHYSAC', lchnk, ncol, ztodt ,   &
+            state%q(1,pver,1), state%rpdel(1,pver), &
+            cam_in%shf, cam_in%lhf, cam_in%cflx,    &
+            seflx=hflx_iref)
+    else
+       call qneg4('TPHYSAC', lchnk, ncol, ztodt ,   &
+            state%q(1,pver,1), state%rpdel(1,pver), &
+            cam_in%shf, cam_in%lhf, cam_in%cflx)
+    end if
 
     call t_stopf('tphysac_init')
 
@@ -1708,6 +1755,11 @@ contains
        prec_pcw_macmic = 0._r8
        snow_pcw_macmic = 0._r8
 
+       if (compute_enthalpy_flux) then
+          qrain_mg_macmic(:ncol,:) = 0._r8
+          qsnow_mg_macmic(:ncol,:) = 0._r8
+       endif
+
        ! contrail parameterization
        ! see Chen et al., 2012: Global contrail coverage simulated
        !                        by CAM5 with the inventory of 2006 global aircraft emissions, JAMES
@@ -1743,7 +1795,11 @@ contains
              ! Since we "added" the reserved liquid back in this routine, we need
              ! to account for it in the energy checker
              flx_cnd(:ncol) = -1._r8*rliq(:ncol)
-             flx_heat(:ncol) = cam_in%shf(:ncol) + det_s(:ncol)
+             if (compute_enthalpy_flux) then
+                flx_heat(:ncol) = hflx_iref(:ncol) + det_s(:ncol)
+             else
+                flx_heat(:ncol) = cam_in%shf(:ncol) + det_s(:ncol)
+             end if
 
              ! Unfortunately, physics_update does not know what time period
              ! "tend" is supposed to cover, and therefore can't update it
@@ -1767,11 +1823,21 @@ contains
              end if
 
              ! Use actual qflux (not lhf/latvap) for consistency with surface fluxes and revised code
-             call check_energy_cam_chng(state, tend, "clubb_tend", nstep, ztodt, &
-                cam_in%cflx(:ncol,1)/cld_macmic_num_steps, &
-                flx_cnd(:ncol)/cld_macmic_num_steps, &
-                det_ice(:ncol)/cld_macmic_num_steps, &
-                flx_heat(:ncol)/cld_macmic_num_steps)
+             if (compute_enthalpy_flux) then
+                write(physparname,"(i3)") macmic_it
+                physparname="clubb_tend "//trim(physparname)
+                call check_energy_cam_chng(state, tend, physparname, nstep, ztodt, &
+                     cam_in%cflx(:ncol,1)/cld_macmic_num_steps, &
+                     flx_cnd(:ncol)/cld_macmic_num_steps, &
+                     det_ice(:ncol)/cld_macmic_num_steps, &
+                     flx_heat(:ncol)/cld_macmic_num_steps)
+             else
+                call check_energy_cam_chng(state, tend, "clubb_tend", nstep, ztodt, &
+                     cam_in%cflx(:ncol,1)/cld_macmic_num_steps, &
+                     flx_cnd(:ncol)/cld_macmic_num_steps, &
+                     det_ice(:ncol)/cld_macmic_num_steps, &
+                     flx_heat(:ncol)/cld_macmic_num_steps)
+             end if
 
           call t_stopf('macrop_tend')
 
@@ -1900,16 +1966,46 @@ contains
                   fh2o, surfric, obklen, flx_heat, cmfmc, dlf, det_s, det_ice, net_flx)
           end if
 
-          call check_energy_cam_chng(state, tend, "microp_tend", nstep, ztodt, &
-               zero, prec_str(:ncol)/cld_macmic_num_steps, &
-               snow_str(:ncol)/cld_macmic_num_steps, zero)
-
+          if (compute_enthalpy_flux) then
+             write(physparname,"(i3)") macmic_it
+             physparname="microp_tend "//trim(physparname)
+             call check_energy_cam_chng(state, tend, physparname, nstep, ztodt, &
+                  zero, prec_str(:ncol)/cld_macmic_num_steps, &
+                  snow_str(:ncol)/cld_macmic_num_steps, zero)
+          else
+             call check_energy_cam_chng(state, tend, "microp_tend", nstep, ztodt, &
+                  zero, prec_str(:ncol)/cld_macmic_num_steps, &
+                  snow_str(:ncol)/cld_macmic_num_steps, zero)
+          end if
           call t_stopf('microp_tend')
 
           prec_sed_macmic(:ncol) = prec_sed_macmic(:ncol) + prec_sed(:ncol)
           snow_sed_macmic(:ncol) = snow_sed_macmic(:ncol) + snow_sed(:ncol)
           prec_pcw_macmic(:ncol) = prec_pcw_macmic(:ncol) + prec_pcw(:ncol)
           snow_pcw_macmic(:ncol) = snow_pcw_macmic(:ncol) + snow_pcw(:ncol)
+
+          if (compute_enthalpy_flux) then
+             if (qcsedten_idx > 0) then
+                call pbuf_get_field(pbuf, qcsedten_idx, qcsedten)
+                qrain_mg_macmic(:ncol,:) = qrain_mg_macmic(:ncol,:) - qcsedten(:ncol,:)
+             endif
+             if (qrsedten_idx > 0) then
+                call pbuf_get_field(pbuf, qrsedten_idx, qrsedten)
+                qrain_mg_macmic(:ncol,:) = qrain_mg_macmic(:ncol,:) - qrsedten(:ncol,:)
+             endif
+             if (qisedten_idx > 0) then
+                call pbuf_get_field(pbuf, qisedten_idx, qisedten)
+                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:) - qisedten(:ncol,:)
+             endif
+             if (qssedten_idx > 0) then
+                call pbuf_get_field(pbuf, qssedten_idx, qssedten)
+                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:) - qssedten(:ncol,:)
+             endif
+             if (qgsedten_idx > 0) then
+                call pbuf_get_field(pbuf, qgsedten_idx, qgsedten)
+                qsnow_mg_macmic(:ncol,:) = qsnow_mg_macmic(:ncol,:) - qgsedten(:ncol,:)
+             endif
+          endif
 
        end do ! end substepping over macrophysics/microphysics
 
@@ -1923,6 +2019,13 @@ contains
        snow_pcw(:ncol) = snow_pcw_macmic(:ncol)/cld_macmic_num_steps
        prec_str(:ncol) = prec_pcw(:ncol) + prec_sed(:ncol)
        snow_str(:ncol) = snow_pcw(:ncol) + snow_sed(:ncol)
+
+       if (compute_enthalpy_flux) then
+          call pbuf_get_field(pbuf, qrain_mg_idx, qrain_mg)
+          call pbuf_get_field(pbuf, qsnow_mg_idx, qsnow_mg)
+          qrain_mg(:ncol,:) = qrain_mg_macmic(:ncol,:)/cld_macmic_num_steps
+          qsnow_mg(:ncol,:) = qsnow_mg_macmic(:ncol,:)/cld_macmic_num_steps
+       endif
 
     endif
 
@@ -2387,86 +2490,97 @@ contains
       call check_energy_cam_chng(state, tend, "nudging", nstep, ztodt, zero, zero, zero, zero)
     endif
 
-    !-------------- Energy budget checks vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-    ! Save total energy for global fixer in next timestep
-    !
-    ! This call must be after the last parameterization and call to physics_update
-    !
-    call pbuf_set_field(pbuf, teout_idx, state%te_cur(:,dyn_te_idx), (/1,itim_old/),(/pcols,1/))
-    !
-    ! FV: convert dry-type mixing ratios to moist here because physics_dme_adjust
-    !     assumes moist. This is done in p_d_coupling for other dynamics. Bundy, Feb 2004.
-    moist_mixing_ratio_dycore = dycore_is('LR').or. dycore_is('FV3')
-    !
-    ! update cp/cv for energy computation based in updated water variables
-    !
-    call cam_thermo_water_update(state%q(:ncol,:,:), lchnk, ncol, vc_dycore,&
-         to_dry_factor=state%pdel(:ncol,:)/state%pdeldry(:ncol,:))
+    if (compute_enthalpy_flux) then
 
-    ! for dry mixing ratio dycore, physics_dme_adjust is called for energy diagnostic purposes only.
-    ! So, save off tracers
-    if (.not.moist_mixing_ratio_dycore) then
-      !
-      ! for dry-mixing ratio based dycores dme_adjust takes place in the dynamical core
-      !
-      ! only compute dme_adjust for diagnostics purposes
-      !
-      if (thermo_budget_history) then
-        tmp_trac(:ncol,:pver,:pcnst) = state%q(:ncol,:pver,:pcnst)
-        tmp_pdel(:ncol,:pver)        = state%pdel(:ncol,:pver)
-        tmp_ps(:ncol)                = state%ps(:ncol)
-        if (trim(cam_take_snapshot_before) == "physics_dme_adjust") then
-           call cam_snapshot_all_outfld_tphysac(cam_snapshot_before_num, state, tend, cam_in, cam_out, pbuf,&
-                      fh2o, surfric, obklen, flx_heat, cmfmc, dlf, det_s, det_ice, net_flx)
-        end if
-        call physics_dme_adjust(state, tend, qini, totliqini, toticeini, ztodt)
-        if (trim(cam_take_snapshot_after) == "physics_dme_adjust") then
-          call cam_snapshot_all_outfld_tphysac(cam_snapshot_after_num, state, tend, cam_in, cam_out, pbuf,&
-               fh2o, surfric, obklen, flx_heat, cmfmc, dlf, det_s, det_ice, net_flx)
-        end if
-        call tot_energy_phys(state, 'phAM')
-        call tot_energy_phys(state, 'dyAM', vc=vc_dycore)
-        ! Restore pre-"physics_dme_adjust" tracers
-        state%q(:ncol,:pver,:pcnst) = tmp_trac(:ncol,:pver,:pcnst)
-        state%pdel(:ncol,:pver)     = tmp_pdel(:ncol,:pver)
-        state%ps(:ncol)             = tmp_ps(:ncol)
-      end if
+       ! conserve energy
+       if (.not.dycore_is('SE')) then
+          call endrun("Explicit enthalpy flux functionality only supported for SE dycore")
+       end if
+       call enthalpy_adjustment(ncol,lchnk,state,cam_in,cam_out,pbuf,ztodt,itim_old,&
+            qini(:,:),totliqini(:,:),toticeini(:,:),tend)
+
     else
-      !
-      ! for moist-mixing ratio based dycores
-      !
-      ! Note: this operation will NOT be reverted with set_wet_to_dry after set_dry_to_wet call
-      !
-      call set_dry_to_wet(state, convert_cnst_type='dry')
 
-      if (trim(cam_take_snapshot_before) == "physics_dme_adjust") then
-         call cam_snapshot_all_outfld_tphysac(cam_snapshot_before_num, state, tend, cam_in, cam_out, pbuf,&
-                    fh2o, surfric, obklen, flx_heat, cmfmc, dlf, det_s, det_ice, net_flx)
-      end if
-      call physics_dme_adjust(state, tend, qini, totliqini, toticeini, ztodt)
-      if (trim(cam_take_snapshot_after) == "physics_dme_adjust") then
-        call cam_snapshot_all_outfld_tphysac(cam_snapshot_after_num, state, tend, cam_in, cam_out, pbuf,&
-             fh2o, surfric, obklen, flx_heat, cmfmc, dlf, det_s, det_ice, net_flx)
-      end if
+       !-------------- Energy budget checks vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+       ! Save total energy for global fixer in next timestep
+       !
+       ! This call must be after the last parameterization and call to physics_update
+       !
+       call pbuf_set_field(pbuf, teout_idx, state%te_cur(:,dyn_te_idx), (/1,itim_old/),(/pcols,1/))
+       !
+       ! FV: convert dry-type mixing ratios to moist here because physics_dme_adjust
+       !     assumes moist. This is done in p_d_coupling for other dynamics. Bundy, Feb 2004.
+       moist_mixing_ratio_dycore = dycore_is('LR').or. dycore_is('FV3')
+       !
+       ! update cp/cv for energy computation based in updated water variables
+       !
+       call cam_thermo_water_update(state%q(:ncol,:,:), lchnk, ncol, vc_dycore,&
+            to_dry_factor=state%pdel(:ncol,:)/state%pdeldry(:ncol,:))
 
-      call tot_energy_phys(state, 'phAM')
-      call tot_energy_phys(state, 'dyAM', vc=vc_dycore)
+       ! for dry mixing ratio dycore, physics_dme_adjust is called for energy diagnostic purposes only.
+       ! So, save off tracers
+       if (.not.moist_mixing_ratio_dycore) then
+          !
+          ! for dry-mixing ratio based dycores dme_adjust takes place in the dynamical core
+          !
+          ! only compute dme_adjust for diagnostics purposes
+          !
+          if (thermo_budget_history) then
+             tmp_trac(:ncol,:pver,:pcnst) = state%q(:ncol,:pver,:pcnst)
+             tmp_pdel(:ncol,:pver)        = state%pdel(:ncol,:pver)
+             tmp_ps(:ncol)                = state%ps(:ncol)
+             if (trim(cam_take_snapshot_before) == "physics_dme_adjust") then
+                call cam_snapshot_all_outfld_tphysac(cam_snapshot_before_num, state, tend, cam_in, cam_out, pbuf,&
+                     fh2o, surfric, obklen, flx_heat, cmfmc, dlf, det_s, det_ice, net_flx)
+             end if
+             call physics_dme_adjust(state, tend, qini, totliqini, toticeini, ztodt)
+             if (trim(cam_take_snapshot_after) == "physics_dme_adjust") then
+                call cam_snapshot_all_outfld_tphysac(cam_snapshot_after_num, state, tend, cam_in, cam_out, pbuf,&
+                     fh2o, surfric, obklen, flx_heat, cmfmc, dlf, det_s, det_ice, net_flx)
+             end if
+             call tot_energy_phys(state, 'phAM')
+             call tot_energy_phys(state, 'dyAM', vc=vc_dycore)
+             ! Restore pre-"physics_dme_adjust" tracers
+             state%q(:ncol,:pver,:pcnst) = tmp_trac(:ncol,:pver,:pcnst)
+             state%pdel(:ncol,:pver)     = tmp_pdel(:ncol,:pver)
+             state%ps(:ncol)             = tmp_ps(:ncol)
+          end if
+       else
+          !
+          ! for moist-mixing ratio based dycores
+          !
+          ! Note: this operation will NOT be reverted with set_wet_to_dry after set_dry_to_wet call
+          !
+          call set_dry_to_wet(state, convert_cnst_type='dry')
+
+          if (trim(cam_take_snapshot_before) == "physics_dme_adjust") then
+             call cam_snapshot_all_outfld_tphysac(cam_snapshot_before_num, state, tend, cam_in, cam_out, pbuf,&
+                                            fh2o, surfric, obklen, flx_heat, cmfmc, dlf, det_s, det_ice, net_flx)
+          end if
+          call physics_dme_adjust(state, tend, qini, totliqini, toticeini, ztodt)
+          if (trim(cam_take_snapshot_after) == "physics_dme_adjust") then
+             call cam_snapshot_all_outfld_tphysac(cam_snapshot_after_num, state, tend, cam_in, cam_out, pbuf,&
+                                            fh2o, surfric, obklen, flx_heat, cmfmc, dlf, det_s, det_ice, net_flx)
+          end if
+          call tot_energy_phys(state, 'phAM')
+          call tot_energy_phys(state, 'dyAM', vc=vc_dycore)
+       endif
+
+       if (vc_dycore == vc_height.or.vc_dycore == vc_dry_pressure) then
+         !
+         ! MPAS and SE specific scaling of temperature for enforcing energy consistency
+         ! (and to make sure that temperature dependent diagnostic tendencies
+         !  are computed correctly; e.g. dtcore)
+         !
+         scaling(1:ncol,:)  = cpairv(:ncol,:,lchnk)/cp_or_cv_dycore(:ncol,:,lchnk)
+         state%T(1:ncol,:)  = state%temp_ini(1:ncol,:)+&
+              scaling(1:ncol,:)*(state%T(1:ncol,:)-state%temp_ini(1:ncol,:))
+         tend%dtdt(:ncol,:) = scaling(:ncol,:)*tend%dtdt(:ncol,:)
+         !
+         ! else: do nothing for dycores with energy consistent with CAM physics
+         !
+       endif
     endif
-
-    if (vc_dycore == vc_height.or.vc_dycore == vc_dry_pressure) then
-      !
-      ! MPAS and SE specific scaling of temperature for enforcing energy consistency
-      ! (and to make sure that temperature dependent diagnostic tendencies
-      !  are computed correctly; e.g. dtcore)
-      !
-      scaling(1:ncol,:)  = cpairv(:ncol,:,lchnk)/cp_or_cv_dycore(:ncol,:,lchnk)
-      state%T(1:ncol,:)  = state%temp_ini(1:ncol,:)+&
-           scaling(1:ncol,:)*(state%T(1:ncol,:)-state%temp_ini(1:ncol,:))
-      tend%dtdt(:ncol,:) = scaling(:ncol,:)*tend%dtdt(:ncol,:)
-      !
-      ! else: do nothing for dycores with energy consistent with CAM physics
-      !
-    end if
 
 
     ! store T, U, and V in buffer for use in computing dynamics T-tendency in next timestep
@@ -2548,6 +2662,8 @@ contains
     use constituents,    only: qmin
     use air_composition, only: thermodynamic_active_species_liq_num,thermodynamic_active_species_liq_idx
     use air_composition, only: thermodynamic_active_species_ice_num,thermodynamic_active_species_ice_idx
+    use air_composition, only: compute_enthalpy_flux, num_enthalpy_vars, cp_or_cv_dycore, te_init,cpairv
+    use physics_buffer,  only: pbuf_set_field
     use convect_deep,    only: convect_deep_tend
     use time_manager,    only: is_first_step, get_nstep
     use convect_diagnostics,only: convect_diagnostics_calc
@@ -2567,6 +2683,7 @@ contains
     use dyn_tests_utils, only: vc_dycore
     use surface_emissions_mod,only: surface_emissions_set
     use elevated_emissions_mod,only: elevated_emissions_set
+    use cam_thermo,      only: get_hydrostatic_energy
 
     ! Arguments
 
@@ -2726,9 +2843,37 @@ contains
 
     call t_stopf('bc_init')
 
+    if (compute_enthalpy_flux) then
+       call cnst_get_ind('Q', ixq)
+       call cnst_get_ind('CLDLIQ', ixcldliq)
+       call cnst_get_ind('CLDICE', ixcldice)
+       qini     (:ncol,:pver) = state%q(:ncol,:pver,     ixq)
+       cldliqini(:ncol,:pver) = state%q(:ncol,:pver,ixcldliq)
+       cldiceini(:ncol,:pver) = state%q(:ncol,:pver,ixcldice)
+
+       totliqini(:ncol,:pver) = 0.0_r8
+       do m_cnst=1,thermodynamic_active_species_liq_num
+          m = thermodynamic_active_species_liq_idx(m_cnst)
+          totliqini(:ncol,:pver) = totliqini(:ncol,:pver)+state%q(:ncol,:pver,m)
+       end do
+       toticeini(:ncol,:pver) = 0.0_r8
+       do m_cnst=1,thermodynamic_active_species_ice_num
+          m = thermodynamic_active_species_ice_idx(m_cnst)
+          toticeini(:ncol,:pver) = toticeini(:ncol,:pver)+state%q(:ncol,:pver,m)
+       end do
+
+       ! compute energy variables for state at the beginning of physics
+      call get_hydrostatic_energy(state%q(1:ncol,1:pver,1:pcnst),.true.,          &
+           state%pdel(1:ncol,1:pver), cp_or_cv_dycore(:ncol,:,lchnk),             &
+           state%u(1:ncol,1:pver), state%v(1:ncol,1:pver), state%T(1:ncol,1:pver),&
+           vc_dycore, ptop=state%pintdry(1:ncol,1), phis = state%phis(1:ncol),    &
+           te = te_init(:ncol,1,lchnk), se=te_init(:ncol,2,lchnk), po=te_init(:ncol,3,lchnk), ke=te_init(:ncol,4,lchnk))
+    endif
+
     !===================================================
     ! Global mean total energy fixer
     !===================================================
+
     call t_startf('energy_fixer')
 
     call tot_energy_phys(state, 'phBF')
@@ -2746,24 +2891,25 @@ contains
     ! Save state for convective tendency calculations.
     call diag_conv_tend_ini(state, pbuf)
 
-    call cnst_get_ind('Q', ixq)
-    call cnst_get_ind('CLDLIQ', ixcldliq)
-    call cnst_get_ind('CLDICE', ixcldice)
-    qini     (:ncol,:pver) = state%q(:ncol,:pver,     ixq)
-    cldliqini(:ncol,:pver) = state%q(:ncol,:pver,ixcldliq)
-    cldiceini(:ncol,:pver) = state%q(:ncol,:pver,ixcldice)
+    if (.not. compute_enthalpy_flux) then
+       call cnst_get_ind('Q', ixq)
+       call cnst_get_ind('CLDLIQ', ixcldliq)
+       call cnst_get_ind('CLDICE', ixcldice)
+       qini     (:ncol,:pver) = state%q(:ncol,:pver,     ixq)
+       cldliqini(:ncol,:pver) = state%q(:ncol,:pver,ixcldliq)
+       cldiceini(:ncol,:pver) = state%q(:ncol,:pver,ixcldice)
 
-    totliqini(:ncol,:pver) = 0.0_r8
-    do m_cnst=1,thermodynamic_active_species_liq_num
-      m = thermodynamic_active_species_liq_idx(m_cnst)
-      totliqini(:ncol,:pver) = totliqini(:ncol,:pver)+state%q(:ncol,:pver,m)
-    end do
-    toticeini(:ncol,:pver) = 0.0_r8
-    do m_cnst=1,thermodynamic_active_species_ice_num
-      m = thermodynamic_active_species_ice_idx(m_cnst)
-      toticeini(:ncol,:pver) = toticeini(:ncol,:pver)+state%q(:ncol,:pver,m)
-    end do
-
+       totliqini(:ncol,:pver) = 0.0_r8
+       do m_cnst=1,thermodynamic_active_species_liq_num
+          m = thermodynamic_active_species_liq_idx(m_cnst)
+          totliqini(:ncol,:pver) = totliqini(:ncol,:pver)+state%q(:ncol,:pver,m)
+       end do
+       toticeini(:ncol,:pver) = 0.0_r8
+       do m_cnst=1,thermodynamic_active_species_ice_num
+          m = thermodynamic_active_species_ice_idx(m_cnst)
+          toticeini(:ncol,:pver) = toticeini(:ncol,:pver)+state%q(:ncol,:pver,m)
+       end do
+    end if
 
     call outfld('TEOUT', teout       , pcols, lchnk   )
     call outfld('TEINP', state%te_ini(:,dyn_te_idx), pcols, lchnk   )
@@ -2894,7 +3040,7 @@ contains
              state      , pbuf)
     if ( (trim(cam_take_snapshot_after) == "convect_diagnostics_calc") .and. &
          (trim(cam_take_snapshot_before) == trim(cam_take_snapshot_after))) then
-            call cam_snapshot_ptend_outfld(ptend, lchnk)
+       call cam_snapshot_ptend_outfld(ptend, lchnk)
     end if
 
     ! add reserve liquid to pbuf
@@ -2912,6 +3058,11 @@ contains
       snow_sed = 0._r8
       prec_str = 0._r8
       snow_str = 0._r8
+
+      if (compute_enthalpy_flux) then
+         ! In first time-step tphysac variables need to be zero'd out
+         call pbuf_set_field(pbuf, ifld, 0._r8)
+      end if
 
       if (is_subcol_on()) then
         prec_str_sc = 0._r8
@@ -2939,7 +3090,11 @@ contains
     call t_startf('cam_export')
     call pbuf_get_field(pbuf, psl_idx, psl)
     call cpslec(ncol, state%pmid, state%phis, state%ps, state%t, psl, gravit, rair)
-    call cam_export (state,cam_out,pbuf)
+    if (compute_enthalpy_flux) then
+       call cam_export(state, cam_out, pbuf, cam_in=cam_in)
+    else
+       call cam_export(state, cam_out, pbuf)
+    end if
     call t_stopf('cam_export')
 
     ! Write export state to history file
