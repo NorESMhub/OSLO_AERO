@@ -49,6 +49,29 @@ contains
       call addfld ('FSDSCDRF',horiz_only, 'A','W/m^2   ','SW downwelling clear sky flux at surface')
       call addfld ('FLUS    ',horiz_only, 'A','W/m^2   ','LW surface upwelling flux')
 
+      !+++ djlo +++  
+      call addfld ('FSNTAF'   ,horiz_only, 'A','W/m^2   ','Net solar flux at top of model from aerosol-free radiation call')  
+      call addfld ('FSNTCAF'  ,horiz_only, 'A','W/m^2   ','Clearsky net solar flux at top of model from aerosol-free radiation call')  
+      call addfld ('FSNTOAAF' ,horiz_only, 'A','W/m^2   ','Net solar flux at top of atmosphere from aerosol-free radiation call')  
+      call addfld ('FSNTOACAF',horiz_only, 'A','W/m^2   ','Clearsky net solar flux at top of atmosphere from aerosol-free radiation call')  
+      call addfld ('FSUTOAAF' ,horiz_only, 'A','W/m^2   ','Upwelling solar flux at top of atmosphere from aerosol-free radiation call')  
+
+      call addfld ('FLNTAF'   ,horiz_only, 'A','W/m^2   ','Net longwave flux at top of model from aerosol-free radiation call') 
+      call addfld ('FLNTCAF'  ,horiz_only, 'A','W/m^2   ','Clearsky net longwave flux at top of model from aerosol-free radiation call') 
+      call addfld ('FLUTAF'   ,horiz_only, 'A','W/m^2   ','Upwelling longwave flux at top of model from aerosol-free radiation call') 
+      call addfld ('FLUTCAF'  ,horiz_only, 'A','W/m^2   ','Clearsky upwelling longwave flux at top of model from aerosol-free radiation call') 
+
+      call addfld ('FSNSAF'   ,horiz_only, 'A','W/m^2   ','Net solar flux at surface from aerosol-free radiation call')
+      call addfld ('FSNSCAF'  ,horiz_only, 'A','W/m^2   ','Clearsky net solar flux at surface from aerosol-free radiation call')
+      call addfld ('FSDSAF'   ,horiz_only, 'A','W/m^2   ','Downwelling solar flux at surface from aerosol-free radiation call')
+      call addfld ('FSDSCAF'  ,horiz_only, 'A','W/m^2   ','Clearsky downwelling solar flux at surface from aerosol-free radiation call')
+
+      call addfld ('FLNSAF'   ,horiz_only, 'A','W/m^2   ','Net longwave flux at surface from aerosol-free radiation call')  
+      call addfld ('FLNSCAF'  ,horiz_only, 'A','W/m^2   ','Clearsky net longwave flux at surface from aerosol-free radiation call')  
+      call addfld ('FLDSAF'   ,horiz_only, 'A','W/m^2   ','Downwelling longwave flux at surface from aerosol-free radiation call')  
+      call addfld ('FLDSCAF'  ,horiz_only, 'A','W/m^2   ','Clearsky Downwelling longwave flux at surface from aerosol-free radiation call')  
+      !--- djlo ---  
+
       if ( history_aerosol_base ) then
         call add_default ('AODVIS  ', 1, ' ')
         call add_default ('ABSVIS  ', 1, ' ')
@@ -79,6 +102,30 @@ contains
          call add_default ('FSUS_DRF', 1, ' ')
          call add_default ('FSDSCDRF', 1, ' ')
          call add_default ('FLUS    ', 1, ' ')
+
+      !+++ djlo +++  
+         call add_default ('FSNTAF'   , 1, ' ')
+         call add_default ('FSNTCAF'  , 1, ' ')
+         call add_default ('FSNTOAAF' , 1, ' ')
+         call add_default ('FSNTOACAF', 1, ' ')
+         call add_default ('FSUTOAAF' , 1, ' ')
+
+         call add_default ('FLNTAF'   , 1, ' ')
+         call add_default ('FLNTCAF'  , 1, ' ')
+         call add_default ('FLUTAF'   , 1, ' ')
+         call add_default ('FLUTCAF'  , 1, ' ')
+
+         call add_default ('FSNSAF'   , 1, ' ')
+         call add_default ('FSNSCAF'  , 1, ' ')
+         call add_default ('FSDSAF'   , 1, ' ')
+         call add_default ('FSDSCAF'  , 1, ' ')
+
+         call add_default ('FLNSAF'   , 1, ' ')
+         call add_default ('FLNSCAF'  , 1, ' ')
+         call add_default ('FLDSAF'   , 1, ' ')
+         call add_default ('FLDSCAF'  , 1, ' ')
+      !--- djlo ---  
+
       endif
 
       if (use_aerocom) then

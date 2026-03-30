@@ -1354,6 +1354,20 @@ subroutine radiation_tend( &
                call outfld('FSNS_DRF',fsns     , pcols, lchnk)
                call outfld('FSNTCDRF',rd%fsntc , pcols, lchnk)
                call outfld('FSNSCDRF',rd%fsnsc , pcols, lchnk)
+
+               !+++ djlo +++ 
+               call outfld('FSNTAF'   ,fsnt        , pcols, lchnk)
+               call outfld('FSNTCAF'  ,rd%fsntc    , pcols, lchnk)
+               call outfld('FSNTOAAF' ,rd%fsntoa   , pcols, lchnk) 
+               call outfld('FSNTOACAF',rd%fsntoac  , pcols, lchnk) 
+               call outfld('FSUTOAAF' ,rd%fsutoa(:), pcols, lchnk)  
+
+               call outfld('FSNSAF'   ,fsns        , pcols, lchnk)
+               call outfld('FSNSCAF'  ,rd%fsnsc    , pcols, lchnk)
+               call outfld('FSDSAF'   ,fsds(:)     , pcols, lchnk)
+               call outfld('FSDSCAF'  ,rd%fsdsc(:) , pcols, lchnk)
+               !--- djlo ---
+
                if (use_aerocom) then
                   call outfld('FSUTADRF',rd%fsutoa(:) , pcols, lchnk)
                   call outfld('FSDS_DRF',fsds(:)      , pcols, lchnk)
@@ -1420,6 +1434,19 @@ subroutine radiation_tend( &
 
                call outfld('FLNT_DRF',flnt(:)    , pcols, lchnk)
                call outfld('FLNTCDRF',rd%flntc(:), pcols, lchnk)
+
+               !+++ djlo +++ 
+               call outfld('FLNTAF' ,flnt(:)    , pcols, lchnk)
+               call outfld('FLNTCAF',rd%flntc(:), pcols, lchnk)
+               call outfld('FLUTAF' ,rd%flut(:) , pcols, lchnk)
+               call outfld('FLUTCAF',rd%flutc(:), pcols, lchnk) 
+
+               call outfld('FLNSAF' ,flns(:)         , pcols, lchnk)
+               call outfld('FLNSCAF',rd%flnsc(:)     , pcols, lchnk)
+               call outfld('FLDSAF' ,cam_out%flwds(:), pcols, lchnk)
+               call outfld('FLDSCAF',rd%fldsc(:)     , pcols, lchnk) 
+               !--- djlo ---
+
                ! OSLO_AERO_END
 
                ! Note that aer_lw_abs which is an input to
