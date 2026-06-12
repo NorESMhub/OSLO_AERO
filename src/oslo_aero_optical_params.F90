@@ -18,7 +18,7 @@ module oslo_aero_optical_params
   use oslo_aero_conc,      only: calculateBulkProperties, partitionMass
   use oslo_aero_sw_tables, only: interpol0, interpol1, interpol2to3, interpol4, interpol5to10
   use oslo_aero_aerocom,   only: aerocom1, aerocom2
-  use oslo_aero_control,   only: use_aerocom
+  use oslo_aero_control,   only: use_aerocom, rh_fine_aer_scale_fact_optics
   use perf_mod,            only: t_startf, t_stopf
 
   implicit none
@@ -66,7 +66,7 @@ contains
     real(r8), intent(out) :: absvis(pcols)                        ! AAOD vis
 
     ! Local variables
-    integer  :: imode, index, ilev, ib, icol, mplus10
+    integer  :: imode, index, ilev, ib, icol, kcomp, irelh
     real(r8) :: Nnatk(pcols,pver,0:nmodes) ! aerosol mode number concentration
     logical  :: daylight(pcols)            ! SW calculations also at (polar) night in interpol* if daylight=.true.
     real(r8) :: aodvisvolc(pcols)          ! AOD vis for CMIP6 volcanic aerosol
@@ -103,6 +103,8 @@ contains
     real(r8) :: rh_temp(pcols,pver) ! relative humidity (fraction) for input to LUT
     real(r8) :: xrh(pcols,pver)
     integer  :: irh1(pcols,pver)
+    real(r8) :: xrh_sc(pcols,pver)   ! RH scaled by rh_fine_aer_scale_fact_optics for all modes except dust (6-7) and seasalt (8-10)
+    integer  :: irh1_sc(pcols,pver)
     real(r8) :: xfombg(pcols,pver)
     integer  :: ifombg1(pcols,pver), ifombg2(pcols,pver)
     real(r8) :: xct(pcols,pver,nmodes)
@@ -249,6 +251,23 @@ contains
          focm, fcm, xfac, ifac1, fbcm, xfbc, ifbc1, faqm, xfaq, ifaq1)
     call t_stopf('oslo_aero_input_interpol')
 
+    ! scale RH by rh_fine_aer_scale_fact_optics for all modes except dust (6-7) and seasalt (8-10).
+    do ilev=1,pver
+       do icol=1,ncol
+          xrh_sc(icol,ilev) = min(max(xrh(icol,ilev)*rh_fine_aer_scale_fact_optics, rh(1)), rh(10))
+       end do
+    end do
+    irh1_sc(:,:) = 1
+    do irelh=1,9
+       do ilev=1,pver
+          do icol=1,ncol
+             if (xrh_sc(icol,ilev) >= rh(irelh) .and. xrh_sc(icol,ilev) <= rh(irelh+1)) then
+                irh1_sc(icol,ilev) = irelh
+             end if
+          end do
+       end do
+    end do
+
     if (use_aerocom) then
        call aerocom1(lchnk, ncol, Cam, Nnatk, deltah_km, &
             xct, ict1, xfac, ifac1, xfbc, ifbc1, xfaq, ifaq1, &
@@ -265,33 +284,38 @@ contains
     call interpol0 (ncol, daylight, Nnatk, ssa, asym, be, ke, lw_on, kalw)
     call t_stopf('oslo_aero_interpol0')
 
-    mplus10=0
     ! SO4/SOA(Ait) mode:
     call t_startf('oslo_aero_interpol1')
-    call interpol1 (ncol, daylight, xrh, irh1, mplus10, &
+    call interpol1 (ncol, daylight, xrh_sc, irh1_sc, 1, &
          Nnatk, xfombg, ifombg1, xct, ict1,    &
          xfac, ifac1, ssa, asym, be, ke, lw_on, kalw)
     call t_stopf('oslo_aero_interpol1')
 
     ! BC(Ait) and OC(Ait) modes:
     call t_startf('oslo_aero_interpol2to3')
-    call interpol2to3 (ncol, daylight, xrh, irh1, mplus10, &
+    call interpol2to3 (ncol, daylight, xrh_sc, irh1_sc, 2, &
          Nnatk, xct, ict1, xfac, ifac1, &
          ssa, asym, be, ke, lw_on, kalw)
     call t_stopf('oslo_aero_interpol2to3')
 
     ! BC&OC(Ait) mode:   ------ fcm invalid here (=0). Using faitbc instead
     call t_startf('oslo_aero_interpol4')
-    call interpol4 (ncol, daylight, xrh, irh1, mplus10, &
+    call interpol4 (ncol, daylight, xrh_sc, irh1_sc, 4, &
          Nnatk, xfbcbg, ifbcbg1, xct, ict1,    &
          xfac, ifac1, xfaq, ifaq1, ssa, asym, be, ke, lw_on, kalw)
     call t_stopf('oslo_aero_interpol4')
 
-    ! SO4(Ait75) (5), Mineral (6-7) and Sea-salt (8-10) modes:
+    ! SO4(Ait75) (5), 
     call t_startf('oslo_aero_interpol5to10')
-    call interpol5to10 (ncol, daylight, xrh, irh1, &
-         Nnatk, xct, ict1, xfac, ifac1, &
-         xfbc, ifbc1, xfaq, ifaq1, ssa, asym, be, ke, lw_on, kalw)
+    call interpol5to10 (ncol, daylight, xrh_sc, irh1_sc, 5, &
+            Nnatk, xct, ict1, xfac, ifac1, &
+            xfbc, ifbc1, xfaq, ifaq1, ssa, asym, be, ke, lw_on, kalw)
+    ! Mineral (6-7) and Sea-salt (8-10) modes:
+    do kcomp=6,10
+       call interpol5to10 (ncol, daylight, xrh, irh1, kcomp, &
+            Nnatk, xct, ict1, xfac, ifac1, &
+            xfbc, ifbc1, xfaq, ifaq1, ssa, asym, be, ke, lw_on, kalw)
+    end do
     call t_stopf('oslo_aero_interpol5to10')
 
     ! total aerosol number concentrations
@@ -304,18 +328,16 @@ contains
     enddo
     call outfld('N_AER   ',n_aer ,pcols,lchnk)
 
-    ! BC(Ait) and OC(Ait) modes:
-    mplus10=1
+    ! BC(Ait) and OC(Ait) nucleation modes:
     call t_startf('oslo_aero_interpol2to3')
-    call interpol2to3 (ncol, daylight, xrh, irh1, mplus10, &
+    call interpol2to3 (ncol, daylight, xrh_sc, irh1_sc, 12, &
          Nnatk, xct, ict1, xfac, ifac1, &
          ssa, asym, be, ke, lw_on, kalw)
     call t_stopf('oslo_aero_interpol2to3')
 
     ! BC&OC(n) mode:    ------ fcm not valid here (=0). Use fnbc instead
-    mplus10=1
     call t_startf('oslo_aero_interpol4')
-    call interpol4 (ncol, daylight, xrh, irh1, mplus10, &
+    call interpol4 (ncol, daylight, xrh_sc, irh1_sc, 14, &
          Nnatk, xfbcbgn, ifbcbgn1, xct, ict1,  &
          xfac, ifac1, xfaq, ifaq1, ssa, asym, be, ke, lw_on, kalw)
     call t_stopf('oslo_aero_interpol4')

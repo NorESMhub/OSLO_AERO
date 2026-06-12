@@ -706,7 +706,7 @@ contains
   end subroutine intaeropt0
 
   !===============================================================================
-  subroutine intaeropt1 (lchnk, ncol, xrh, irh1, mplus10,    &
+  subroutine intaeropt1 (lchnk, ncol, xrh, irh1, kout, &
        Nnatk, xfombg, ifombg1, xct, ict1, xfac, ifac1, &
        bext440, bext500, bext550, bext670, bext870,    &
        bebg440, bebg500, bebg550, bebg670, bebg870,    &
@@ -724,7 +724,7 @@ contains
     ! Arguments
     integer  , intent(in)  :: lchnk                       ! chunk identifier
     integer  , intent(in)  :: ncol                        ! number of atmospheric columns
-    integer  , intent(in)  :: mplus10                     ! mode number (0) or number + 10 (1)
+    integer  , intent(in)  :: kout                        ! source mode index (1 or 11)
     real(r8) , intent(in)  :: xrh(pcols,pver)            ! level relative humidity (fraction)
     integer  , intent(in)  :: irh1(pcols,pver)
     real(r8) , intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
@@ -766,7 +766,7 @@ contains
     real(r8) , intent(out) :: backsc550(pcols,pver,0:nbmodes)
 
     ! Local variables
-    integer  :: iv, ierr, irelh, ifombg, ictot, ifac, kcomp, ilev, icol, kc10
+    integer  :: iv, ierr, irelh, ifombg, ictot, ifac, ilev, icol
     integer  :: t_irh1, t_irh2, t_ifo1, t_ifo2, t_ict1, t_ict2, t_ifc1, t_ifc2
     real(r8) :: a, b, e
     real(r8) :: t_fac1, t_fac2, t_xfac
@@ -778,13 +778,7 @@ contains
     real(r8) :: opt1, opt2, opt(38)
     !-------------------------------------------------------------------------
 
-    kcomp = 1
-    if (mplus10==0) then
-       kc10=kcomp
-    else
-       write(*,*) "mplus10=1 is no loger an option for kcomp=1."
-       stop
-    endif
+    integer, parameter :: kcomp = 1
 
     ! initialize all output fields
     do ilev=1,pver
@@ -837,7 +831,7 @@ contains
 
     do ilev=1,pver
        do icol=1,ncol
-          if(Nnatk(icol,ilev,kc10)>0) then
+          if(Nnatk(icol,ilev,kout)>0) then
 
              ! Collect all the vector elements into temporary storage
              ! to avoid cache conflicts and excessive cross-referencing
@@ -845,9 +839,9 @@ contains
              t_irh2 = t_irh1+1
              t_ifo1 = ifombg1(icol,ilev)
              t_ifo2 = t_ifo1+1
-             t_ict1 = ict1(icol,ilev,kcomp)
+             t_ict1 = ict1(icol,ilev,kout)
              t_ict2 = t_ict1+1
-             t_ifc1 = ifac1(icol,ilev,kcomp)
+             t_ifc1 = ifac1(icol,ilev,kout)
              t_ifc2 = t_ifc1+1
 
              t_rh1  = rh(t_irh1)
@@ -860,8 +854,8 @@ contains
              t_fac2 = fac(t_ifc2)
 
              t_xrh  = xrh(icol,ilev)
-             t_xct  = xct(icol,ilev,kc10)
-             t_xfac = xfac(icol,ilev,kcomp)
+             t_xct  = xct(icol,ilev,kout)
+             t_xfac = xfac(icol,ilev,kout)
              t_xfombg = xfombg(icol,ilev)
 
              ! partial lengths along each dimension (1-4) for interpolation
@@ -955,7 +949,7 @@ contains
 
   !===============================================================================
   subroutine intaeropt2to3 (&
-       lchnk, ncol, xrh, irh1, mplus10,                &
+       lchnk, ncol, xrh, irh1, kout,                   &
        Nnatk, xct, ict1, xfac, ifac1,                  &
        bext440, bext500, bext550, bext670, bext870,    &
        bebg440, bebg500, bebg550, bebg670, bebg870,    &
@@ -973,7 +967,7 @@ contains
     ! arguments
     integer  , intent(in)  :: lchnk                      ! chunk identifier
     integer  , intent(in)  :: ncol                       ! number of atmospheric columns
-    integer  , intent(in)  :: mplus10                    ! mode number (0) or number + 10 (1)
+    integer  , intent(in)  :: kout                       ! source mode index (2 or 12)
     real(r8) , intent(in)  :: xrh(pcols,pver)            ! level relative humidity (fraction)
     integer  , intent(in)  :: irh1(pcols,pver)
     real(r8) , intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
@@ -1014,21 +1008,14 @@ contains
 
     ! Local variables
     real(r8) :: a, b, e
-    integer  :: iv, kcomp, ilev, icol, kc10
+    integer  :: iv, ilev, icol
     integer  :: t_irh1, t_irh2, t_ict1, t_ict2, t_ifc1, t_ifc2
     real(r8) :: t_fac1, t_fac2, t_xfac, t_xrh, t_xct, t_rh1, t_rh2, t_cat1, t_cat2
     real(r8) :: d2mx(3), dxm1(3), invd(3)
     real(r8) :: opt3d(2,2,2)
     real(r8) :: opt1, opt2, opt(38)
+    integer, parameter :: kcomp = 2
     !-------------------------------------------------------------------------
-
-    ! SO4(Ait), BC(Ait) and OC(Ait) modes:
-    kcomp = 2
-    if (mplus10==0) then
-       kc10=kcomp
-    else
-       kc10=kcomp+10
-    endif
 
     ! initialize all output fields
     do ilev=1,pver
@@ -1081,13 +1068,13 @@ contains
 
     do ilev=1,pver
        do icol=1,ncol
-          if(Nnatk(icol,ilev,kc10)>0) then
+          if(Nnatk(icol,ilev,kout)>0) then
              ! Collect all the vector elements into temporary storage
              ! to avoid cache conflicts and excessive cross-referencing
 
              t_irh1 = irh1(icol,ilev)
              t_irh2 = t_irh1+1
-             t_ict1 = ict1(icol,ilev,kc10)
+             t_ict1 = ict1(icol,ilev,kout)
              t_ict2 = t_ict1+1
              t_ifc1 = ifac1(icol,ilev,kcomp)
              t_ifc2 = t_ifc1+1
@@ -1098,7 +1085,7 @@ contains
              t_fac1 = fac(t_ifc1)
              t_fac2 = fac(t_ifc2)
              t_xrh  = xrh(icol,ilev)
-             t_xct  = xct(icol,ilev,kc10)
+             t_xct  = xct(icol,ilev,kout)
              t_xfac = xfac(icol,ilev,kcomp)
 
              ! partial lengths along each dimension (1-4) for interpolation
@@ -1180,7 +1167,7 @@ contains
   end subroutine intaeropt2to3
 
   !===============================================================================
-  subroutine intaeropt4 (lchnk, ncol, xrh, irh1, mplus10, Nnatk,   &
+  subroutine intaeropt4 (lchnk, ncol, xrh, irh1, kout, Nnatk,   &
        xfbcbg, ifbcbg1, xct, ict1, xfac, ifac1, xfaq, ifaq1, &
        bext440, bext500, bext550, bext670, bext870,          &
        bebg440, bebg500, bebg550, bebg670, bebg870,          &
@@ -1198,7 +1185,7 @@ contains
     ! Arguments
     integer  , intent(in)  :: lchnk                      ! chunk identifier
     integer  , intent(in)  :: ncol                       ! number of atmospheric columns
-    integer  , intent(in)  :: mplus10                    ! mode number (0) or number + 10 (1)
+    integer  , intent(in)  :: kout                       ! source mode index (4 or 14)
     real(r8) , intent(in)  :: xrh(pcols,pver)            ! level relative humidity (fraction)
     integer  , intent(in)  :: irh1(pcols,pver)
     real(r8) , intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
@@ -1243,7 +1230,7 @@ contains
 
     ! Local variables
     real(r8) :: a, b, e
-    integer  :: iv, kcomp, ilev, icol, kc10
+    integer  :: iv, ilev, icol
     integer  :: t_irh1, t_irh2, t_ict1, t_ict2, t_ifc1, t_ifc2,  t_ifa1, t_ifa2
     integer  :: t_ifb1, t_ifb2
     real(r8) :: t_fbcbg1, t_fbcbg2
@@ -1257,12 +1244,7 @@ contains
     real(r8) :: opt1, opt2, opt(38)
     !-------------------------------------------------------------------------
 
-    kcomp = 4
-    if(mplus10==0) then
-       kc10=kcomp
-    else
-       kc10=kcomp+10
-    endif
+    integer, parameter :: kcomp = 4
 
     ! initialize all output fields
     do ilev=1,pver
@@ -1315,7 +1297,7 @@ contains
 
     do ilev=1,pver
        do icol=1,ncol
-          if(Nnatk(icol,ilev,kc10)>0) then
+          if(Nnatk(icol,ilev,kout)>0) then
              ! Collect all the vector elements into temporary storage
              ! to avoid cache conflicts and excessive cross-referencing
 
@@ -1323,7 +1305,7 @@ contains
              t_irh2 = t_irh1+1
              t_ifb1 = ifbcbg1(icol,ilev)
              t_ifb2 = t_ifb1+1
-             t_ict1 = ict1(icol,ilev,kc10)
+             t_ict1 = ict1(icol,ilev,kout)
              t_ict2 = t_ict1+1
              t_ifc1 = ifac1(icol,ilev,kcomp)
              t_ifc2 = t_ifc1+1
@@ -1343,7 +1325,7 @@ contains
 
              t_xrh  = xrh(icol,ilev)
              t_xfbcbg = xfbcbg(icol,ilev)
-             t_xct  = xct(icol,ilev,kc10)
+             t_xct  = xct(icol,ilev,kout)
              t_xfac = xfac(icol,ilev,kcomp)
              t_xfaq = xfaq(icol,ilev,kcomp)
 
@@ -1457,7 +1439,7 @@ contains
   end subroutine intaeropt4
 
   !===============================================================================
-  subroutine intaeropt5to10 (lchnk, ncol, xrh, irh1, Nnatk,    &
+  subroutine intaeropt5to10 (lchnk, ncol, xrh, irh1, kcomp, Nnatk,    &
        xct, ict1, xfac, ifac1, xfbc, ifbc1, xfaq, ifaq1, &
        bext440, bext500, bext550, bext670, bext870,      &
        bebg440, bebg500, bebg550, bebg670, bebg870,      &
@@ -1475,6 +1457,7 @@ contains
     ! arguments
     integer  , intent(in)  :: lchnk                       ! chunk identifier
     integer  , intent(in)  :: ncol                        ! number of atmospheric columns
+    integer  , intent(in)  :: kcomp                       ! mode index (5-10)
     real(r8) , intent(in)  :: xrh(pcols,pver)            ! level relative humidity (fraction)
     integer  ,  intent(in) :: irh1(pcols,pver)
     real(r8) , intent(in)  :: Nnatk(pcols,pver,0:nmodes) ! modal aerosol number concentration
@@ -1519,7 +1502,7 @@ contains
 
     ! Local variables
     real(r8) :: a, b, e
-    integer  :: iv, kcomp, ilev, icol
+    integer  :: iv, ilev, icol
     integer  :: t_irh1, t_irh2, t_ict1, t_ict2, t_ifa1, t_ifa2
     integer  :: t_ifb1, t_ifb2, t_ifc1, t_ifc2
     real(r8) :: t_faq1, t_faq2, t_xfaq
@@ -1534,12 +1517,10 @@ contains
 
     ! Modes 5 to 10 (SO4(Ait75) and mineral and seasalt-modes + cond./coag./aq.):
 
-    do kcomp=5,10
-
-       ! initialize all output fields
-       do ilev=1,pver
-          do icol=1,ncol
-             bext440(icol,ilev,kcomp)=0.0_r8
+    ! initialize all output fields
+    do ilev=1,pver
+       do icol=1,ncol
+          bext440(icol,ilev,kcomp)=0.0_r8
              babs440(icol,ilev,kcomp)=0.0_r8
              bext500(icol,ilev,kcomp)=0.0_r8
              babs500(icol,ilev,kcomp)=0.0_r8
@@ -1726,7 +1707,6 @@ contains
              endif
           end do ! icol
        end do ! ilev
-    end do  ! kcomp
   end subroutine intaeropt5to10
 
   !===============================================================================

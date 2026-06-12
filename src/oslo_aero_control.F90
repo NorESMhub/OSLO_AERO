@@ -29,7 +29,8 @@ module oslo_aero_control
 
   ! Public Namelist variables:
   logical, public, protected :: use_aerocom = .false. ! If true, turn on aerocom output
-
+  
+  real(r8), public, protected :: rh_fine_aer_scale_fact_optics = 1.0_r8
   ! Private Namelist variables:
   real(r8)          :: volc_fraction_coarse = 0.0_r8  !Fraction of volcanic aerosols in coarse mode
   character(len=dir_string_length) :: aerotab_table_dir = unset_str
@@ -61,7 +62,7 @@ contains
     namelist /oslo_ctl_nl/ volc_fraction_coarse, aerotab_table_dir, dms_source, &
                            dms_source_type, opom_source, opom_source_type, &
                            ocean_filename, ocean_filepath, dms_cycle_year, opom_cycle_year, &
-                           use_aerocom
+                           use_aerocom, rh_fine_aer_scale_fact_optics
     !-----------------------------------------------------------------------------
 
     if (masterproc) then
@@ -106,6 +107,11 @@ contains
     if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: ocean_filename")
     call mpi_bcast(ocean_filepath, len(ocean_filepath), mpi_character, mstrid, mpicom, ierr)
     if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: ocean_filepath")
+
+    ! Relhum scaling in the optics for tuning of aerosol optical depth
+    call mpi_bcast(rh_fine_aer_scale_fact_optics, len(ocean_filename), mpi_character, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: rh_fine_aer_scale_fact_optics")
+
 
     ! Reset dms_source if ocean is sending dms to atm
     if (dms_from_ocn) then

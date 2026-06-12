@@ -22,6 +22,8 @@ module oslo_aero_seasalt
   integer, parameter, public :: seasalt_nbin = numberOfSaltModes  ! needed by mo_photo.F90
   logical, parameter, public :: seasalt_active = .true.
 
+  real(r8):: emis_scale = huge(1.0_r8)
+
   integer :: modeMap(numberOfSaltModes)    ! [idx] which modes are we modifying
   integer :: tracerMap(numberOfSaltModes)  ! [idx] which tracers are we modifying
 
@@ -32,8 +34,8 @@ module oslo_aero_seasalt
 contains
 !===============================================================================
 
-  subroutine oslo_aero_seasalt_init()
-
+  subroutine oslo_aero_seasalt_init(seasalt_emis_scale)
+    real(r8), intent(in) :: seasalt_emis_scale
     integer :: imode
 
     modeMap(1) = MODE_IDX_SS_A1
@@ -48,6 +50,8 @@ contains
     do imode = 1,numberOfSaltModes
        seasalt_names(imode) = cnst_name(tracerMap(imode))
     end do
+
+    emis_scale = seasalt_emis_scale
 
   end subroutine oslo_aero_seasalt_init
 
@@ -90,8 +94,11 @@ contains
     !updated value for Salter et al. sea-salt treatment, which gives global annual SS_A1 emissions of
     !2.663 instead of 0.153 ng m-2 s-1 (i.e. ca 17 times more than the old sea-salt treatment):
     real(r8), parameter :: seasaltToSpracklenOM2 = 3.03_r8*0.153_r8/2.663_r8
+    
+    ! Scaling of emissions
+    real(r8), parameter :: factorlist(numberOfSaltModes) = (/ 0.5_r8, 0.5_r8, 0.75_r8 /)
     !-----------------------------------------------------------------------
-
+   
     ! start with midpoint wind speed
     u10m(:ncol)=sqrt(u(:ncol)**2 + v(:ncol)**2)
 
@@ -117,15 +124,18 @@ contains
     end do
 
     do imode=1,numberOfSaltModes
-       cflx(:ncol, tracerMap(imode)) = numberFlux(:ncol,imode)    & !#/m2/sec
+       cflx(:ncol, tracerMap(imode)) = factorlist(imode) * numberFlux(:ncol,imode)    & !#/m2/sec
                                  / volumeToNumber(modeMap(imode)) & !==> m3/m2/sec
                                  * rhopart(tracerMap(imode))        !==> kg/m2/sec
+       cflx(:ncol, tracerMap(imode)) = cflx(:ncol, tracerMap(imode)) * emis_scale ! scale seaalt 
     end do
-    spracklenOMOceanSource(:ncol) = cflx(:ncol, tracerMap(1))*seasaltToSpracklenOM2
+    spracklenOMOceanSource(:ncol) = 1.0_r8 / factorlist(1) * cflx(:ncol, tracerMap(1))*seasaltToSpracklenOM2
 
     if (oslo_aero_opom_inq())then
        call oslo_aero_opom_emis(&
-            cflx(:ncol, tracerMap(1)), cflx(:ncol,tracerMap(2)), cflx(:ncol,tracerMap(3)), &
+            1.0_r8 / factorlist(1) * cflx(:ncol, tracerMap(1)), & 
+            1.0_r8 / factorlist(2) * cflx(:ncol, tracerMap(2)), &
+            1.0_r8 / factorlist(3) * cflx(:ncol, tracerMap(3)), &
             open_ocean, ncol, lchnk, onOMOceanSource )
        OMOceanSource(:ncol) = onOMOceanSource(:ncol)
     else
