@@ -636,8 +636,8 @@ subroutine rad_rrtmg_sw(lchnk,ncol       ,rrtmg_levs   ,r_state      , &
    ! OSLO_AERO end
    if (present(idrf)) then
       if (idrf) then
-         call outfld('FUSCDRF ', fusc(:ncol,:), ncol, lchnk)
-         call outfld('FDSCDRF ', fdsc(:ncol,:), ncol, lchnk)
+         call outfld('FUSCAF', fusc(:ncol,:), ncol, lchnk)
+         call outfld('FDSCAF', fdsc(:ncol,:), ncol, lchnk)
       endif
    end if
 

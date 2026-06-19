@@ -547,8 +547,8 @@ subroutine radiation_init(pbuf2d)
    end do
 
    ! OSLO_AERO begin
-   call addfld('FDSCDRF', (/ 'ilev' /), 'A', 'W/m2', 'Shortwave clear-sky downward flux')
-   call addfld('FUSCDRF', (/ 'ilev' /), 'A', 'W/m2', 'Shortwave clear-sky upward flux')
+   call addfld('FDSCAF', (/ 'ilev' /), 'A', 'W/m2', 'Shortwave clear-sky downward flux from aerosol-free radiation call')
+   call addfld('FUSCAF', (/ 'ilev' /), 'A', 'W/m2', 'Shortwave clear-sky upward flux from aerosol-free radiation call')
    ! OSLO_AERO end
 
    if (scm_crm_mode) then
@@ -1341,21 +1341,15 @@ subroutine radiation_tend( &
                   E_cld_tau_w_f=c_cld_tau_w_f, old_convert=.false., idrf=.true.)
 
                ! Dump shortwave radiation information to history tape buffer (diagnostics)
-               ! Note that DRF fields are now from the aer_tau=0 call (clean), no longer with
+               ! Note that AF fields are now from the aer_tau=0 call (clean), no longer with
                ! aer_tau from oslo_aero_optical_params_calc
 
                ftem(:ncol,:pver) = qrs(:ncol,:pver)/cpair
-               call outfld('QRS_DRF ',ftem  ,pcols,lchnk)
+               call outfld('QRSAF',ftem  ,pcols,lchnk)
 
                ftem(:ncol,:pver) = rd%qrsc(:ncol,:pver)/cpair
-               call outfld('QRSC_DRF',ftem  ,pcols,lchnk)
+               call outfld('QRSCAF',ftem  ,pcols,lchnk)
 
-               call outfld('FSNT_DRF',fsnt     , pcols, lchnk)
-               call outfld('FSNS_DRF',fsns     , pcols, lchnk)
-               call outfld('FSNTCDRF',rd%fsntc , pcols, lchnk)
-               call outfld('FSNSCDRF',rd%fsnsc , pcols, lchnk)
-
-               !+++ djlo +++ 
                call outfld('FSNTAF'   ,fsnt        , pcols, lchnk)
                call outfld('FSNTCAF'  ,rd%fsntc    , pcols, lchnk)
                call outfld('FSNTOAAF' ,rd%fsntoa   , pcols, lchnk) 
@@ -1366,15 +1360,6 @@ subroutine radiation_tend( &
                call outfld('FSNSCAF'  ,rd%fsnsc    , pcols, lchnk)
                call outfld('FSDSAF'   ,fsds(:)     , pcols, lchnk)
                call outfld('FSDSCAF'  ,rd%fsdsc(:) , pcols, lchnk)
-               !--- djlo ---
-
-               if (use_aerocom) then
-                  call outfld('FSUTADRF',rd%fsutoa(:) , pcols, lchnk)
-                  call outfld('FSDS_DRF',fsds(:)      , pcols, lchnk)
-                  ftem_1d(1:ncol) = fsds(1:ncol)-fsns(1:ncol)
-                  call outfld('FSUS_DRF',ftem_1d      , pcols, lchnk)
-                  call outfld('FSDSCDRF',rd%fsdsc(:)  , pcols, lchnk)
-               end if
 
                call rad_rrtmg_sw( &
                   lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,          &
@@ -1432,10 +1417,6 @@ subroutine radiation_tend( &
                     rd%flut, rd%flutc, fnl, fcnl, rd%fldsc,                   &
                     lu, ld)
 
-               call outfld('FLNT_DRF',flnt(:)    , pcols, lchnk)
-               call outfld('FLNTCDRF',rd%flntc(:), pcols, lchnk)
-
-               !+++ djlo +++ 
                call outfld('FLNTAF' ,flnt(:)    , pcols, lchnk)
                call outfld('FLNTCAF',rd%flntc(:), pcols, lchnk)
                call outfld('FLUTAF' ,rd%flut(:) , pcols, lchnk)
@@ -1445,7 +1426,6 @@ subroutine radiation_tend( &
                call outfld('FLNSCAF',rd%flnsc(:)     , pcols, lchnk)
                call outfld('FLDSAF' ,cam_out%flwds(:), pcols, lchnk)
                call outfld('FLDSCAF',rd%fldsc(:)     , pcols, lchnk) 
-               !--- djlo ---
 
                ! OSLO_AERO_END
 
