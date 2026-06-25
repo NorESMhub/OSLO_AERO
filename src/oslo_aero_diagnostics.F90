@@ -29,7 +29,7 @@ contains
       call addfld ('CABSVIS ',horiz_only,  'A','unitless' ,'Clear air aerosol absorptive optical depth')
       call addfld ('CLDFREE ',horiz_only,  'A','unitless' ,'Cloud free fraction wrt CAODVIS and CABSVIS')
       call addfld ('DAYFOC  ',horiz_only,  'A','unitless' ,'Daylight fraction')
-      call addfld ('N_AER   ',(/'lev'/),   'A', 'unitless','Aerosol number concentration')
+      call addfld ('N_AER   ',(/'lev'/),   'A','1/cm3   ' ,'Aerosol number concentration')
       call addfld ('SSAVIS  ',(/'lev'/),   'A','unitless' ,'Aerosol single scattering albedo in visible wavelength band')
       call addfld ('ASYMMVIS',(/'lev'/),   'A','unitless' ,'Aerosol assymetry factor in visible wavelength band')
       call addfld ('EXTVIS  ',(/'lev'/),   'A','1/km    ' ,'Aerosol extinction')
