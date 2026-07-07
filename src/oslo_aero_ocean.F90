@@ -189,6 +189,10 @@ contains
       call add_default('odms', 1, ' ')
    endif
 
+    call addfld('emipomocean', horiz_only,  'A',  'kg/m2/sec', 'POM ocean emissions flux' )
+    call add_default('emipomocean', 1, ' ')
+
+
   endsubroutine oslo_aero_ocean_init
 
   !===============================================================================
@@ -311,6 +315,8 @@ contains
        flux(:ncol)   = c_o*omFrac(:ncol) * em_ss1(:ncol)
        opomem_out(:ncol) = flux(:ncol)
     endif
+
+    call outfld('emipomocean', flux(:ncol), ncol, lchnk)
 
   end subroutine oslo_aero_opom_emis
 
