@@ -17,9 +17,11 @@ module mo_gas_phase_chemdr
 
   private
   public :: gas_phase_chemdr, gas_phase_chemdr_inti
-  public :: map2chm
+  public :: initialize_map2chm
 
-  integer :: map2chm(pcnst) = 0           ! index map to/from chemistry/constituents list
+  integer, public, protected :: map2chm(pcnst) = 0  ! index map to/from chemistry/constituents list
+  integer                    :: flbc_map(pcnst) = 0 ! map2chm with emissions-driven species excluded from FLBC
+  logical :: map2chm_initialized = .false.
 
   integer :: so4_ndx, h2o_ndx, o2_ndx, o_ndx, hno3_ndx, hcl_ndx, cldice_ndx, snow_ndx
   integer :: o3_ndx, o3s_ndx, o3_inv_ndx, srf_ozone_pbf_ndx=-1
@@ -60,17 +62,32 @@ module mo_gas_phase_chemdr
 
 contains
 
+  subroutine initialize_map2chm(new_map)
+    use cam_abortutils, only : endrun
+
+    ! Initialize map2chm
+    integer, intent(in) :: new_map(:)
+
+    if (map2chm_initialized) then
+       call endrun("initialize_map2chm: map2chm is already initialized")
+    else
+       map2chm_initialized = .true.
+       map2chm(:) = new_map(:)
+    end if
+  end subroutine initialize_map2chm
+
   subroutine gas_phase_chemdr_inti()
 
     ! OSLO_AERO begin
-    use mo_chem_utls,      only : get_spc_ndx, get_extfrc_ndx, get_rxt_ndx, get_inv_ndx
+    use mo_chem_utls,   only : get_spc_ndx, get_extfrc_ndx, get_rxt_ndx, get_inv_ndx
     ! OSLO_AERO end
-    use cam_history,       only : addfld,add_default,horiz_only
-    use mo_chm_diags,      only : chm_diags_inti
-    use constituents,      only : cnst_get_ind
-    use physics_buffer,    only : pbuf_get_index
-    use rate_diags,        only : rate_diags_init
-    use cam_abortutils,    only : endrun
+    use cam_history,    only : addfld,add_default,horiz_only
+    use mo_chm_diags,   only : chm_diags_inti
+    use constituents,   only : cnst_get_ind
+    use physics_buffer, only : pbuf_get_index
+    use rate_diags,     only : rate_diags_init
+    use co2_cycle,      only : co2_transport, c_i
+    use cam_abortutils, only : endrun
 
     character(len=3) :: string
     integer          :: n, m, err, ii
@@ -95,6 +112,13 @@ contains
     ! OSLO_AERO end
 
     ndx_h2so4 = get_spc_ndx('H2SO4')
+
+    ! Do not apply FLBC to CO2 tracer in emission-driven runs
+    flbc_map(:) = map2chm(:)
+    if (co2_transport()) then
+       flbc_map(c_i(4)) = 0
+    end if
+
 !
 ! CCMI
 !
@@ -1095,7 +1119,7 @@ contains
     !-----------------------------------------------------------------------
     !         ... Set fixed lower boundary mmr values
     !-----------------------------------------------------------------------
-    call flbc_set( vmr, ncol, lchnk, map2chm )
+    call flbc_set( vmr, ncol, lchnk, flbc_map )
 
     if ( ghg_chem ) then
        call ghg_chem_set_flbc( vmr, ncol )
