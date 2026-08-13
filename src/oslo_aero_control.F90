@@ -109,7 +109,7 @@ contains
     if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: ocean_filepath")
 
     ! Relhum scaling in the optics for tuning of aerosol optical depth
-    call mpi_bcast(rh_fine_aer_scale_fact_optics, len(ocean_filename), mpi_character, mstrid, mpicom, ierr)
+    call mpi_bcast(rh_fine_aer_scale_fact_optics, 1, mpi_real8, mstrid, mpicom, ierr)
     if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: rh_fine_aer_scale_fact_optics")
 
 
