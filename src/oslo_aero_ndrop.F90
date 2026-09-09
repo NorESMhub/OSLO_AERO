@@ -17,7 +17,7 @@ module oslo_aero_ndrop
   use phys_control,      only: phys_getopts, use_hetfrz_classnuc
   use ref_pres,          only: top_lev => trop_cloud_top_lev
   use shr_spfn_mod,      only: erf => shr_spfn_erf
-  use cam_history,       only: addfld, add_default, horiz_only, fieldname_len, outfld
+  use cam_history,       only: addfld, add_default, horiz_only, fieldname_len, outfld, hist_fld_active
   use cam_abortutils,    only: endrun
   use cam_logfile,       only: iulog
   use perf_mod,          only: t_startf, t_stopf
@@ -51,9 +51,11 @@ module oslo_aero_ndrop
   real(r8) :: sq2, sqpi
 
   ! supersaturation (%) to determine ccn concentration
-  integer,  parameter :: psat=7    ! number of supersaturations to calc ccn concentration
-  real(r8), parameter :: supersat(psat)= (/ 0.02_r8, 0.05_r8, 0.1_r8, 0.15_r8, 0.2_r8, 0.5_r8, 1.0_r8 /)
-  character(len=8) :: ccn_name(psat)= (/'CCN1','CCN2','CCN3','CCN4','CCN5','CCN6','CCN7'/)
+  integer,  parameter :: psat=16    ! number of supersaturations to calc ccn concentration
+  integer,  parameter :: psat_old=7    ! number of supersaturations to calc ccn concentration
+  ! CCN1,....CCN7 is the original format, while CCN005,...CCN100 is added for aerocom output and can potentially replace the original format eventually
+  real(r8), parameter :: supersat(psat)= (/ 0.02_r8, 0.05_r8, 0.1_r8, 0.15_r8, 0.2_r8, 0.5_r8, 1.0_r8, 0.05_r8, 0.08_r8, 0.12_r8, 0.2_r8, 0.3_r8, 0.45_r8, 0.6_r8, 0.75_r8, 1.0_r8/)
+  character(len=8), parameter :: ccn_name(psat)= (/'CCN1', 'CCN2', 'CCN3', 'CCN4', 'CCN5', 'CCN6', 'CCN7', 'CCN005', 'CCN008', 'CCN012', 'CCN020', 'CCN030', 'CCN045', 'CCN060', 'CCN075', 'CCN100'/)
 
   ! indices in state and pbuf structures
   integer :: numliq_idx = -1
@@ -262,9 +264,13 @@ contains
     call addfld('CCN5',(/ 'lev' /), 'A','#/cm3','CCN concentration at S=0.2%')
     call addfld('CCN6',(/ 'lev' /), 'A','#/cm3','CCN concentration at S=0.5%')
     call addfld('CCN7',(/ 'lev' /), 'A','#/cm3','CCN concentration at S=1.0%')
+    do isat =(psat_old+1),psat
+        WRITE(long_name,'(a,f0.2,a)') 'CCN concentration at S=', supersat(isat), '%'
+        call addfld(ccn_name(isat),(/ 'lev' /), 'A','#/cm3', long_name)
+    end do
 
     if(history_aerosol)then
-       do isat = 1, psat
+       do isat = 1, psat_old ! Once the new diagnostics replace the old ones, this can be changed to psat
           call add_default(ccn_name(isat), 1, ' ')
        enddo
     end if
@@ -1468,7 +1474,7 @@ contains
    call ccncalc_oslo(state, pbuf, cs, hasAerosol, numberConcentration, volumeConcentration, &
       hygroscopicity, lnSigma, ccn)
    do isat = 1, psat
-      call outfld(ccn_name(isat), ccn(:ncol,:,isat), ncol, lchnk)
+       call outfld(ccn_name(isat), ccn(:ncol,:,isat), ncol, lchnk)
    enddo
 
     tendencyCounted(:)=.FALSE.
@@ -2066,16 +2072,17 @@ contains
 
                 !Solve eqn 13 in ARGII
                 do lsat = 1,psat
+                   if (hist_fld_active(ccn_name(lsat))) then
+                       !eqn 15 in ARGII
+                       argfactor = twothird/(sq2*lnSigma(icol,ilev,imode))
 
-                   !eqn 15 in ARGII
-                   argfactor = twothird/(sq2*lnSigma(icol,ilev,imode))
+                       !eqn 15 in ARGII
+                       arg = argfactor*log(sm/super(lsat))
 
-                   !eqn 15 in ARGII
-                   arg = argfactor*log(sm/super(lsat))
+                       !eqn 13 icol ARGII
+                       ccn(icol,ilev,lsat) = ccn(icol,ilev,lsat) + numberConcentration(icol,ilev,imode)*0.5_r8*(1._r8-erf(arg))
 
-                   !eqn 13 icol ARGII
-                   ccn(icol,ilev,lsat) = ccn(icol,ilev,lsat) + numberConcentration(icol,ilev,imode)*0.5_r8*(1._r8-erf(arg))
-
+                   end if
                 end do
              end if
           end do
