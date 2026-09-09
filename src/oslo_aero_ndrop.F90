@@ -270,7 +270,7 @@ contains
     end do
 
     if(history_aerosol)then
-       do isat = 1, psat_old ! smb: Once the new diagnostics replace the old ones, this can be changed to psat
+       do isat = 1, psat_old ! Once the new diagnostics replace the old ones, this can be changed to psat
           call add_default(ccn_name(isat), 1, ' ')
        enddo
     end if
