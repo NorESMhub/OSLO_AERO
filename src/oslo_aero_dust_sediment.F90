@@ -208,7 +208,7 @@ contains
     integer   , intent(in)  :: ncol                      ! number of colums to process
     real (r8) , intent(in)  :: x(pcols, pverp)
     real (r8) , intent(in)  :: f(pcols, pverp)
-    real (r8) , intent(out) :: fdot(pcols, pverp)
+    real (r8) , intent(inout) :: fdot(pcols, pverp)
     real (r8) , intent(in)  :: xin(pcols)
     real (r8) , intent(out) :: fxdot(pcols)
     real (r8) , intent(out) :: fxdd(pcols)
