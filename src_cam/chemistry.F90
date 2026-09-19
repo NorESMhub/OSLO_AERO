@@ -950,6 +950,7 @@ end function chem_is_active
     use hco_cc_emissions, only: hco_set_srf_emissions
     use fire_emissions,   only: fire_emissions_srf
     use ocean_emis,       only: ocean_emis_getflux
+    use co2_cycle,        only: c_i, co2_transport
     ! OSLO_AERO begin
     use oslo_aero_share,  only: l_dms, l_isoprene, l_monoterp
     use oslo_aero_share,  only: aerosolType, sulfurMassFraction
@@ -985,8 +986,12 @@ end function chem_is_active
     ! initialize chemistry constituent surface fluxes to zero
     do m = 2,pcnst
        n = map2chm(m)
-       if (n>0) cam_in%cflx(:,m) = 0._r8
-    enddo
+       if (n > 0) then
+          ! Do not reset CO2 species in emission-driven runs
+          if (co2_transport() .and. ANY(c_i == n)) cycle
+          cam_in%cflx(:,m) = 0._r8
+       end if
+    end do
 
     ! OSLO_AERO begin
    ! initialize an array to hold the aerosol emissions for each aerosol type
