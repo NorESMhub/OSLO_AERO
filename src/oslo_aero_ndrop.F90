@@ -53,9 +53,12 @@ module oslo_aero_ndrop
   ! supersaturation (%) to determine ccn concentration
   integer,  parameter :: psat=16    ! number of supersaturations to calc ccn concentration
   integer,  parameter :: psat_old=7    ! number of supersaturations to calc ccn concentration
-  ! CCN1,....CCN7 is the original format, while CCN005,...CCN100 is added for aerocom output and can potentially replace the original format eventually
-  real(r8), parameter :: supersat(psat)= (/ 0.02_r8, 0.05_r8, 0.1_r8, 0.15_r8, 0.2_r8, 0.5_r8, 1.0_r8, 0.05_r8, 0.08_r8, 0.12_r8, 0.2_r8, 0.3_r8, 0.45_r8, 0.6_r8, 0.75_r8, 1.0_r8/)
-  character(len=8), parameter :: ccn_name(psat)= (/'CCN1', 'CCN2', 'CCN3', 'CCN4', 'CCN5', 'CCN6', 'CCN7', 'CCN005', 'CCN008', 'CCN012', 'CCN020', 'CCN030', 'CCN045', 'CCN060', 'CCN075', 'CCN100'/)
+  ! CCN1,....CCN7 is the original format, while CCN005,...CCN100 is added for aerocom
+  ! output and can potentially replace the original format eventually
+  real(r8), parameter :: supersat(psat)= (/ 0.02_r8, 0.05_r8, 0.1_r8, 0.15_r8, 0.2_r8, 0.5_r8, 1.0_r8, &
+       0.05_r8, 0.08_r8, 0.12_r8, 0.2_r8, 0.3_r8, 0.45_r8, 0.6_r8, 0.75_r8, 1.0_r8/)
+  character(len=8), parameter :: ccn_name(psat)= (/'CCN1  ', 'CCN2  ', 'CCN3  ', 'CCN4  ', 'CCN5  ', &
+       'CCN6  ', 'CCN7  ', 'CCN005', 'CCN008', 'CCN012', 'CCN020', 'CCN030', 'CCN045', 'CCN060', 'CCN075', 'CCN100'/)
 
   ! indices in state and pbuf structures
   integer :: numliq_idx = -1
@@ -297,12 +300,12 @@ contains
     ! arguments
     type(physics_state), target, intent(in)  :: state
     type(physics_ptend),         intent(out) :: ptend
-    real(r8),                    intent(in)  :: dtmicro                                  ! time step for microphysics (s)
+    real(r8),                    intent(in)  :: dtmicro             ! time step for microphysics (s)
     type(physics_buffer_desc),   pointer     :: pbuf(:)
-    real(r8),                    intent(in)  :: wsub(pcols,pver)                         ! subgrid vertical velocity
-    real(r8),                    intent(in)  :: cldn(pcols,pver)                         ! cloud fraction
-    real(r8),                    intent(in)  :: cldo(pcols,pver)                         ! cloud fraction on previous time step
-    real(r8),                    intent(in)  :: cldliqf(pcols,pver)                      ! liquid cloud fraction (liquid / (liquid + ice))
+    real(r8),                    intent(in)  :: wsub(pcols,pver)    ! subgrid vertical velocity
+    real(r8),                    intent(in)  :: cldn(pcols,pver)    ! cloud fraction
+    real(r8),                    intent(in)  :: cldo(pcols,pver)    ! cloud fraction on previous time step
+    real(r8),                    intent(in)  :: cldliqf(pcols,pver) ! liquid cloud fraction (liquid / (liquid + ice))
     logical ,                    intent(in)  :: hasAerosol(pcols, pver, nmodes)
     real(r8),                    intent(in)  :: CProcessModes(pcols,pver)
     real(r8),                    intent(in)  :: f_c(pcols,pver)
@@ -320,7 +323,7 @@ contains
     real(r8),                    intent(in)  :: volumeConcentration(pcols,pver,nmodes)   ![m3/m3] volume concentration
     real(r8),                    intent(in)  :: hygroscopicity(pcols,pver,nmodes)        ![-] hygroscopicity
     real(r8),                    intent(in)  :: lnsigma(pcols,pver,nmodes)               ![-] log(base e) sigma
-    real(r8),                    intent(out) :: tendnd(pcols,pver)                       ! change in droplet number concentration (#/kg/s)
+    real(r8),                    intent(out) :: tendnd(pcols,pver)                       ! change in droplet number conc. (#/kg/s)
 
     ! Local variables
     integer  :: lchnk                           ! chunk identifier
@@ -663,14 +666,16 @@ contains
                        *(1.0_r8 - f_acm(icol,ilev,imode)) & !sulfate fraction
                        *(1.0_r8 - f_aqm(icol,ilev,imode)) & !fraction not from aq phase
                        *(f_so4_condm(icol,ilev,imode)))   & !fraction being condensate
-                       /(CProcessModes(icol,ilev)*(1.0_r8-f_c(icol,ilev))*(1.0_r8-f_aq(icol,ilev))*f_so4_cond(icol,ilev)+smallNumber) !total so4 condensate
+                       /(CProcessModes(icol,ilev)*(1.0_r8-f_c(icol,ilev))*(1.0_r8-f_aq(icol,ilev)) &
+                       *f_so4_cond(icol,ilev)+smallNumber) !total so4 condensate
 
                else if (l_so4_ac == tracerIndex) then ! so4 coagulation
                   componentFractionOK(imode,tracerIndex,ilev) = (Cam(icol,ilev,imode) &
                        *(1.0_r8 - f_acm(icol,ilev,imode)) &         !sulfate fraction
                        *(1.0_r8 - f_aqm(icol,ilev,imode)) &         !fraction not from aq phase
                        *(1.0_r8 - f_so4_condm(icol,ilev,imode))) &  !fraction not being condensate
-                       /(CProcessModes(icol,ilev)*(1.0_r8-f_c(icol,ilev))*(1.0_r8-f_aq(icol,ilev))*(1.0_r8-f_so4_cond(icol,ilev)) + smallNumber)
+                       /(CProcessModes(icol,ilev)*(1.0_r8-f_c(icol,ilev))*(1.0_r8-f_aq(icol,ilev)) &
+                       *(1.0_r8-f_so4_cond(icol,ilev)) + smallNumber)
 
                else if (l_so4_a2 == tracerIndex) then  !so4 wet phase
                   componentFractionOK(imode,tracerIndex,ilev) = (Cam(icol,ilev,imode) &
@@ -2062,7 +2067,8 @@ contains
 
                 ! Numbe rmedian radius (power of three)
                 ! By definition of lognormal distribution only if variable size dist
-                amcube =(3._r8*volumeConcentration(icol,ilev,imode) /(4._r8*pi*exp45logsig_var*numberConcentration(icol,ilev,imode)))
+                amcube =(3._r8*volumeConcentration(icol,ilev,imode) / &
+                     (4._r8*pi*exp45logsig_var*numberConcentration(icol,ilev,imode)))
 
                 !This is part of eqn 9 in ARGII where A smcoefcoef is 2/3^(3/2)
                 smcoef = smcoefcoef * a * sqrt(a)
