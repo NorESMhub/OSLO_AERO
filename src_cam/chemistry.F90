@@ -152,6 +152,8 @@ module chemistry
   integer :: srf_ozone_pbf_ndx = -1
   logical :: srf_emis_diag(pcnst) = .false.
 
+  integer :: indx_co2 = -1 ! Index of CO2 constituent
+
 !================================================================================================
 contains
 !================================================================================================
@@ -922,6 +924,9 @@ end function chem_is_active
    call summation_fields_init()
    !OSLO_AERO end
 
+   ! Store the index of the CO2 tracer if one exists
+   call cnst_get_ind('CO2', indx_co2, abort=.false.)
+
   contains
 
     pure logical function aero_has_emis(spcname)
@@ -988,7 +993,7 @@ end function chem_is_active
        n = map2chm(m)
        if (n > 0) then
           ! Do not reset CO2 species in emission-driven runs
-          if (co2_transport() .and. ANY(c_i == n)) cycle
+          if (co2_transport() .and. (m == indx_co2)) cycle
           cam_in%cflx(:,m) = 0._r8
        end if
     end do
