@@ -1575,14 +1575,16 @@ contains
 
     ! Extra AeroCom diagnostics requiring table look-ups with RH = constant
     ! Note: using xrhnull etc as proxy for constant RH input values
-    irf = 1
-    do ilev=1,pver
-       do icol=1,ncol
-          xrhnull(icol,ilev) = xrhrf(irf)
-          irh1null(icol,ilev) = irhrf1(irf)
-       end do
-    enddo
-    call opticsAtConstRh(&
+    ! irf=1 => RH=0% (dry); irf=2 => RH=40%; irf=6 => RH=85% (see RF in oslo_aero_share)
+    do irf = 1, 6
+       if (irf/=1 .and. irf/=2 .and. irf/=6) cycle
+       do ilev=1,pver
+          do icol=1,ncol
+             xrhnull(icol,ilev) = xrhrf(irf)
+             irh1null(icol,ilev) = irhrf1(irf)
+          end do
+       enddo
+       call opticsAtConstRh(&
          lchnk, ncol, pint, rhoda, Nnatk, xrhnull, irh1null, irf, &
          xct, ict1, xfaq, ifaq1, xfbcbg, ifbcbg1,           &
          xfbcbgn, ifbcbgn1, xfac, ifac1, xfbc, ifbc1,       &
@@ -1605,6 +1607,7 @@ contains
          bebglt1n, bebggt1n, bebclt1n, bebcgt1n,            &
          beoclt1n, beocgt1n, bes4lt1n, bes4gt1n,            &
          backsc550n, babg550n, babc550n, baoc550n, basu550n)
+    end do
 
   end subroutine aerocom2
 
@@ -2078,6 +2081,18 @@ contains
        call outfld('ABSDRYSU',abs550rh_su    ,pcols,lchnk)
        call outfld('ABSDRYSS',abs550rh_ss    ,pcols,lchnk)
        call outfld('ABSDRYDU',abs550rh_du    ,pcols,lchnk)
+    end if
+
+    if (irf == 2) then   ! aerosol extinction at constant RH = 40%
+       call outfld('EC440R40',ec440rh_aer    ,pcols,lchnk)
+       call outfld('EC550R40',ec550rh_aer    ,pcols,lchnk)
+       call outfld('EC870R40',ec870rh_aer    ,pcols,lchnk)
+    end if
+
+    if (irf == 6) then   ! aerosol extinction at constant RH = 85%
+       call outfld('EC440R85',ec440rh_aer    ,pcols,lchnk)
+       call outfld('EC550R85',ec550rh_aer    ,pcols,lchnk)
+       call outfld('EC870R85',ec870rh_aer    ,pcols,lchnk)
     end if
 
   end subroutine opticsAtConstRh
