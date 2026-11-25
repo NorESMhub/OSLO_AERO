@@ -1508,8 +1508,8 @@ contains
    ! Column-integrated CCN at S=0.1% (isat=3) and S=0.2% (isat=5).
    ! ccn is a volume concentration in #/cm3, so convert to #/m3 (*1e6) and
    ! integrate over layer thickness dz (m) to get a column burden in #/m2.
-   ccn3col(:ncol) = sum(ccn(:ncol,top_lev:pver,3)*1.e6_r8*dz(:ncol,top_lev:pver), dim=2)
-   ccn5col(:ncol) = sum(ccn(:ncol,top_lev:pver,5)*1.e6_r8*dz(:ncol,top_lev:pver), dim=2)
+   ccn3col(:ncol) = sum(ccn(:ncol,top_lev:pver,iccn01)*1.e6_r8*dz(:ncol,top_lev:pver), dim=2)
+   ccn5col(:ncol) = sum(ccn(:ncol,top_lev:pver,iccn02)*1.e6_r8*dz(:ncol,top_lev:pver), dim=2)
    call outfld('CCN3NUMC', ccn3col(:ncol), ncol, lchnk)
    call outfld('CCN5NUMC', ccn5col(:ncol), ncol, lchnk)
 
