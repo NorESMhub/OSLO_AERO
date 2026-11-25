@@ -161,6 +161,9 @@ contains
          call addfld ('DOD870  ',horiz_only, 'A','unitless','Aerosol optical depth at 870nm')
          call addfld ('ABS870  ',horiz_only, 'A','unitless','Aerosol absorptive optical depth at 870nm')
 
+         call addfld ('ALH10   ',horiz_only, 'A','km      ','Aerosol layer height, 550nm extinction weighted, 0-10km')
+         call addfld ('ALH06   ',horiz_only, 'A','km      ','Aerosol layer height, 550nm extinction weighted, 0-6km')
+
          call addfld ('DLOAD_MI',horiz_only, 'A','mg/m2   ','mineral aerosol load')
          call addfld ('DLOAD_SS',horiz_only, 'A','mg/m2   ','sea-salt aerosol load')
          call addfld ('DLOAD_S4',horiz_only, 'A','mg/m2   ','sulfate aerosol load')
@@ -315,6 +318,8 @@ contains
          call add_default ('ABS670  ', 1, ' ')
          call add_default ('DOD870  ', 1, ' ')
          call add_default ('ABS870  ', 1, ' ')
+         call add_default ('ALH10   ', 1, ' ')
+         call add_default ('ALH06   ', 1, ' ')
          call add_default ('DLOAD_MI', 1, ' ')
          call add_default ('DLOAD_SS', 1, ' ')
          call add_default ('DLOAD_S4', 1, ' ')
