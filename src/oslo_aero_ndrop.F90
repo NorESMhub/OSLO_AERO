@@ -275,6 +275,9 @@ contains
         call addfld(ccn_name(isat),(/ 'lev' /), 'A','#/cm3', long_name)
     end do
 
+    call addfld('CCN3NUMC', horiz_only, 'A','1/m2','Vertically-integrated CCN concentration at S=0.1%')
+    call addfld('CCN5NUMC', horiz_only, 'A','1/m2','Vertically-integrated CCN concentration at S=0.2%')
+
     call addfld('CCN5_1  ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 1 at S=0.2%')
     call addfld('CCN5_2  ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 2 at S=0.2%')
     call addfld('CCN5_4  ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 4 at S=0.2%')
@@ -408,6 +411,8 @@ contains
     real(r8) :: nsource(pcols,pver)             ! droplet number source (#/kg/s)
     real(r8) :: ndropmix(pcols,pver)            ! droplet number mixing (#/kg/s) (diagnostic)
     real(r8) :: ndropcol(pcols)                 ! column droplet number (#/m2) (diagnostic)
+    real(r8) :: ccn3col(pcols)                  ! column-integrated CCN at S=0.1% (#/m2) (diagnostic)
+    real(r8) :: ccn5col(pcols)                  ! column-integrated CCN at S=0.2% (#/m2) (diagnostic)
     real(r8) :: cldo_tmp, cldn_tmp
     real(r8) :: tau_cld_regenerate
     real(r8) :: tau_cld_regenerate_exp
@@ -1499,6 +1504,14 @@ contains
    do isat = 1, psat
        call outfld(ccn_name(isat), ccn(:ncol,:,isat), ncol, lchnk)
    enddo
+
+   ! Column-integrated CCN at S=0.1% (isat=3) and S=0.2% (isat=5).
+   ! ccn is a volume concentration in #/cm3, so convert to #/m3 (*1e6) and
+   ! integrate over layer thickness dz (m) to get a column burden in #/m2.
+   ccn3col(:ncol) = sum(ccn(:ncol,top_lev:pver,3)*1.e6_r8*dz(:ncol,top_lev:pver), dim=2)
+   ccn5col(:ncol) = sum(ccn(:ncol,top_lev:pver,5)*1.e6_r8*dz(:ncol,top_lev:pver), dim=2)
+   call outfld('CCN3NUMC', ccn3col(:ncol), ncol, lchnk)
+   call outfld('CCN5NUMC', ccn5col(:ncol), ncol, lchnk)
 
    ! per-mode CCN at S=0.2% (#/m3) for the available modes
    call outfld('CCN5_1  ', ccnmode(:ncol,:,1),  ncol, lchnk)
