@@ -2083,16 +2083,22 @@ contains
        call outfld('ABSDRYDU',abs550rh_du    ,pcols,lchnk)
     end if
 
-    if (irf == 2) then   ! aerosol extinction at constant RH = 40%
+    if (irf == 2) then   ! aerosol extinction/absorption at constant RH = 40%
        call outfld('EC440R40',ec440rh_aer    ,pcols,lchnk)
        call outfld('EC550R40',ec550rh_aer    ,pcols,lchnk)
        call outfld('EC870R40',ec870rh_aer    ,pcols,lchnk)
+       call outfld('ABS440R40',abs440rh_aer   ,pcols,lchnk)
+       call outfld('ABS550R40',abs550rh_aer   ,pcols,lchnk)
+       call outfld('ABS870R40',abs870rh_aer   ,pcols,lchnk)
     end if
 
-    if (irf == 6) then   ! aerosol extinction at constant RH = 85%
+    if (irf == 6) then   ! aerosol extinction/absorption at constant RH = 85%
        call outfld('EC440R85',ec440rh_aer    ,pcols,lchnk)
        call outfld('EC550R85',ec550rh_aer    ,pcols,lchnk)
        call outfld('EC870R85',ec870rh_aer    ,pcols,lchnk)
+       call outfld('ABS440R85',abs440rh_aer   ,pcols,lchnk)
+       call outfld('ABS550R85',abs550rh_aer   ,pcols,lchnk)
+       call outfld('ABS870R85',abs870rh_aer   ,pcols,lchnk)
     end if
 
   end subroutine opticsAtConstRh
