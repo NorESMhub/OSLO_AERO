@@ -520,14 +520,15 @@ contains
        call outfld('BATLW01 ',batotlw01,pcols,lchnk)
 
        ! Column-integrated absorption optical depth in the ~10um LW band (9.259-10.204um).
-       ! Total aerosol (incl. CMIP6 volcanic) and mineral/dust (modes 6-7) only.
+       ! Total aerosol (incl. CMIP6 volcanic) and mineral/dust (accumulation and coarse dust modes) only.
        abs10um(:)    = 0._r8
        abs10um_du(:) = 0._r8
        do ilev=1,pver
           do icol=1,ncol
              abs10um(icol)    = abs10um(icol)    + deltah_km(icol,ilev)*batotlw(icol,ilev,ib10um)
              abs10um_du(icol) = abs10um_du(icol) + deltah_km(icol,ilev)* &
-                  (Nnatk(icol,ilev,6)*balw(icol,ilev,6,ib10um) + Nnatk(icol,ilev,7)*balw(icol,ilev,7,ib10um))
+                  (Nnatk(icol,ilev,MODE_IDX_DST_A2)*balw(icol,ilev,MODE_IDX_DST_A2,ib10um) &
+                  + Nnatk(icol,ilev,MODE_IDX_DST_A3)*balw(icol,ilev,MODE_IDX_DST_A3,ib10um))
           end do
        end do
        call outfld('ABS10UM ',abs10um,   pcols,lchnk)
