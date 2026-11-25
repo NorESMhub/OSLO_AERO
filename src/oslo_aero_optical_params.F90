@@ -125,6 +125,8 @@ contains
     real(r8) :: mmr_aerh2o(pcols,pver)
     real(r8) :: batotsw13(pcols,pver)
     real(r8) :: batotlw01(pcols,pver)
+    real(r8) :: abs10um(pcols), abs10um_du(pcols)  ! ~10um absorption optical depth (total, dust)
+    integer, parameter :: ib10um = 10              ! AeroTab LW band 9.259-10.204 um (contains 10 um)
     real(r8) :: daerh2o(pcols)
     !-------------------------------------------------------------------------
 
@@ -511,6 +513,20 @@ contains
        ! in the 3.077-3.846 um wavelenght band (i.e., a check of LUT for LW vs. SW).
        call outfld('BATSW13 ',batotsw13,pcols,lchnk)
        call outfld('BATLW01 ',batotlw01,pcols,lchnk)
+
+       ! Column-integrated absorption optical depth in the ~10um LW band (9.259-10.204um).
+       ! Total aerosol (incl. CMIP6 volcanic) and mineral/dust (modes 6-7) only.
+       abs10um(:)    = 0._r8
+       abs10um_du(:) = 0._r8
+       do ilev=1,pver
+          do icol=1,ncol
+             abs10um(icol)    = abs10um(icol)    + deltah_km(icol,ilev)*batotlw(icol,ilev,ib10um)
+             abs10um_du(icol) = abs10um_du(icol) + deltah_km(icol,ilev)* &
+                  (Nnatk(icol,ilev,6)*balw(icol,ilev,6,ib10um) + Nnatk(icol,ilev,7)*balw(icol,ilev,7,ib10um))
+          end do
+       end do
+       call outfld('ABS10UM ',abs10um,   pcols,lchnk)
+       call outfld('A10UM_DU',abs10um_du,pcols,lchnk)
     end if
 
     ! APPROXIMATE aerosol extinction and absorption at 550nm (0.442-0.625 um)
