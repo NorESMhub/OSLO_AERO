@@ -29,7 +29,8 @@ module oslo_aero_control
 
   ! Public Namelist variables:
   logical, public, protected :: use_aerocom = .false. ! If true, turn on aerocom output
-  
+  logical, public, protected :: no_rad_dust_active = .false. ! If true, exclude dust from the aerosol optics in the radiation
+
   real(r8), public, protected :: rh_fine_aer_scale_fact_optics = 1.0_r8
   ! Private Namelist variables:
   real(r8)          :: volc_fraction_coarse = 0.0_r8  !Fraction of volcanic aerosols in coarse mode
@@ -62,7 +63,7 @@ contains
     namelist /oslo_ctl_nl/ volc_fraction_coarse, aerotab_table_dir, dms_source, &
                            dms_source_type, opom_source, opom_source_type, &
                            ocean_filename, ocean_filepath, dms_cycle_year, opom_cycle_year, &
-                           use_aerocom, rh_fine_aer_scale_fact_optics
+                           use_aerocom, no_rad_dust_active, rh_fine_aer_scale_fact_optics
     !-----------------------------------------------------------------------------
 
     if (masterproc) then
@@ -79,7 +80,10 @@ contains
 
     ! Broadcast namelist variables
     call mpi_bcast(use_aerocom, 1 , mpi_logical, mstrid, mpicom, ierr)
-    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: volc_fraction_coarse")
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: use_aerocom")
+
+    call mpi_bcast(no_rad_dust_active, 1 , mpi_logical, mstrid, mpicom, ierr)
+    if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: no_rad_dust_active")
 
     call mpi_bcast(volc_fraction_coarse, 1 , mpi_real8, mstrid, mpicom, ierr)
     if (ierr /= mpi_success) call endrun(subname//" mpi_bcast: volc_fraction_coarse")

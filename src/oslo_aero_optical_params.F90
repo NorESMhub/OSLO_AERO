@@ -13,12 +13,13 @@ module oslo_aero_optical_params
   !
   use oslo_aero_share,     only: eps, rh, fombg, fbcbg, fac, fbc, faq, cate, cat
   use oslo_aero_share,     only: nmodes, nbmodes, nbands, nlwbands
+  use oslo_aero_share,     only: MODE_IDX_DST_A2, MODE_IDX_DST_A3
   use oslo_aero_share,     only: rhopart, l_soa_na, l_so4_na
   use oslo_aero_share,     only: calculateNumberConcentration
   use oslo_aero_conc,      only: calculateBulkProperties, partitionMass
   use oslo_aero_sw_tables, only: interpol0, interpol1, interpol2to3, interpol4, interpol5to10
   use oslo_aero_aerocom,   only: aerocom1, aerocom2
-  use oslo_aero_control,   only: use_aerocom, rh_fine_aer_scale_fact_optics
+  use oslo_aero_control,   only: use_aerocom, no_rad_dust_active, rh_fine_aer_scale_fact_optics
   use perf_mod,            only: t_startf, t_stopf
 
   implicit none
@@ -367,8 +368,12 @@ contains
           end do
        enddo
     enddo
+
+    ! With no_rad_dust_active the dust modes (accumulation and coarse) are left out of the
+    ! SW aerosol optics, i.e. dust does not interact with the radiation.
     do ib=1,nbands
        do imode=0,nmodes
+          if (no_rad_dust_active .and. (imode == MODE_IDX_DST_A2 .or. imode == MODE_IDX_DST_A3)) cycle
           do ilev=1,pver
              do icol=1,ncol
                 betot(icol,ilev,ib)=betot(icol,ilev,ib)+Nnatk(icol,ilev,imode) &
