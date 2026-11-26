@@ -59,6 +59,9 @@ module oslo_aero_ndrop
        0.05_r8, 0.08_r8, 0.12_r8, 0.2_r8, 0.3_r8, 0.45_r8, 0.6_r8, 0.75_r8, 1.0_r8/)
   character(len=8), parameter :: ccn_name(psat)= (/'CCN1  ', 'CCN2  ', 'CCN3  ', 'CCN4  ', 'CCN5  ', &
        'CCN6  ', 'CCN7  ', 'CCN005', 'CCN008', 'CCN012', 'CCN020', 'CCN030', 'CCN045', 'CCN060', 'CCN075', 'CCN100'/)
+  ! indices into supersat() used by the SATACI column and per-mode CCN diagnostics
+  integer, parameter :: iccn01 = 3  ! S=0.1% (CCN3)
+  integer, parameter :: iccn02 = 5  ! S=0.2% (CCN5)
 
   ! indices in state and pbuf structures
   integer :: numliq_idx = -1
@@ -272,11 +275,28 @@ contains
         call addfld(ccn_name(isat),(/ 'lev' /), 'A','#/cm3', long_name)
     end do
 
+    call addfld('CCN3NUMC', horiz_only, 'A','1/m2','Vertically-integrated CCN concentration at S=0.1%')
+    call addfld('CCN5NUMC', horiz_only, 'A','1/m2','Vertically-integrated CCN concentration at S=0.2%')
+
+    call addfld('CCN5_1  ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 1 at S=0.2%')
+    call addfld('CCN5_2  ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 2 at S=0.2%')
+    call addfld('CCN5_4  ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 4 at S=0.2%')
+    call addfld('CCN5_5  ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 5 at S=0.2%')
+    call addfld('CCN5_6  ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 6 at S=0.2%')
+    call addfld('CCN5_7  ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 7 at S=0.2%')
+    call addfld('CCN5_8  ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 8 at S=0.2%')
+    call addfld('CCN5_9  ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 9 at S=0.2%')
+    call addfld('CCN5_10 ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 10 at S=0.2%')
+    call addfld('CCN5_12 ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 12 at S=0.2%')
+    call addfld('CCN5_14 ',(/ 'lev' /), 'A','m-3','CCN concentration of mode 14 at S=0.2%')
+
     if(history_aerosol)then
        do isat = 1, psat_old ! Once the new diagnostics replace the old ones, this can be changed to psat
           call add_default(ccn_name(isat), 1, ' ')
        enddo
     end if
+    ! Note: per-mode CCN5_<mode> fields are registered via addfld only (no add_default);
+    ! they are output only when explicitly requested via fincl in user_nl_cam.
 
     call addfld('WTKE',     (/ 'lev' /), 'A', 'm/s', 'Standard deviation of updraft velocity')
     call addfld('NDROPMIX', (/ 'lev' /), 'A', '#/kg/s', 'Droplet number mixing')
@@ -391,6 +411,8 @@ contains
     real(r8) :: nsource(pcols,pver)             ! droplet number source (#/kg/s)
     real(r8) :: ndropmix(pcols,pver)            ! droplet number mixing (#/kg/s) (diagnostic)
     real(r8) :: ndropcol(pcols)                 ! column droplet number (#/m2) (diagnostic)
+    real(r8) :: ccn3col(pcols)                  ! column-integrated CCN at S=0.1% (#/m2) (diagnostic)
+    real(r8) :: ccn5col(pcols)                  ! column-integrated CCN at S=0.2% (#/m2) (diagnostic)
     real(r8) :: cldo_tmp, cldn_tmp
     real(r8) :: tau_cld_regenerate
     real(r8) :: tau_cld_regenerate_exp
@@ -430,6 +452,7 @@ contains
     real(r8), allocatable :: coltend(:,:)       ! column tendency for diagnostic output
     real(r8), allocatable :: coltend_cw(:,:)    ! column tendency
     real(r8)              :: ccn(pcols,pver,psat) ! number conc of aerosols activated at supersat
+    real(r8)              :: ccnmode(pcols,pver,nmodes) ! per-mode CCN number conc at S=0.2% (#/m3)
 
     !for gas species turbulent mixing
     real(r8), pointer     :: rgas(:, :, :)
@@ -1477,10 +1500,31 @@ contains
     call outfld('WTKE    ', wtke(:ncol,:),     ncol, lchnk)
 
    call ccncalc_oslo(state, pbuf, cs, hasAerosol, numberConcentration, volumeConcentration, &
-      hygroscopicity, lnSigma, ccn)
+      hygroscopicity, lnSigma, ccn, ccnmode)
    do isat = 1, psat
        call outfld(ccn_name(isat), ccn(:ncol,:,isat), ncol, lchnk)
    enddo
+
+   ! Column-integrated CCN at S=0.1% (isat=3) and S=0.2% (isat=5).
+   ! ccn is a volume concentration in #/cm3, so convert to #/m3 (*1e6) and
+   ! integrate over layer thickness dz (m) to get a column burden in #/m2.
+   ccn3col(:ncol) = sum(ccn(:ncol,top_lev:pver,iccn01)*1.e6_r8*dz(:ncol,top_lev:pver), dim=2)
+   ccn5col(:ncol) = sum(ccn(:ncol,top_lev:pver,iccn02)*1.e6_r8*dz(:ncol,top_lev:pver), dim=2)
+   call outfld('CCN3NUMC', ccn3col(:ncol), ncol, lchnk)
+   call outfld('CCN5NUMC', ccn5col(:ncol), ncol, lchnk)
+
+   ! per-mode CCN at S=0.2% (#/m3) for the available modes
+   call outfld('CCN5_1  ', ccnmode(:ncol,:,1),  ncol, lchnk)
+   call outfld('CCN5_2  ', ccnmode(:ncol,:,2),  ncol, lchnk)
+   call outfld('CCN5_4  ', ccnmode(:ncol,:,4),  ncol, lchnk)
+   call outfld('CCN5_5  ', ccnmode(:ncol,:,5),  ncol, lchnk)
+   call outfld('CCN5_6  ', ccnmode(:ncol,:,6),  ncol, lchnk)
+   call outfld('CCN5_7  ', ccnmode(:ncol,:,7),  ncol, lchnk)
+   call outfld('CCN5_8  ', ccnmode(:ncol,:,8),  ncol, lchnk)
+   call outfld('CCN5_9  ', ccnmode(:ncol,:,9),  ncol, lchnk)
+   call outfld('CCN5_10 ', ccnmode(:ncol,:,10), ncol, lchnk)
+   call outfld('CCN5_12 ', ccnmode(:ncol,:,12), ncol, lchnk)
+   call outfld('CCN5_14 ', ccnmode(:ncol,:,14), ncol, lchnk)
 
     tendencyCounted(:)=.FALSE.
     do imode = 1, ntot_amode
@@ -1999,7 +2043,7 @@ contains
   !===============================================================================
 
   subroutine ccncalc_oslo(state, pbuf, cs, hasAerosol, numberConcentration, volumeConcentration, &
-       hygroscopicity, lnSigma, ccn)
+       hygroscopicity, lnSigma, ccn, ccnmode)
 
     ! calculates number concentration of aerosols activated as CCN at
     ! supersaturation supersat.
@@ -2020,6 +2064,7 @@ contains
     real(r8) , intent(in)  :: hygroscopicity(pcols,pver,nmodes)
     real(r8) , intent(in)  :: lnSigma(pcols,pver,nmodes)
     real(r8) , intent(out) :: ccn(pcols,pver,psat)                     ! number conc of aerosols activated at supersat (#/m3)
+    real(r8) , intent(out) :: ccnmode(pcols,pver,nmodes)               ! per-mode CCN number conc at S=0.2% (#/m3)
 
     ! local
     integer  :: lchnk             ! chunk index
@@ -2033,6 +2078,7 @@ contains
     real(r8) :: argfactor         ! Coefficient in ARGI/ARGII
     real(r8) :: exp45logsig_var   ! mathematical constants
     integer  :: lsat,imode,icol,ilev        ! mathematical constants
+    logical  :: calc_sat(psat)    ! supersaturations that have to be evaluated this call
     real(r8) :: smcoefcoef,smcoef ! mathematical constants
     real(r8), pointer   :: tair(:,:)        ! air temperature (K)
     real(r8), parameter :: twothird=2.0_r8/3.0_r8
@@ -2046,6 +2092,14 @@ contains
 
     super(:) = supersat(:)*0.01_r8
 
+    ! Only evaluate a supersaturation if a history field needs it: its own CCN field, the
+    ! per-mode CCN5_<mode> fields (S=0.2%) or the column CCN3NUMC/CCN5NUMC fields (S=0.1%/0.2%).
+    do lsat = 1, psat
+       calc_sat(lsat) = hist_fld_active(ccn_name(lsat))
+    end do
+    calc_sat(iccn01) = calc_sat(iccn01) .or. hist_fld_active('CCN3NUMC')
+    calc_sat(iccn02) = calc_sat(iccn02) .or. hist_fld_active('CCN5NUMC') .or. any_ccnmode_active()
+
     !This is curvature effect (A) in ARGI eqn 5 in ARG1 (missing division by temperature, see below)
     surften_coef = 2._r8*mwh2o*surften/(r_universal*rhoh2o)
 
@@ -2053,6 +2107,7 @@ contains
     smcoefcoef = 2._r8/sqrt(27._r8)
 
     ccn(:,:,:) = 0._r8
+    ccnmode(:,:,:) = 0._r8
 
     do imode=1,nmodes
        do ilev=top_lev,pver
@@ -2078,7 +2133,7 @@ contains
 
                 !Solve eqn 13 in ARGII
                 do lsat = 1,psat
-                   if (hist_fld_active(ccn_name(lsat))) then
+                   if (calc_sat(lsat)) then
                        !eqn 15 in ARGII
                        argfactor = twothird/(sq2*lnSigma(icol,ilev,imode))
 
@@ -2087,6 +2142,11 @@ contains
 
                        !eqn 13 icol ARGII
                        ccn(icol,ilev,lsat) = ccn(icol,ilev,lsat) + numberConcentration(icol,ilev,imode)*0.5_r8*(1._r8-erf(arg))
+
+                       !per-mode CCN at S=0.2% (kept in #/m3, no cm3 conversion)
+                       if (lsat == iccn02) then
+                          ccnmode(icol,ilev,imode) = numberConcentration(icol,ilev,imode)*0.5_r8*(1._r8-erf(arg))
+                       end if
 
                    end if
                 end do
@@ -2098,5 +2158,17 @@ contains
     ccn(:ncol,:,:)=ccn(:ncol,:,:)*1.e-6_r8 ! convert from #/m3 to #/cm3
 
   end subroutine ccncalc_oslo
+
+  !===============================================================================
+  logical function any_ccnmode_active()
+    ! True if any of the per-mode CCN5_<mode> history fields is requested
+    character(len=8), parameter :: names(11) = (/ 'CCN5_1  ', 'CCN5_2  ', 'CCN5_4  ', 'CCN5_5  ', &
+         'CCN5_6  ', 'CCN5_7  ', 'CCN5_8  ', 'CCN5_9  ', 'CCN5_10 ', 'CCN5_12 ', 'CCN5_14 ' /)
+    integer :: i
+    any_ccnmode_active = .false.
+    do i = 1, size(names)
+       any_ccnmode_active = any_ccnmode_active .or. hist_fld_active(names(i))
+    end do
+  end function any_ccnmode_active
 
 end module oslo_aero_ndrop

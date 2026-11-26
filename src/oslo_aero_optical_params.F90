@@ -13,12 +13,13 @@ module oslo_aero_optical_params
   !
   use oslo_aero_share,     only: eps, rh, fombg, fbcbg, fac, fbc, faq, cate, cat
   use oslo_aero_share,     only: nmodes, nbmodes, nbands, nlwbands
+  use oslo_aero_share,     only: MODE_IDX_DST_A2, MODE_IDX_DST_A3
   use oslo_aero_share,     only: rhopart, l_soa_na, l_so4_na
   use oslo_aero_share,     only: calculateNumberConcentration
   use oslo_aero_conc,      only: calculateBulkProperties, partitionMass
   use oslo_aero_sw_tables, only: interpol0, interpol1, interpol2to3, interpol4, interpol5to10
   use oslo_aero_aerocom,   only: aerocom1, aerocom2
-  use oslo_aero_control,   only: use_aerocom, rh_fine_aer_scale_fact_optics
+  use oslo_aero_control,   only: use_aerocom, no_rad_dust_active, rh_fine_aer_scale_fact_optics
   use perf_mod,            only: t_startf, t_stopf
 
   implicit none
@@ -125,6 +126,8 @@ contains
     real(r8) :: mmr_aerh2o(pcols,pver)
     real(r8) :: batotsw13(pcols,pver)
     real(r8) :: batotlw01(pcols,pver)
+    real(r8) :: abs10um(pcols), abs10um_du(pcols)  ! ~10um absorption optical depth (total, dust)
+    integer, parameter :: ib10um = 10              ! AeroTab LW band 9.259-10.204 um (contains 10 um)
     real(r8) :: daerh2o(pcols)
     !-------------------------------------------------------------------------
 
@@ -365,8 +368,12 @@ contains
           end do
        enddo
     enddo
+
+    ! With no_rad_dust_active the dust modes (accumulation and coarse) are left out of the
+    ! SW aerosol optics, i.e. dust does not interact with the radiation.
     do ib=1,nbands
        do imode=0,nmodes
+          if (no_rad_dust_active .and. (imode == MODE_IDX_DST_A2 .or. imode == MODE_IDX_DST_A3)) cycle
           do ilev=1,pver
              do icol=1,ncol
                 betot(icol,ilev,ib)=betot(icol,ilev,ib)+Nnatk(icol,ilev,imode) &
@@ -511,6 +518,21 @@ contains
        ! in the 3.077-3.846 um wavelenght band (i.e., a check of LUT for LW vs. SW).
        call outfld('BATSW13 ',batotsw13,pcols,lchnk)
        call outfld('BATLW01 ',batotlw01,pcols,lchnk)
+
+       ! Column-integrated absorption optical depth in the ~10um LW band (9.259-10.204um).
+       ! Total aerosol (incl. CMIP6 volcanic) and mineral/dust (accumulation and coarse dust modes) only.
+       abs10um(:)    = 0._r8
+       abs10um_du(:) = 0._r8
+       do ilev=1,pver
+          do icol=1,ncol
+             abs10um(icol)    = abs10um(icol)    + deltah_km(icol,ilev)*batotlw(icol,ilev,ib10um)
+             abs10um_du(icol) = abs10um_du(icol) + deltah_km(icol,ilev)* &
+                  (Nnatk(icol,ilev,MODE_IDX_DST_A2)*balw(icol,ilev,MODE_IDX_DST_A2,ib10um) &
+                  + Nnatk(icol,ilev,MODE_IDX_DST_A3)*balw(icol,ilev,MODE_IDX_DST_A3,ib10um))
+          end do
+       end do
+       call outfld('ABS10UM ',abs10um,   pcols,lchnk)
+       call outfld('A10UM_DU',abs10um_du,pcols,lchnk)
     end if
 
     ! APPROXIMATE aerosol extinction and absorption at 550nm (0.442-0.625 um)

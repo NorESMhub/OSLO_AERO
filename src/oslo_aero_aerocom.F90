@@ -2,7 +2,7 @@ module oslo_aero_aerocom
 
   use shr_kind_mod,             only: r8 => shr_kind_r8
   use ppgrid,                   only: pcols, pver, pverp
-  use cam_history,              only: outfld
+  use cam_history,              only: outfld, hist_fld_active
   !
   use oslo_aero_share,          only: cate, cat, fac, faq, fbc, rh, fombg, fbcbg, rh, xrhrf, irhrf1, eps
   use oslo_aero_sw_tables,      only: interpol0, interpol1, interpol2to3, interpol4, interpol5to10
@@ -593,6 +593,12 @@ contains
     real(r8) :: dod550lt1_pom(pcols)
     real(r8) :: dod550gt1_pom(pcols)
     !
+    real(r8) :: zmid(pcols,pver)     ! layer midpoint height above surface, unit km
+    real(r8) :: hcum                 ! cumulative height above surface at layer bottom, unit km
+    real(r8) :: alh10num(pcols), alh10den(pcols) ! aerosol layer height, 0-10km, numerator/denominator
+    real(r8) :: alh06num(pcols), alh06den(pcols) ! aerosol layer height, 0-6km, numerator/denominator
+    real(r8) :: alh10(pcols), alh06(pcols)       ! extinction weighted mean aerosol layer height, unit km
+    !
     real(r8) :: abs550_ss(pcols)
     real(r8) :: abs550_dust(pcols)
     real(r8) :: abs550_so4(pcols)
@@ -1165,6 +1171,38 @@ contains
        enddo ! ilev
     enddo  ! icol
 
+    ! Aerosol layer height (Z_alpha), i.e. the 550nm extinction-weighted mean height,
+    ! following Eq. (1) in Koffi et al. (2012, JGR), applied over the first 10 km and
+    ! the first 6 km of the atmosphere. dod5503d (per-layer 550nm AOD, i.e. b_ext,i*dz_i)
+    ! is used both as the extinction weight and to account for the varying layer
+    ! thickness of the model levels.
+    ! add check if ALH10 and ALH06 are requested in AeroCom output, to avoid unnecessary calculations
+    if (hist_fld_active('ALH10') .or. hist_fld_active('ALH06')) then
+      do icol=1,ncol
+         hcum          = 0.0_r8
+         alh10num(icol) = 0.0_r8
+         alh10den(icol) = 0.0_r8
+         alh06num(icol) = 0.0_r8
+         alh06den(icol) = 0.0_r8
+         do ilev=pver,1,-1
+            zmid(icol,ilev) = hcum + 0.5_r8*deltah_km(icol,ilev)
+            hcum            = hcum + deltah_km(icol,ilev)
+            if (zmid(icol,ilev) <= 10.0_r8) then
+               alh10num(icol) = alh10num(icol) + dod5503d(icol,ilev)*zmid(icol,ilev)
+               alh10den(icol) = alh10den(icol) + dod5503d(icol,ilev)
+            end if
+            if (zmid(icol,ilev) <= 6.0_r8) then
+               alh06num(icol) = alh06num(icol) + dod5503d(icol,ilev)*zmid(icol,ilev)
+               alh06den(icol) = alh06den(icol) + dod5503d(icol,ilev)
+            end if
+         end do
+         alh10(icol) = alh10num(icol)/(alh10den(icol)+eps)
+         alh06(icol) = alh06num(icol)/(alh06den(icol)+eps)
+      end do
+      call outfld('ALH10',alh10,pcols,lchnk)
+      call outfld('ALH06',alh06,pcols,lchnk)
+   end if
+
     ! extinction, absorption (m-1) and backscatter coefficients (m-1 sr-1)
     call outfld('EC550AER',ec550_aer,pcols,lchnk)
     call outfld('ABS550_A',abs550_aer,pcols,lchnk)
@@ -1575,14 +1613,16 @@ contains
 
     ! Extra AeroCom diagnostics requiring table look-ups with RH = constant
     ! Note: using xrhnull etc as proxy for constant RH input values
-    irf = 1
-    do ilev=1,pver
-       do icol=1,ncol
-          xrhnull(icol,ilev) = xrhrf(irf)
-          irh1null(icol,ilev) = irhrf1(irf)
-       end do
-    enddo
-    call opticsAtConstRh(&
+    ! irf=1 => RH=0% (dry); irf=2 => RH=40%; irf=6 => RH=85% (see RF in oslo_aero_share)
+    do irf = 1, 6
+       if (irf/=1 .and. irf/=2 .and. irf/=6) cycle
+       do ilev=1,pver
+          do icol=1,ncol
+             xrhnull(icol,ilev) = xrhrf(irf)
+             irh1null(icol,ilev) = irhrf1(irf)
+          end do
+       enddo
+       call opticsAtConstRh(&
          lchnk, ncol, pint, rhoda, Nnatk, xrhnull, irh1null, irf, &
          xct, ict1, xfaq, ifaq1, xfbcbg, ifbcbg1,           &
          xfbcbgn, ifbcbgn1, xfac, ifac1, xfbc, ifbc1,       &
@@ -1605,6 +1645,7 @@ contains
          bebglt1n, bebggt1n, bebclt1n, bebcgt1n,            &
          beoclt1n, beocgt1n, bes4lt1n, bes4gt1n,            &
          backsc550n, babg550n, babc550n, baoc550n, basu550n)
+    end do
 
   end subroutine aerocom2
 
@@ -2078,6 +2119,24 @@ contains
        call outfld('ABSDRYSU',abs550rh_su    ,pcols,lchnk)
        call outfld('ABSDRYSS',abs550rh_ss    ,pcols,lchnk)
        call outfld('ABSDRYDU',abs550rh_du    ,pcols,lchnk)
+    end if
+
+    if (irf == 2) then   ! aerosol extinction/absorption at constant RH = 40%
+       call outfld('EC440R40',ec440rh_aer    ,pcols,lchnk)
+       call outfld('EC550R40',ec550rh_aer    ,pcols,lchnk)
+       call outfld('EC870R40',ec870rh_aer    ,pcols,lchnk)
+       call outfld('ABS440R40',abs440rh_aer   ,pcols,lchnk)
+       call outfld('ABS550R40',abs550rh_aer   ,pcols,lchnk)
+       call outfld('ABS870R40',abs870rh_aer   ,pcols,lchnk)
+    end if
+
+    if (irf == 6) then   ! aerosol extinction/absorption at constant RH = 85%
+       call outfld('EC440R85',ec440rh_aer    ,pcols,lchnk)
+       call outfld('EC550R85',ec550rh_aer    ,pcols,lchnk)
+       call outfld('EC870R85',ec870rh_aer    ,pcols,lchnk)
+       call outfld('ABS440R85',abs440rh_aer   ,pcols,lchnk)
+       call outfld('ABS550R85',abs550rh_aer   ,pcols,lchnk)
+       call outfld('ABS870R85',abs870rh_aer   ,pcols,lchnk)
     end if
 
   end subroutine opticsAtConstRh
